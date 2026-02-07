@@ -1,0 +1,10 @@
+- Profile score range: 0–100
+- Score is composed of:
+  - Resume
+  - Behavioral
+  - Psychometric
+  - Skills
+  - Reference
+- Weightages depend on experience band
+- Resume score currently assumed full, later dynamic
+- Scores are immutable after assessment completion

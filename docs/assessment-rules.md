@@ -1,0 +1,7 @@
+- Assessment is one-time per user
+- Assessment must be completed in one session
+- No copy-paste allowed
+- No tab switching (2nd violation blocks account)
+- Each question has a time limit
+- Answers are not stored, only scores and confidence
+- Assessment impacts profile score permanently
