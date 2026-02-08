@@ -47,7 +47,22 @@ CREATE TABLE candidate_profiles (
   location TEXT,
   resume_uploaded BOOLEAN DEFAULT false,
   assessment_status assessment_status DEFAULT 'not_started',
+  skills TEXT[], -- Final verified skills (AI Extracted + User Added)
+  onboarding_step TEXT DEFAULT 'INITIAL', -- Current step for persistence
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- ---------- RESUME DATA (PARSED) ----------
+
+CREATE TABLE resume_data (
+  user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  raw_text TEXT,
+  timeline JSONB, -- [ {role, company, start, end} ]
+  career_gaps JSONB, -- { count, details }
+  achievements TEXT[],
+  skills TEXT[],
+  education JSONB,
+  parsed_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
 -- ---------- COMPANIES ----------

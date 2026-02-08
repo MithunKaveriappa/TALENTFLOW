@@ -1,32 +1,31 @@
-from jose import jwt, JWTError
-import requests
 from fastapi import HTTPException, status
-
-SUPABASE_JWKS_URL = (
-    "https://snzqqjrmthqdezozgvsp.supabase.co"
-)
+from .supabase import supabase
 
 def verify_supabase_jwt(token: str) -> dict:
     try:
-        jwks = requests.get(SUPABASE_JWKS_URL).json()
-        unverified_header = jwt.get_unverified_header(token)
+        # Instead of manual JWT verification with JWKS (which fails for HS256),
+        # we let Supabase's own Auth service verify the token.
+        # This works for both HS256 and RS256.
+        user_res = supabase.auth.get_user(token)
+        
+        if not user_res.user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication token",
+            )
+        
+        # Return a payload structure similar to what we had before
+        # 'sub' is the user_id in Supabase JWTs
+        user = user_res.user
+        return {
+            "sub": user.id,
+            "email": user.email,
+            "role": user.role
+        }
 
-        key = next(
-            k for k in jwks["keys"]
-            if k["kid"] == unverified_header["kid"]
-        )
-
-        payload = jwt.decode(
-            token,
-            key,
-            algorithms=["RS256"],
-            audience="authenticated"
-        )
-
-        return payload
-
-    except (JWTError, StopIteration):
+    except Exception as e:
+        print(f"ERR: JWT Verification failed: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication token",
+            detail=f"Invalid authentication token: {str(e)}",
         )

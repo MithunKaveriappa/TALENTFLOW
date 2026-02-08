@@ -8,7 +8,9 @@ yarn-error.log*
 __pycache__/
 *.py[cod]
 .venv/
+.venv_311/
 venv/
+test_jwks.py
 
 # Environment variables
 .env
