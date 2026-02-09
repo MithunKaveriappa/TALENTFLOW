@@ -3,6 +3,7 @@
 ## Purpose
 
 Row Level Security (RLS) ensures that:
+
 - Users can only access their own data
 - Recruiters cannot directly access candidate internals
 - Frontend clients cannot bypass business rules
@@ -23,41 +24,59 @@ All tables have RLS enabled by default.
 
 ## RLS Strategy Overview
 
-| Table | Who Can Read | Who Can Write |
-|------|-------------|---------------|
-| users | Owner only | Backend only |
-| candidate_profiles | Candidate (self) | Candidate (limited) / Backend |
-| recruiter_profiles | Recruiter (self) | Recruiter (limited) / Backend |
-| companies | Recruiter (own company) | Backend only |
-| assessments | Owner only | Backend only |
-| profile_scores | Owner only | Backend only |
+| Table                            | Who Can Read         | Who Can Write   | RLS Status              |
+| :------------------------------- | :------------------- | :-------------- | :---------------------- |
+| `users`                          | Owner                | Backend         | Enabled                 |
+| `candidate_profiles`             | Owner                | Owner / Backend | Enabled                 |
+| `recruiter_profiles`             | Owner                | Owner / Backend | Enabled                 |
+| `companies`                      | Associated Recruiter | Backend         | Enabled                 |
+| `assessment_sessions`            | Owner                | Backend         | Enabled                 |
+| `assessment_responses`           | Owner                | Backend         | Enabled                 |
+| `recruiter_assessment_responses` | Backend              | Backend         | Disabled (Backend Only) |
+| `blocked_users`                  | Public (Read-Only)   | Backend         | Enabled                 |
+| `profile_scores`                 | Owner                | Backend         | Enabled                 |
 
 ---
 
-## Policies by Table
+## Policies by Table (Recent Additions)
+
+### recruiter_assessment_responses
+
+- **Status**: RLS Disabled.
+- **Handling**: This table is treated as a system-only audit log. No frontend access is permitted. All operations are mediated via FastAPI using the Service Role.
+
+### blocked_users
+
+- **Status**: RLS Enabled.
+- **Policy**: `authenticated` users can SELECT to check their own status, but only the Backend (Service Role) can INSERT or DELETE.
 
 ### users
+
 - Read: User can read only their own row
 - Insert/Update/Delete: Not allowed from frontend
 
 Reason:
+
 - Prevent role escalation
 - Prevent email tampering
 
 ---
 
 ### candidate_profiles
+
 - Read: Candidate can read their own profile
 - Update: Candidate can update allowed fields
 - Insert/Delete: Backend only
 
 Reason:
+
 - Profile ownership enforcement
 - Controlled assessment flow
 
 ---
 
 ### recruiter_profiles
+
 - Read: Recruiter can read their own profile
 - Update: Recruiter can update allowed fields
 - Insert/Delete: Backend only
@@ -65,30 +84,36 @@ Reason:
 ---
 
 ### companies
+
 - Read: Recruiter can read only their associated company
 - Write: Backend only
 
 Reason:
+
 - Prevent company impersonation
 - Prevent unauthorized edits
 
 ---
 
 ### assessments
+
 - Read: User can read their own assessment records
 - Write: Backend only
 
 Reason:
+
 - Prevent assessment manipulation
 - Enforce one-attempt rule
 
 ---
 
 ### profile_scores
+
 - Read: User can read only their own score
 - Write: Backend only
 
 Reason:
+
 - Scores are derived data
 - No direct user manipulation
 
@@ -97,6 +122,7 @@ Reason:
 ## Backend Bypass (Service Role)
 
 FastAPI uses the Supabase `service_role` key, which:
+
 - Bypasses RLS
 - Is never exposed to frontend
 - Is required for:
@@ -105,6 +131,7 @@ FastAPI uses the Supabase `service_role` key, which:
   - admin actions
 
 This ensures:
+
 - Business logic stays in backend
 - Frontend remains untrusted
 

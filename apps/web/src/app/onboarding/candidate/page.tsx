@@ -35,8 +35,7 @@ export default function CandidateOnboarding() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const initialized = useRef(false);
 
-  const { isListening, transcript, startListening, stopListening } =
-    useVoice();
+  const { isListening, transcript, startListening, stopListening } = useVoice();
 
   const handleLogout = async () => {
     localStorage.removeItem("tf_onboarding_chat"); // Clear chat on logout

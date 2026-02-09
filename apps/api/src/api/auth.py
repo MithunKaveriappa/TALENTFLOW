@@ -69,6 +69,11 @@ def post_login(user: dict = Depends(get_current_user)):
     user_id = user["sub"]
     email = user["email"]
     
+    # Check if blocked
+    blocked = supabase.table("blocked_users").select("*").eq("user_id", user_id).execute()
+    if blocked.data:
+        raise HTTPException(status_code=403, detail="Your account has been permanently blocked due to security violations.")
+
     try:
         # 1. Fetch user role (removing .single() to handle 0 rows manually)
         user_res = supabase.table("users").select("role").eq("id", user_id).execute()
@@ -114,17 +119,16 @@ def post_login(user: dict = Depends(get_current_user)):
             status = profile_res.data[0]["assessment_status"]
         
         # 3. Determine next step
-        if status == "completed":
-            next_step = f"/dashboard/{role}"
-        elif status == "in_progress":
-            next_step = f"/assessment/{role}"
-        else:
-            # Check onboarding step
-            profile_data = profile_res.data[0] if profile_res.data else {}
-            if profile_data.get("onboarding_step") == "COMPLETED":
-                next_step = f"/assessment/{role}"
+        if role == "candidate":
+            if status == "completed":
+                next_step = "/dashboard/candidate"
             else:
-                next_step = f"/onboarding/{role}"
+                next_step = "/onboarding/candidate"
+        else: # recruiter
+            if status == "completed":
+                next_step = "/dashboard/recruiter"
+            else:
+                next_step = "/onboarding/recruiter"
             
         return {
             "next_step": next_step,

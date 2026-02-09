@@ -14,10 +14,10 @@ type Message = {
   timestamp: Date;
 };
 
-type LoginState = 
-  | "INITIAL" 
-  | "AWAITING_EMAIL" 
-  | "AWAITING_PASSWORD" 
+type LoginState =
+  | "INITIAL"
+  | "AWAITING_EMAIL"
+  | "AWAITING_PASSWORD"
   | "COMPLETED";
 
 function LoginForm() {
@@ -29,8 +29,9 @@ function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const initialized = useRef(false);
-  
-  const { isListening, transcript, startListening, stopListening, hasSupport } = useVoice();
+
+  const { isListening, transcript, startListening, stopListening, hasSupport } =
+    useVoice();
 
   // Scroll to bottom whenever messages change
   useEffect(() => {
@@ -47,12 +48,15 @@ function LoginForm() {
   }, [transcript]);
 
   const addMessage = (text: string, sender: "bot" | "user") => {
-    setMessages(prev => [...prev, {
-      id: Math.random().toString(36).substr(2, 9),
-      text,
-      sender,
-      timestamp: new Date()
-    }]);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: Math.random().toString(36).substr(2, 9),
+        text,
+        sender,
+        timestamp: new Date(),
+      },
+    ]);
   };
 
   useEffect(() => {
@@ -81,30 +85,42 @@ function LoginForm() {
       } else if (state === "AWAITING_PASSWORD") {
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
-          password: workingInput
+          password: workingInput,
         });
 
         if (error) {
-          addMessage(`Login failed: ${error.message}. Please check your credentials and try again.`, "bot");
+          addMessage(
+            `Login failed: ${error.message}. Please check your credentials and try again.`,
+            "bot",
+          );
           setState("AWAITING_EMAIL");
           addMessage("Let's start over. What is your email?", "bot");
         } else {
-          addMessage("Success! Synchronizing with the TalentFlow security layer...", "bot");
-          
+          addMessage(
+            "Success! Synchronizing with the TalentFlow security layer...",
+            "bot",
+          );
+
           try {
             const session = await supabase.auth.getSession();
             const token = session.data.session?.access_token;
-            
+
             const handshake = await apiClient.get("/auth/post-login", token);
-            
-            addMessage(`Verified. Redirecting you to your ${handshake.role} dashboard...`, "bot");
+
+            addMessage(
+              `Verified. Redirecting you to your ${handshake.role} dashboard...`,
+              "bot",
+            );
             setState("COMPLETED");
-            
+
             setTimeout(() => {
               router.push(handshake.next_step);
             }, 2000);
           } catch (err: any) {
-            addMessage(`Security handshake failed: ${err.message}. Please contact support.`, "bot");
+            addMessage(
+              `Security handshake failed: ${err.message}. Please contact support.`,
+              "bot",
+            );
           }
         }
       }
@@ -123,24 +139,26 @@ function LoginForm() {
           <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center">
             <div className="h-4 w-4 rounded-sm bg-white rotate-45" />
           </div>
-          <span className="font-bold text-slate-900 tracking-tight">TalentFlow Sign In</span>
+          <span className="font-bold text-slate-900 tracking-tight">
+            TalentFlow Sign In
+          </span>
         </div>
       </header>
 
       {/* Chat Area */}
-      <div 
+      <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto p-4 space-y-4 max-w-3xl mx-auto w-full scroll-smooth"
       >
         {messages.map((msg) => (
-          <div 
+          <div
             key={msg.id}
             className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
           >
-            <div 
+            <div
               className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-sm ${
-                msg.sender === "user" 
-                  ? "bg-indigo-600 text-white rounded-tr-none" 
+                msg.sender === "user"
+                  ? "bg-indigo-600 text-white rounded-tr-none"
                   : "bg-white text-slate-800 border border-slate-100 rounded-tl-none"
               }`}
             >
@@ -159,7 +177,7 @@ function LoginForm() {
 
       {/* Input Area */}
       <div className="p-4 bg-white border-t sm:p-6 shadow-[0_-4px_10px_-1px_rgba(0,0,0,0.05)]">
-        <form 
+        <form
           onSubmit={handleSend}
           className="max-w-3xl mx-auto flex items-center gap-3 relative"
         >
@@ -171,17 +189,29 @@ function LoginForm() {
             disabled={isLoading || state === "COMPLETED"}
             className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all disabled:opacity-50"
           />
-          
+
           <button
             type="button"
             onClick={isListening ? stopListening : startListening}
             disabled={isLoading || state === "COMPLETED" || !hasSupport}
             className={`p-3 rounded-xl transition-all ${
-              isListening ? "bg-red-500 text-white animate-pulse" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              isListening
+                ? "bg-red-500 text-white animate-pulse"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
             } disabled:opacity-50`}
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m8 0h-8m4-29a3 3 0 013 3v10a3 3 0 01-3 3 3 3 0 01-3-3V7a3 3 0 013-3z" />
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m8 0h-8m4-29a3 3 0 013 3v10a3 3 0 01-3 3 3 3 0 01-3-3V7a3 3 0 013-3z"
+              />
             </svg>
           </button>
 
@@ -190,8 +220,18 @@ function LoginForm() {
             disabled={!input.trim() || isLoading || state === "COMPLETED"}
             className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all disabled:opacity-50 shadow-md shadow-indigo-100"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+              />
             </svg>
           </button>
         </form>

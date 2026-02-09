@@ -4,6 +4,7 @@ Defines the end-to-end candidate journey from landing page to dashboard unlock.
 This workflow is strict, gated, chat-based, and assessment-driven.
 
 Candidate Workflow (Phase-1)
+
 1. Entry & Authentication (Chat + Mic)
 
 Landing page shows:
@@ -81,28 +82,29 @@ Session created only on “Start Assessment”
 
 Question count depends on experience band:
 
-Fresher: max 8
-Mid: max 10
-Senior: max 13
-Leadership: max 16
+- **Fresher**: max 8 questions
+- **Mid-Level**: max 10 questions
+- **Senior**: max 13 questions
+- **Leadership**: max 16 questions
 
-Question types:
-Resume-based (conditional)
-Behavioral
-Psychometric
-Skills
-Reference (minimal for freshers)
+**Dynamic AI Evaluation**:
+Each response is processed by **Gemini 1.5 Flash** for qualitative scoring (0-6 scale) across Relevance, Specificity, Clarity, and Ownership.
 
-Real-time validation (no ML):
-answered?
-min length?
-keywords?
-on topic?
-logical flow?
-Anti-cheat:
-Copy-paste disabled
-1 tab switch → warning
-2 tab switches → permanent block
+**Security Logic**:
+
+- **2-Strike Tab Switch**: 1 warning, 2nd switch leads to a permanent ban (`blocked_users`).
+- **Timer**: 60 seconds per response.
+- **Score Impact**: Final normalized score (0-100) is calculated upon completion.
+
+5. Dashboard Unlock
+
+- Score displayed in premium ring chart.
+- Dashboard content (Job matches, Analytics) unlocked only if `assessment_status = 'completed'`.
+  logical flow?
+  Anti-cheat:
+  Copy-paste disabled
+  1 tab switch → warning
+  2 tab switches → permanent block
 
 5. Post-Assessment Aadhaar Upload (Phase-1)
 

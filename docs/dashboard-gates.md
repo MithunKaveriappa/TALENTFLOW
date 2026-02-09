@@ -5,33 +5,27 @@ There are no soft rules—these are hard gates.
 
 Candidate Dashboard Gates
 A Candidate CANNOT access the dashboard unless ALL conditions below are true.
-Mandatory Conditions
-candidate_profiles.experience_band is set
-Resume is uploaded
-→ candidate_profiles.resume_uploaded = true
-Assessment is completed
-→ candidate_profiles.assessment_completed = true
-Aadhaar is uploaded (file only, no verification)
-→ candidate_profiles.aadhaar_uploaded = true
-If Any Condition Fails
-Dashboard remains locked
-User stays in chat-based guided flow
-Clear messaging explains what is pending
 
-Recruiter Dashboard Gates
+### Mandatory Conditions
+
+1. **Experience Band set** (`experience` field).
+2. **Resume uploaded** (`resume_url` is not null).
+3. **Assessment completed** (`assessment_status = 'completed'`).
+
+### Recruiter Dashboard Gates
+
 A Recruiter CANNOT access the dashboard unless ALL conditions below are true.
-Mandatory Conditions
-Recruiter account exists
-Company profile is created
-Recruiter is mapped to company
-Recruiter assessment is completed
-→ recruiter_profiles.assessment_completed = true
-Company assessment is completed
-→ companies.assessment_completed = true
-If Any Condition Fails
-Dashboard remains locked
-Recruiter stays in onboarding chat
-System prompts next required step
+
+### Mandatory Conditions
+
+1. **Company details entered** (`company_id` mapped in `recruiter_profiles`).
+2. **Onboarding completed** (CIN/GSTIN provided).
+3. **Assessment completed** (`assessment_status = 'completed'`).
+
+### Blocked State
+
+- If a user is in the `blocked_users` table, access to ALL dashboards is permanently revoked.
+- The dashboard UI displays a locking overlay/blur if any condition is missing.
 
 Assessment Rules (Applies to Both)
 Assessment is one-time

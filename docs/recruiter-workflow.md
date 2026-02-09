@@ -3,6 +3,7 @@ Purpose
 Defines recruiter onboarding, assessment, and dashboard unlock logic.
 
 Recruiter Workflow (Phase-1)
+
 1. Entry & Authentication
 
 Recruiter selects Recruiter role
@@ -28,20 +29,31 @@ location
 description
 Company entity created.
 
-3. Recruiter Assessment Awareness
+3. Recruiter Assessment (The Quality Gate)
 
-Before dashboard unlock:
-Assessment purpose explained:
-company trust score
-candidate matching
-Exactly 5 questions
-No skip
-No copy/paste
-No tab switching
-Can take now or later
-Dashboard locked until completed
+Exactly **5 questions** assessing the following dimensions:
 
-4. Recruiter Assessment
+1. Hiring Intent
+2. Ethics & Fairness
+3. Role Clarity
+4. Candidate Value Proposition
+5. Fit Definition
+
+**Evaluation**:
+
+- AI-Driven qualitative scoring (0-6 scale) using Gemini 1.5 Flash.
+- **Security**: 2-strike tab-switching ban and 60-second response timers.
+
+4. Company Profile Score Generation
+
+- Total Dimension Sum is normalized to a **0-100 Company Quality Score**.
+- This score determines the company's reputation and visibility to top-tier candidates.
+- **Persistence**: Results are stored in `recruiter_assessment_responses` for auditing and scoring.
+
+5. Dashboard Unlock
+
+- Dashboard is **locked** (blurred/overlay) until the 5-question assessment is completed.
+- The premium dashboard features a "Company Profile Score" ring displaying the AI-calculated trust level.
 
 One continuous session
 

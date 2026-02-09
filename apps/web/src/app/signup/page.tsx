@@ -154,11 +154,14 @@ function SignupForm() {
             options: { shouldCreateUser: true },
           });
           setIsLoading(false);
-          
+
           if (error) {
             addMessage(`Failed to resend: ${error.message}`, "bot");
           } else {
-            addMessage("I've triggered a new code. Please check your inbox again.", "bot");
+            addMessage(
+              "I've triggered a new code. Please check your inbox again.",
+              "bot",
+            );
           }
           return;
         }
