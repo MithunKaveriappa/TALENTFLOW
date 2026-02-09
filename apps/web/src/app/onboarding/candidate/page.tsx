@@ -28,7 +28,6 @@ export default function CandidateOnboarding() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [state, setState] = useState<OnboardingState>("INITIAL");
-  const [userName, setUserName] = useState("");
   const [experienceBand, setExperienceBand] = useState<string>("fresher");
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [input, setInput] = useState("");
@@ -36,7 +35,7 @@ export default function CandidateOnboarding() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const initialized = useRef(false);
 
-  const { isListening, transcript, startListening, stopListening, hasSupport } =
+  const { isListening, transcript, startListening, stopListening } =
     useVoice();
 
   const handleLogout = async () => {
@@ -117,7 +116,6 @@ export default function CandidateOnboarding() {
       }
 
       const name = extractNameFromEmail(user.email || "");
-      setUserName(name);
 
       // 1. Load chat history from localStorage if it exists
       const savedChat = localStorage.getItem(`tf_onboarding_chat`);
@@ -125,12 +123,12 @@ export default function CandidateOnboarding() {
         try {
           const parsed = JSON.parse(savedChat);
           // Convert string timestamps back to Date objects
-          const hydrated = parsed.map((m: any) => ({
+          const hydrated = parsed.map((m: Message) => ({
             ...m,
             timestamp: new Date(m.timestamp),
           }));
           setMessages(hydrated);
-        } catch (e) {
+        } catch {
           localStorage.removeItem(`tf_onboarding_chat`);
         }
       }
@@ -203,7 +201,7 @@ export default function CandidateOnboarding() {
       }
     }
     init();
-  }, []);
+  }, [router]);
 
   const handleSend = async (textOverride?: string) => {
     const workingInput = textOverride || input.trim();
@@ -332,8 +330,9 @@ export default function CandidateOnboarding() {
           router.push("/assessment/candidate");
         }, 2000);
       }
-    } catch (err: any) {
-      addMessage(`Error: ${err.message}`, "bot");
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Unknown error";
+      addMessage(`Error: ${errorMsg}`, "bot");
     } finally {
       setIsLoading(false);
     }
@@ -396,8 +395,9 @@ export default function CandidateOnboarding() {
         await saveStep(nextState);
         setState(nextState);
       }, 1000);
-    } catch (err: any) {
-      addMessage(`Upload failed: ${err.message}`, "bot");
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Upload failed";
+      addMessage(`Upload failed: ${errorMsg}`, "bot");
     } finally {
       setIsLoading(false);
     }

@@ -4,6 +4,7 @@ from src.api.health import router as health_router
 from src.api.protected import router as protected_router
 from src.api.auth import router as auth_router
 from src.api.candidate import router as candidate_router
+from src.api.assessment import router as assessment_router
 
 app = FastAPI(title="TalentFlow API")
 
@@ -19,6 +20,7 @@ app.include_router(health_router, prefix="/health")
 app.include_router(protected_router, prefix="/protected")
 app.include_router(auth_router, prefix="/auth")
 app.include_router(candidate_router)
+app.include_router(assessment_router, prefix="/assessment")
 
 @app.get("/")
 def root():

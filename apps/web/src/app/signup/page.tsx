@@ -128,23 +128,41 @@ function SignupForm() {
               });
 
               if (error) {
+                console.error("Supabase Auth Error:", error);
                 addMessage(
-                  `Sorry, I couldn't send the code: ${error.message}`,
+                  `Sorry, I couldn't send the code: ${error.message}. Please check if you've hit the rate limit.`,
                   "bot",
                 );
               } else {
                 addMessage(
-                  "Code sent! Please enter the 6-digit code from your email.",
+                  "Code sent! Please enter the 6-digit code from your email. (Check your spam folder if it doesn't appear in 1 minute)",
                   "bot",
                 );
                 setState("AWAITING_OTP");
               }
             } catch (err: any) {
+              console.error("Validation Error:", err);
               addMessage(err.message || "Email validation failed.", "bot");
             }
           }
         }
       } else if (state === "AWAITING_OTP") {
+        if (workingInput.toLowerCase() === "resend") {
+          setIsLoading(true);
+          const { error } = await supabase.auth.signInWithOtp({
+            email,
+            options: { shouldCreateUser: true },
+          });
+          setIsLoading(false);
+          
+          if (error) {
+            addMessage(`Failed to resend: ${error.message}`, "bot");
+          } else {
+            addMessage("I've triggered a new code. Please check your inbox again.", "bot");
+          }
+          return;
+        }
+
         const { error } = await supabase.auth.verifyOtp({
           email,
           token: workingInput,

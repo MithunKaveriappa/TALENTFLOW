@@ -104,9 +104,9 @@ def post_login(user: dict = Depends(get_current_user)):
         
         # 2. Check assessment status
         if role == "candidate":
-            profile_res = supabase.table("candidate_profiles").select("assessment_status").eq("user_id", user_id).execute()
+            profile_res = supabase.table("candidate_profiles").select("*").eq("user_id", user_id).execute()
         else:
-            profile_res = supabase.table("recruiter_profiles").select("assessment_status").eq("user_id", user_id).execute()
+            profile_res = supabase.table("recruiter_profiles").select("*").eq("user_id", user_id).execute()
             
         # Safe access to profile data
         status = "not_started"
@@ -115,9 +115,16 @@ def post_login(user: dict = Depends(get_current_user)):
         
         # 3. Determine next step
         if status == "completed":
-            next_step = f"/{role}/dashboard"
+            next_step = f"/dashboard/{role}"
+        elif status == "in_progress":
+            next_step = f"/assessment/{role}"
         else:
-            next_step = f"/onboarding/{role}"
+            # Check onboarding step
+            profile_data = profile_res.data[0] if profile_res.data else {}
+            if profile_data.get("onboarding_step") == "COMPLETED":
+                next_step = f"/assessment/{role}"
+            else:
+                next_step = f"/onboarding/{role}"
             
         return {
             "next_step": next_step,

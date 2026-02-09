@@ -73,7 +73,7 @@ export default function Home() {
           </div>
 
           {/* Subtle Background Elements */}
-          <div className="absolute top-0 -z-10 h-full w-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-50/50 via-white to-white" />
+          <div className="absolute top-0 -z-10 h-full w-full bg-[radial-gradient(ellipse_at_top,var(--tw-gradient-stops))] from-indigo-50/50 via-white to-white" />
         </section>
 
         {/* Features / Value Props */}
