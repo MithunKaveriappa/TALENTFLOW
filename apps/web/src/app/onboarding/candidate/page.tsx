@@ -172,9 +172,11 @@ export default function CandidateOnboarding() {
               "bot",
             );
           } else if (savedStep === "CONSENT") {
-            addMessage("Ready to start your high-trust assessment?", "bot", [
-              "Start Assessment",
-            ]);
+            addMessage(
+              "Welcome back! You are now ready for the formal assessment phase. Please note: the session takes 10-15 minutes, with a 60-second limit per question. Tab switching is strictly prohibited and will be flagged. This assessment significantly impacts your profile score. Ready to begin?",
+              "bot",
+              ["Start Assessment"],
+            );
           }
         }
 
@@ -305,11 +307,18 @@ export default function CandidateOnboarding() {
 
           setTimeout(() => {
             addMessage(
-              "Ready to start your high-trust assessment? This will involve behavioral, cognitive and psychometric gates.",
+              "Thank you. Your profile is now ready for the evaluation phase. Before we proceed, please review these important instructions:",
+              "bot",
+            );
+          }, 1000);
+
+          setTimeout(() => {
+            addMessage(
+              "The assessment requires 10-15 minutes of focus. You will have exactly 60 seconds to answer each question. Please ensure you do not switch tabs or minimize the window, as this is a monitored environment. This stage is critical; your performance will directly determine your profile trust score and impact your career matching. Are you ready to start?",
               "bot",
               ["Start Assessment"],
             );
-          }, 1000);
+          }, 2500);
         }
       } else if (state === "CONSENT") {
         const nextState = "COMPLETED";
