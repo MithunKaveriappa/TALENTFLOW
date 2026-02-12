@@ -417,7 +417,7 @@ export default function AssessmentExam() {
               />
             </svg>
             <span className="text-[10px] font-black uppercase tracking-widest">
-              Quit
+              Logout
             </span>
           </button>
 
@@ -488,8 +488,14 @@ export default function AssessmentExam() {
           <div className="relative">
             <textarea
               value={answer}
-              onChange={(e) => setAnswer(e.target.value)}
-              placeholder="Type your professional response here... Be detailed yet precise."
+              onChange={(e) => {
+                const val = e.target.value;
+                setAnswer(val);
+                if (val.toLowerCase().trim() === "logout") {
+                  handleLogout();
+                }
+              }}
+              placeholder="Type your professional response here... Be detailed yet precise. (Type 'logout' to exit)"
               className="w-full h-64 md:h-80 bg-slate-50 border border-slate-200 rounded-3xl p-8 text-lg text-slate-800 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all placeholder:text-slate-400 resize-none shadow-sm"
               disabled={isLoading || !currentQuestion}
               autoFocus

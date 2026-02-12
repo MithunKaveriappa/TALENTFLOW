@@ -28,7 +28,7 @@ export default function CandidateDashboard() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push("/login");
+    router.replace("/login");
   };
 
   useEffect(() => {
@@ -38,7 +38,7 @@ export default function CandidateDashboard() {
           data: { session: authSession },
         } = await supabase.auth.getSession();
         if (!authSession) {
-          router.push("/login");
+          router.replace("/login");
           return;
         }
 

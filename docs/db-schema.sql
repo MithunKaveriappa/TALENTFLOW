@@ -25,6 +25,53 @@ CREATE TYPE assessment_status AS ENUM (
   'disqualified'
 );
 
+CREATE TYPE employment_status AS ENUM (
+  'Employed', 
+  'Unemployed', 
+  'Student'
+);
+
+CREATE TYPE company_size_band AS ENUM (
+  '1-10', 
+  '11-50', 
+  '51-200', 
+  '201-500', 
+  '501-1000', 
+  '1000+'
+);
+
+CREATE TYPE sales_model_type AS ENUM (
+  'Inbound', 
+  'Outbound', 
+  'Hybrid'
+);
+
+CREATE TYPE target_market AS ENUM (
+  'SMB', 
+  'Mid-market', 
+  'Enterprise'
+);
+
+CREATE TYPE account_status AS ENUM (
+  'Active', 
+  'Restricted', 
+  'Suspended', 
+  'Blocked'
+);
+
+CREATE TYPE profile_strength AS ENUM (
+  'Low', 
+  'Moderate', 
+  'Strong', 
+  'Elite'
+);
+
+CREATE TYPE job_type AS ENUM (
+  'remote', 
+  'hybrid', 
+  'onsite'
+);
+
 -- ---------- USERS ----------
 
 CREATE TABLE users (
@@ -43,7 +90,13 @@ CREATE TABLE companies (
   website TEXT,
   location TEXT,
   description TEXT,
+  industry_category TEXT,
+  size_band company_size_band,
+  sales_model sales_model_type,
+  target_market target_market,
   profile_score INTEGER DEFAULT 0,
+  visibility_tier TEXT DEFAULT 'Low',
+  verification_status TEXT DEFAULT 'Under Review',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
@@ -51,14 +104,44 @@ CREATE TABLE companies (
 
 CREATE TABLE candidate_profiles (
   user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  full_name TEXT,
+  phone_number TEXT,
+  profile_photo_url TEXT,
+  bio TEXT,
   experience experience_band NOT NULL,
   location TEXT,
+  "current_role" TEXT,
+  years_of_experience INTEGER,
+  primary_industry_focus TEXT,
+  current_employment_status employment_status,
+  current_company_name TEXT,
+  previous_companies TEXT[] DEFAULT '{}',
+  key_responsibilities TEXT,
+  major_achievements TEXT,
   resume_uploaded BOOLEAN DEFAULT false,
   assessment_status assessment_status DEFAULT 'not_started',
   skills TEXT[], 
+  sales_metrics JSONB DEFAULT '{}',
+  crm_tools TEXT[] DEFAULT '{}',
+  sales_methodologies TEXT[] DEFAULT '{}',
+  product_domain_expertise TEXT[] DEFAULT '{}',
+  target_market_exposure TEXT,
+  linkedin_url TEXT,
+  portfolio_url TEXT,
+  learning_links JSONB DEFAULT '[]',
+  career_interests TEXT[] DEFAULT '{}',
+  learning_interests TEXT[] DEFAULT '{}',
+  job_type job_type DEFAULT 'onsite',
+  social_links JSONB DEFAULT '{}',
   onboarding_step TEXT DEFAULT 'INITIAL',
+  profile_strength profile_strength DEFAULT 'Low',
+  completion_score INTEGER DEFAULT 0,
   final_profile_score INTEGER,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+  identity_verified BOOLEAN DEFAULT false,
+  terms_accepted BOOLEAN DEFAULT false,
+  account_status account_status DEFAULT 'Active',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
 -- ---------- RECRUITER PROFILE ----------
@@ -66,10 +149,16 @@ CREATE TABLE candidate_profiles (
 CREATE TABLE recruiter_profiles (
   user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   company_id UUID REFERENCES companies(id),
+  full_name TEXT,
+  phone_number TEXT,
+  job_title TEXT,
+  linkedin_url TEXT,
   onboarding_step TEXT DEFAULT 'REGISTRATION',
   warning_count INTEGER DEFAULT 0,
+  completion_score INTEGER DEFAULT 0,
   assessment_status assessment_status DEFAULT 'not_started',
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
 -- ---------- BLOCKED USERS ----------
@@ -198,8 +287,8 @@ $$ LANGUAGE sql STABLE;
 -- ---------- POLICIES ----------
 
 -- Users
-CREATE POLICY "Users can read own record" 
-ON users FOR SELECT USING (id = auth.uid());
+CREATE POLICY "Users can read own profile" ON users FOR SELECT USING (id = auth.uid());
+CREATE POLICY "Users can read own record" ON users FOR SELECT USING (id = auth.uid());
 
 -- Companies
 CREATE POLICY "Recruiter can read own company" 
@@ -207,19 +296,23 @@ ON companies FOR SELECT
 USING (id IN (SELECT company_id FROM recruiter_profiles WHERE user_id = auth.uid()));
 
 -- Candidate Profiles
+CREATE POLICY "Candidate can read own profile" ON candidate_profiles FOR SELECT USING (user_id = auth.uid());
+CREATE POLICY "Candidate can update own profile" ON candidate_profiles FOR UPDATE USING (user_id = auth.uid());
 CREATE POLICY "Users can manage own candidate profile" 
 ON candidate_profiles FOR ALL 
 USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
 -- Recruiter Profiles
+CREATE POLICY "Recruiter can read own profile" ON recruiter_profiles FOR SELECT USING (user_id = auth.uid());
+CREATE POLICY "Recruiter can update own profile" ON recruiter_profiles FOR UPDATE USING (user_id = auth.uid());
 CREATE POLICY "Users can manage own recruiter profile" 
 ON recruiter_profiles FOR ALL 
 USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
 -- Blocked Users
-CREATE POLICY "Users can check their own blocked status" 
-ON blocked_users FOR SELECT 
-USING (auth.uid() = user_id);
+CREATE POLICY "Allow users to check their own blocked status" ON blocked_users FOR SELECT TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "Read access for blocked status check" ON blocked_users FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Users can check their own blocked status" ON blocked_users FOR SELECT USING (auth.uid() = user_id);
 
 -- Assessment Questions
 CREATE POLICY "Allow authenticated read access to questions" 

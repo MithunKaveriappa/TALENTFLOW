@@ -70,6 +70,12 @@ export default function RecruiterOnboarding() {
 
   const { isListening, transcript, startListening, stopListening } = useVoice();
 
+  const handleLogout = async () => {
+    localStorage.removeItem("tf_recruiter_onboarding");
+    await supabase.auth.signOut();
+    router.push("/login");
+  };
+
   // Scroll to bottom
   useEffect(() => {
     if (scrollRef.current) {
@@ -256,6 +262,12 @@ export default function RecruiterOnboarding() {
     if (!val && !isLoading) return;
     if (isLoading) return;
 
+    if (val.toLowerCase() === "logout" || val.toLowerCase() === "exit") {
+      addMessage("Logging out...", "bot");
+      setTimeout(handleLogout, 1000);
+      return;
+    }
+
     addMessage(val, "user");
     setInput("");
     setIsLoading(true);
@@ -366,13 +378,21 @@ export default function RecruiterOnboarding() {
         <h1 className="text-xl font-bold tracking-tighter text-blue-500 italic">
           TALENTFLOW
         </h1>
-        {isAssessmentActive && (
-          <div
-            className={`px-4 py-1 rounded-full text-sm font-mono ${timeLeft < 15 ? "bg-red-900 animate-pulse" : "bg-zinc-800"}`}
+        <div className="flex items-center gap-4">
+          {isAssessmentActive && (
+            <div
+              className={`px-4 py-1 rounded-full text-sm font-mono ${timeLeft < 15 ? "bg-red-900 animate-pulse" : "bg-zinc-800"}`}
+            >
+              00:{timeLeft.toString().padStart(2, "0")}
+            </div>
+          )}
+          <button
+            onClick={handleLogout}
+            className="text-xs font-bold text-zinc-500 hover:text-red-500 transition-colors uppercase tracking-widest"
           >
-            00:{timeLeft.toString().padStart(2, "0")}
-          </div>
-        )}
+            Logout
+          </button>
+        </div>
       </div>
 
       <div
