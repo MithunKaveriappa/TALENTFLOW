@@ -3,6 +3,8 @@ from src.core.dependencies import get_current_user
 from src.core.supabase import supabase
 from pydantic import BaseModel
 from src.services.resume_service import ResumeService
+from src.services.candidate_service import CandidateService
+from src.schemas.candidate import CandidateProfileUpdate, CandidateStats
 from src.core.config import GOOGLE_API_KEY
 
 router = APIRouter(prefix="/candidate", tags=["candidate"])
@@ -23,8 +25,48 @@ class StepUpdate(BaseModel):
 def get_profile(user: dict = Depends(get_current_user)):
     user_id = user["sub"]
     try:
-        res = supabase.table("candidate_profiles").select("*").eq("user_id", user_id).single().execute()
-        return res.data
+        # Use execute() instead of single() to avoid 404/PGRST116 errors
+        res = supabase.table("candidate_profiles").select("*").eq("user_id", user_id).execute()
+        if not res.data:
+            return None
+        return res.data[0]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.patch("/profile")
+def update_profile(
+    request: CandidateProfileUpdate,
+    user: dict = Depends(get_current_user)
+):
+    user_id = user["sub"]
+    try:
+        # 1. Update Profile Fields
+        update_data = request.model_dump(exclude_unset=True, by_alias=True)
+        supabase.table("candidate_profiles").update(update_data).eq("user_id", user_id).execute()
+        
+        # 2. Recalculate Completion Score (Safe fetch)
+        profile_res = supabase.table("candidate_profiles").select("*").eq("user_id", user_id).execute()
+        if not profile_res.data:
+             return {"status": "error", "detail": "Profile not found"}
+             
+        full_profile = profile_res.data[0]
+        completion_score = CandidateService.calculate_completion_score(full_profile)
+        
+        # 3. Save Score
+        supabase.table("candidate_profiles").update({
+            "completion_score": completion_score,
+            "updated_at": "now()"
+        }).eq("user_id", user_id).execute()
+        
+        return {"status": "profile_updated", "completion_score": completion_score}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/stats", response_model=CandidateStats)
+def get_stats(user: dict = Depends(get_current_user)):
+    user_id = user["sub"]
+    try:
+        return CandidateService.get_candidate_stats(user_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

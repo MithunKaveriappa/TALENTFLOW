@@ -64,14 +64,15 @@ Reason:
 
 ### candidate_profiles
 
-- Read: Candidate can read their own profile
-- Update: Candidate can update allowed fields
-- Insert/Delete: Backend only
+- Read (Candidate): Can read their own profile.
+- Read (Recruiter): Can read profiles where `assessment_status = 'completed'`.
+- Update: Candidate can update allowed fields.
+- Insert/Delete: Backend only.
 
 Reason:
 
-- Profile ownership enforcement
-- Controlled assessment flow
+- Enforce talent privacy (only completed profiles visible).
+- Protect internal candidate signals (raw scores masked via API layer).
 
 ---
 

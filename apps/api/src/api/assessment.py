@@ -88,17 +88,18 @@ async def handle_tab_switch(user: dict = Depends(get_current_user)):
 async def get_results(user: dict = Depends(get_current_user)):
     user_id = user["sub"]
     
-    # 1. Fetch current session
-    res = supabase.table("assessment_sessions").select("*").eq("candidate_id", user_id).single().execute()
+    # 1. Fetch current session (Safe fetch)
+    res = supabase.table("assessment_sessions").select("*").eq("candidate_id", user_id).execute()
     if not res.data:
-        raise HTTPException(status_code=404, detail="Assessment results not found")
+        return None  # Return null so frontend shows onboarding prompt
     
-    session = res.data
+    session = res.data[0]
     
-    # 2. FORCE RE-CALCULATION to fix the score from old logic
-    # This ensures the user sees the normalized score (e.g. 23% instead of 8%) immediately
-    updated_results = await assessment_service.complete_assessment(user_id, session)
-    
-    # 3. Refetch to get the updated values
-    refetch = supabase.table("assessment_sessions").select("*").eq("candidate_id", user_id).single().execute()
-    return refetch.data
+    # 2. FORCE RE-CALCULATION if status is completed
+    if session.get("status") == "completed":
+        await assessment_service.complete_assessment(user_id, session)
+        # Refetch to get updated values
+        res = supabase.table("assessment_sessions").select("*").eq("candidate_id", user_id).execute()
+        return res.data[0]
+        
+    return session

@@ -74,13 +74,16 @@ Company score calculated
 Stored at company level
 Shared across all recruiters of that company
 
-6. Dashboard Unlock
+6. Talent Discovery (Candidate Pool)
 
-Unlocked only if:
-Recruiter assessment completed
-Company assessment marked completed
+Once the dashboard is unlocked, recruiters gain access to the **TalentFlow Candidate Pool**:
 
-7. Recruiter Dashboard Access
+- **Experience Targeting**: Candidates are automatically categorized into bands (Fresher, Mid, Senior, Leadership).
+- **Verified Trust Signal**: Recruiters see a high-level **Trust Score (0-100)** which is an aggregate of behavioral and psychometric signals.
+- **Privacy First**: Raw assessment answers and component scores are hidden from recruiters to prevent bias and protect candidate data integrity.
+- **Real-time Sync**: The pool updates instantly as candidates complete assessments or update profiles.
+
+7. Recruiter Actions
 
 Recruiter can now:
 

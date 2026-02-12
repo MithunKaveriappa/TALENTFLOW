@@ -46,26 +46,18 @@ TalentFlow is a high-trust recruitment platform designed to verify candidate sig
 
 ### 3.3 Recruiter Implementation
 
-#### A. Company Onboarding
-
+#### A. Company Onboarding & Sync
 - **Validation**: Recruiter must provide a valid Company Registration Number (CIN or GSTIN) validated via Regex.
-- **Profiling**: Basic company details (Name, Website, Location, Description) are captured.
+- **Auto-Sync**: If a company registration number already exists in the system (onboarded by another recruiter), the new recruiter is automatically linked, and the company's `profile_score` is inherited.
 
 #### B. Recruiter Assessment
-
 - **Purpose**: To generate a "Company Profile Score" signaling trust and hiring intent.
-- **Structure**: 5 mandatory questions covering:
-  1. Hiring Intent & Role Clarity
-  2. Ideal Candidate Profile (ICP) Understanding
-  3. Ethics & Fair Hiring Practices
-  4. Candidate Value Proposition
-  5. Decision-Making & Ownership
-- **Scoring**: Rule-based AI evaluation on a 0–6 scale across the same 4 dimensions as candidates.
+- **Structure**: 5 mandatory questions covering ICP, Ethics, Value Prop, and Intent.
 
-#### C. Dashboard
-
-- **Premium UI**: Matches the candidate aesthetic but focused on recruiter needs.
-- **Gating**: Dashboard remains "Locked" until the assessment is completed.
+#### C. Talent Marketplace (Candidate Pool)
+- **Real-time Synchronization**: Uses Supabase real-time channels to update the candidate pool UI instantly when profiles are updated.
+- **Data Masking (Trust Matrix)**: Recruiters do not see raw behavioral or psychometric scores. Instead, they see a consolidated **"Verified Trust Score"** (60% Psychometric, 40% Behavioral).
+- **Access Control**: Recruiters can only see candidates who have an `assessment_status` of `'completed'`.
 
 ### 3.4 Security & Anti-Cheat
 

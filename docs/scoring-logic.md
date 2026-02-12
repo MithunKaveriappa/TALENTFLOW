@@ -52,7 +52,17 @@ Weights adjust based on the candidate's level:
 | Skill-Based | 30%     | 35%       | 30%    | 20%        |
 | Core Values | 10%     | 10%       | 20%    | 30%        |
 
-## 4. Normalization and Immutability
+## 4. The Verified Trust Matrix (Recruiter View)
+
+To protect candidate raw data while providing actionable trust signals, recruiters view a consolidated **Trust Score** instead of individual assessment metrics.
+
+### Calculation:
+$$Trust Score = (Psychometric Score \times 0.6) + (Behavioral Score \times 0.4)$$
+
+- **Masking**: Raw `psychometric_score` and `behavioral_score` are deleted from the API payload before being sent to the recruiter frontend.
+- **Sorting**: The Candidate Pool is automatically sorted by this Trust Score to prioritize the most reliable talent.
+
+## 5. Normalization and Immutability
 
 - **Normalization**: All raw scores are mapped to the 0-100 range for display.
 - **Immutable**: Once a session is marked `completed`, the score is finalized.

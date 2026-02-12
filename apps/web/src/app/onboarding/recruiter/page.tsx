@@ -297,9 +297,18 @@ export default function RecruiterOnboarding() {
             token,
           );
           setCompanyId(res.company_id);
-          setState("DETAILS");
-          addMessage("Registration confirmed.", "bot");
-          addMessage("What is the full legal name of your company?", "bot");
+
+          if (res.onboarding_step === "COMPLETED") {
+            addMessage(
+              "Your company is already vetted! Fast-tracking you to the Command Center...",
+              "bot",
+            );
+            setTimeout(() => router.push("/dashboard/recruiter"), 2000);
+          } else {
+            setState("DETAILS");
+            addMessage("Registration confirmed.", "bot");
+            addMessage("What is the full legal name of your company?", "bot");
+          }
         }
       } else if (state === "DETAILS") {
         const nextDetails = { ...companyDetails };

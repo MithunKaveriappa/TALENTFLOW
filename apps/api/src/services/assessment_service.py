@@ -249,12 +249,12 @@ class AssessmentService:
             return 3, {"reasoning": "Fallback score due to AI timeout"}
 
     async def _store_response(self, user_id: str, q_id: Optional[str], category: str, answer: str, score: int, is_skipped: bool, metadata: dict):
-        # 1. Fetch current session for updates
-        session_res = supabase.table("assessment_sessions").select("*").eq("candidate_id", user_id).single().execute()
+        # 1. Fetch current session for updates (Safe fetch)
+        session_res = supabase.table("assessment_sessions").select("*").eq("candidate_id", user_id).execute()
         if not session_res.data:
             return {"status": "error", "message": "Session not found"}
         
-        session = session_res.data
+        session = session_res.data[0]
         new_step = session["current_step"] + 1
         
         # 2. Update Driver Confidence if score > 4

@@ -198,7 +198,7 @@ export default function Home() {
               {/* Decorative Element */}
               <div className="absolute right-0 bottom-0 opacity-10">
                 <svg
-                  className="w-[400px] h-[400px]"
+                  className="w-100 h-100"
                   viewBox="0 0 100 100"
                   fill="none"
                   xmlns="http://www.w3.org/2000/svg"

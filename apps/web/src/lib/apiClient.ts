@@ -24,6 +24,29 @@ export const apiClient = {
     return response.json();
   },
 
+  async patch(path: string, body: any, token?: string) {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${API_URL}${path}`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || "Request failed");
+    }
+
+    return response.json();
+  },
+
   async get(path: string, token?: string) {
     const headers: Record<string, string> = {};
 

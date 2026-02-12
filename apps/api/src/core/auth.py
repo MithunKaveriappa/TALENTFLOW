@@ -24,8 +24,16 @@ def verify_supabase_jwt(token: str) -> dict:
         }
 
     except Exception as e:
-        print(f"ERR: JWT Verification failed: {str(e)}")
+        err_msg = str(e)
+        print(f"ERR: JWT Verification failed: {err_msg}")
+        
+        # Handle specific connection errors with clearer messages
+        if "disconnected" in err_msg.lower() or "connection" in err_msg.lower():
+            detail = "Identity server connection failed. Please ensure the backend can reach Supabase."
+        else:
+            detail = f"Invalid authentication token: {err_msg}"
+            
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid authentication token: {str(e)}",
+            detail=detail,
         )

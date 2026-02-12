@@ -33,25 +33,6 @@ function LoginForm() {
   const { isListening, transcript, startListening, stopListening, hasSupport } =
     useVoice();
 
-  // Redirect if already logged in
-  useEffect(() => {
-    const checkSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        try {
-          const handshake = await apiClient.get(
-            "/auth/post-login",
-            data.session.access_token,
-          );
-          router.replace(handshake.next_step);
-        } catch (err) {
-          console.error("Auto-redirect failed:", err);
-        }
-      }
-    };
-    checkSession();
-  }, [router]);
-
   // Scroll to bottom whenever messages change
   useEffect(() => {
     if (scrollRef.current) {
@@ -133,7 +114,7 @@ function LoginForm() {
             setState("COMPLETED");
 
             setTimeout(() => {
-              router.replace(handshake.next_step);
+              router.push(handshake.next_step);
             }, 2000);
           } catch (err: any) {
             addMessage(

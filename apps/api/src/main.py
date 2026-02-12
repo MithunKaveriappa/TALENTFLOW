@@ -22,7 +22,7 @@ app.include_router(protected_router, prefix="/protected")
 app.include_router(auth_router, prefix="/auth")
 app.include_router(candidate_router)
 app.include_router(assessment_router, prefix="/assessment")
-app.include_router(recruiter_router, prefix="/recruiter")
+app.include_router(recruiter_router)
 
 @app.get("/")
 def root():

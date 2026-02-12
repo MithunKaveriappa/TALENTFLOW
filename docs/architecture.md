@@ -58,6 +58,7 @@ FastAPI is the **single source of truth** for:
 
 - **AI Orchestration**: Sending sanitized responses to Gemini for scoring.
 - **Assessment Management**: Selecting questions, managing timers, and calculating final profile scores.
+- **Data Privacy & Discovery**: Masking sensitive candidate metrics (Psychometric/Behavioral) and providing unified **Trust Matrix** signals to recruiters.
 - **Security Decisions**: Enforcing permanent bans via the `blocked_users` table.
 - **Role-Based Access Control (RBAC)**: Gating the Recruiter/Candidate dashboards.
 

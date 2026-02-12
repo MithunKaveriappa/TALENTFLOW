@@ -20,14 +20,14 @@ The system answers:
 
 * Experience band
 * Consolidated skills (resume + manual)
-* Profile score
+* **Verified Trust Score** (60/40 Psychometric vs Behavioral)
 * Location (optional)
 
 ### Job / Company Inputs
 
 * Required skills
 * Experience level
-* Company profile score
+* **Company Profile Score** (Recruiter reliability)
 * Role type
 
 
@@ -37,6 +37,7 @@ Matching fails immediately if:
 
 * Experience band mismatch
 * Zero skill overlap
+* **Trust Threshold**: Candidates with extreme low-trust signals are de-ranked.
 
 Hard filters prevent irrelevant noise.
 

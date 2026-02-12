@@ -21,39 +21,56 @@ interface AssessmentResults {
   completed_at?: string;
 }
 
+interface CandidateStats {
+  applications_count: number;
+  shortlisted_count: number;
+  invites_received: number;
+  posts_count: number;
+  saved_jobs_count: number;
+  profile_score: number | null;
+  profile_strength: string;
+  completion_score: number;
+  assessment_status: string;
+  identity_verified: boolean;
+  account_status: string;
+}
+
 export default function CandidateDashboard() {
   const router = useRouter();
   const [results, setResults] = useState<AssessmentResults | null>(null);
+  const [stats, setStats] = useState<CandidateStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.replace("/login");
+    router.push("/login");
   };
 
   useEffect(() => {
-    async function loadResults() {
+    async function loadData() {
       try {
         const {
           data: { session: authSession },
         } = await supabase.auth.getSession();
         if (!authSession) {
-          router.replace("/login");
+          router.push("/login");
           return;
         }
 
-        const data = await apiClient.get(
-          "/assessment/results",
-          authSession.access_token,
-        );
-        setResults(data);
+        const [resultsData, statsData] = await Promise.all([
+          apiClient.get("/assessment/results", authSession.access_token),
+          apiClient.get("/candidate/stats", authSession.access_token),
+        ]);
+
+        setResults(resultsData);
+        setStats(statsData);
       } catch (err) {
-        console.error("Failed to load results:", err);
+        console.error("Failed to load dashboard data:", err);
       } finally {
         setLoading(false);
       }
     }
-    loadResults();
+    loadData();
   }, [router]);
 
   if (loading) {
@@ -87,8 +104,15 @@ export default function CandidateDashboard() {
         </div>
 
         <nav className="flex-1 p-6 space-y-2">
-          <SidebarLink label="Dashboard" active />
-          <SidebarLink label="My Profile" />
+          <SidebarLink
+            label="Dashboard"
+            active
+            onClick={() => router.push("/dashboard/candidate")}
+          />
+          <SidebarLink
+            label="My Profile"
+            onClick={() => router.push("/dashboard/candidate/profile")}
+          />
           <SidebarLink label="Assessments" />
           <SidebarLink label="Trust Matrix" />
           <SidebarLink label="Job Matches" />
@@ -137,7 +161,7 @@ export default function CandidateDashboard() {
       <main className="flex-1 ml-64 p-6 md:p-12 overflow-y-auto">
         {!results ? (
           <div className="min-h-[70vh] flex items-center justify-center">
-            <div className="text-center p-12 bg-white rounded-[2rem] shadow-2xl shadow-slate-200/50 border border-slate-100 max-w-md w-full relative overflow-hidden group">
+            <div className="text-center p-12 bg-white rounded-4xl shadow-2xl shadow-slate-200/50 border border-slate-100 max-w-md w-full relative overflow-hidden group">
               {/* Decorative element */}
               <div className="absolute top-0 left-0 w-full h-1.5 bg-linear-to-r from-amber-400 to-orange-500" />
 
@@ -202,11 +226,57 @@ export default function CandidateDashboard() {
               <div className="flex items-end gap-8">
                 <div className="text-right hidden sm:block">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    Profile Strength
+                  </span>
+                  <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                    <div
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        stats?.profile_strength === "Elite"
+                          ? "bg-purple-500"
+                          : stats?.profile_strength === "Strong"
+                            ? "bg-emerald-500"
+                            : stats?.profile_strength === "Moderate"
+                              ? "bg-indigo-500"
+                              : "bg-slate-400"
+                      }`}
+                    />
+                    {stats?.profile_strength?.toUpperCase() || "LOW"}
+                  </div>
+                </div>
+                <div className="text-right hidden sm:block">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    Completion
+                  </span>
+                  <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                    <span className="text-indigo-600">
+                      {stats?.completion_score || 0}%
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right hidden sm:block">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                     Identity Status
                   </span>
-                  <div className="flex items-center gap-2 text-emerald-600 font-bold text-sm">
-                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    VERIFIED
+                  <div
+                    className={`flex items-center gap-2 font-bold text-sm ${stats?.identity_verified ? "text-emerald-600" : "text-amber-600"}`}
+                  >
+                    <div
+                      className={`h-1.5 w-1.5 rounded-full ${stats?.identity_verified ? "bg-emerald-500" : "bg-amber-500"}`}
+                    />
+                    {stats?.identity_verified ? "VERIFIED" : "PENDING"}
+                  </div>
+                </div>
+                <div className="text-right hidden sm:block">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    Trust Status
+                  </span>
+                  <div
+                    className={`flex items-center gap-2 font-bold text-sm ${stats?.account_status === "Active" ? "text-indigo-600" : "text-red-600"}`}
+                  >
+                    <div
+                      className={`h-1.5 w-1.5 rounded-full ${stats?.account_status === "Active" ? "bg-indigo-500" : "bg-red-500"}`}
+                    />
+                    {stats?.account_status?.toUpperCase() || "ACTIVE"}
                   </div>
                 </div>
                 <button
@@ -330,6 +400,72 @@ export default function CandidateDashboard() {
               <ScoreTile label="Psychometric" score={scores.psychometric} />
             </div>
 
+            {/* Engagement Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <StatCard
+                label="Apps"
+                value={stats?.applications_count || 0}
+                icon={
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                  />
+                }
+              />
+              <StatCard
+                label="Shortlisted"
+                value={stats?.shortlisted_count || 0}
+                color="text-emerald-500"
+                icon={
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
+                }
+              />
+              <StatCard
+                label="Invites"
+                value={stats?.invites_received || 0}
+                color="text-indigo-500"
+                icon={
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                  />
+                }
+              />
+              <StatCard
+                label="Saved"
+                value={stats?.saved_jobs_count || 0}
+                icon={
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
+                  />
+                }
+              />
+              <StatCard
+                label="Posts"
+                value={stats?.posts_count || 0}
+                icon={
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                  />
+                }
+              />
+            </div>
+
             <div className="bg-white rounded-[2.5rem] p-10 border border-slate-200/60 shadow-sm overflow-hidden relative">
               <div className="relative z-10">
                 <h3 className="text-xl font-black text-slate-900 mb-8 flex items-center gap-3 italic text-wrap wrap-break-word">
@@ -364,12 +500,15 @@ export default function CandidateDashboard() {
 function SidebarLink({
   label,
   active = false,
+  onClick,
 }: {
   label: string;
   active?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <div
+      onClick={onClick}
       className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-3 transition-all cursor-pointer ${active ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100" : "text-slate-400 hover:text-indigo-600 hover:bg-slate-50"}`}
     >
       <div
@@ -432,6 +571,39 @@ function FeedbackItem({
       <p className="text-slate-500 text-xs leading-relaxed font-medium">
         {desc}
       </p>
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  icon,
+  color = "text-slate-900",
+}: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  color?: string;
+}) {
+  return (
+    <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-xs hover:shadow-md transition-all group flex flex-col items-center text-center">
+      <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center mb-4 group-hover:bg-indigo-50 transition-colors">
+        <svg
+          className="h-5 w-5 text-slate-400 group-hover:text-indigo-500"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          {icon}
+        </svg>
+      </div>
+      <span className={`text-2xl font-black italic mb-1 ${color}`}>
+        {value}
+      </span>
+      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+        {label}
+      </span>
     </div>
   );
 }

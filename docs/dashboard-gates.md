@@ -18,9 +18,10 @@ A Recruiter CANNOT access the dashboard unless ALL conditions below are true.
 
 ### Mandatory Conditions
 
-1. **Company details entered** (`company_id` mapped in `recruiter_profiles`).
-2. **Onboarding completed** (CIN/GSTIN provided).
-3. **Assessment completed** (`assessment_status = 'completed'`).
+1. **Company Sync completed** (`company_id` mapped).
+2. **Onboarding step reached** (`onboarding_step = 'COMPLETED'`).
+3. **Internal/Company assessment completed**. 
+   - Note: If a recruiter joins an existing company that already has a `profile_score > 0`, the assessment gate is bypassed (Company Auto-Sync).
 
 ### Blocked State
 

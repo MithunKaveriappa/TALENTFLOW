@@ -88,13 +88,17 @@ CREATE TABLE companies (
   name TEXT NOT NULL,
   registration_number TEXT UNIQUE,
   website TEXT,
+  domain TEXT,
   location TEXT,
   description TEXT,
   industry_category TEXT,
   size_band company_size_band,
   sales_model sales_model_type,
   target_market target_market,
+  hiring_focus_areas TEXT[] DEFAULT '{}',
+  avg_deal_size_range TEXT,
   profile_score INTEGER DEFAULT 0,
+  candidate_feedback_score FLOAT DEFAULT 0.0,
   visibility_tier TEXT DEFAULT 'Low',
   verification_status TEXT DEFAULT 'Under Review',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
@@ -157,6 +161,8 @@ CREATE TABLE recruiter_profiles (
   warning_count INTEGER DEFAULT 0,
   completion_score INTEGER DEFAULT 0,
   assessment_status assessment_status DEFAULT 'not_started',
+  terms_accepted BOOLEAN DEFAULT false,
+  account_status account_status DEFAULT 'Active',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
@@ -261,6 +267,10 @@ CREATE TABLE profile_scores (
   calculated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
+-- Note: 'trust_score' is a virtual field calculated in the service layer as: 
+-- (psychometric_score * 0.6) + (behavioral_score * 0.4) 
+-- to protect candidate data while providing trust signals to recruiters.
+
 -- =========================================
 -- SECURITY & RLS POLICIES
 -- =========================================
@@ -301,6 +311,12 @@ CREATE POLICY "Candidate can update own profile" ON candidate_profiles FOR UPDAT
 CREATE POLICY "Users can manage own candidate profile" 
 ON candidate_profiles FOR ALL 
 USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+CREATE POLICY "Recruiters can view completed candidate profiles" 
+ON candidate_profiles FOR SELECT 
+USING (
+  EXISTS (SELECT 1 FROM recruiter_profiles WHERE user_id = auth.uid()) AND
+  assessment_status = 'completed'
+);
 
 -- Recruiter Profiles
 CREATE POLICY "Recruiter can read own profile" ON recruiter_profiles FOR SELECT USING (user_id = auth.uid());
