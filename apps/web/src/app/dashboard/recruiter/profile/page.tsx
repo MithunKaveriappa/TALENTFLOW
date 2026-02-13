@@ -159,6 +159,18 @@ export default function RecruiterProfilePage() {
             Dashboard
           </button>
           <button
+            onClick={() => router.push("/dashboard/recruiter/jobs")}
+            className="w-full flex items-center px-4 py-3 rounded-xl text-slate-400 hover:text-slate-900 hover:bg-slate-50 transition-all font-bold uppercase tracking-widest text-sm text-left"
+          >
+            My Jobs
+          </button>
+          <button
+            onClick={() => router.push("/dashboard/recruiter/jobs/new")}
+            className="w-full flex items-center px-4 py-3 rounded-xl text-slate-400 hover:text-slate-900 hover:bg-slate-50 transition-all font-bold uppercase tracking-widest text-sm text-left"
+          >
+            Post a Role
+          </button>
+          <button
             onClick={() => router.push("/dashboard/recruiter/pool")}
             className="w-full flex items-center px-4 py-3 rounded-xl text-slate-400 hover:text-slate-900 hover:bg-slate-50 transition-all font-bold uppercase tracking-widest text-sm text-left"
           >

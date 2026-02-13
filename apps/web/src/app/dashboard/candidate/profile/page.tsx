@@ -120,7 +120,8 @@ export default function CandidateProfilePage() {
       setMessage({ type: "success", text: "Photo updated successfully!" });
     } catch (err: unknown) {
       console.error("Upload error:", err);
-      const errorMessage = err instanceof Error ? err.message : "Failed to upload photo";
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to upload photo";
       setMessage({
         type: "error",
         text: errorMessage,
@@ -152,7 +153,8 @@ export default function CandidateProfilePage() {
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err: unknown) {
       console.error("Save error:", err);
-      const errorMessage = err instanceof Error ? err.message : "Failed to update profile";
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to update profile";
       setMessage({
         type: "error",
         text: errorMessage,

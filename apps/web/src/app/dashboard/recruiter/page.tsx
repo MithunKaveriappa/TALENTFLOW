@@ -41,7 +41,7 @@ export default function RecruiterDashboard() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push("/auth/recruiter/login");
+    router.push("/login");
   };
 
   useEffect(() => {
@@ -51,7 +51,7 @@ export default function RecruiterDashboard() {
           data: { session: authSession },
         } = await supabase.auth.getSession();
         if (!authSession) {
-          router.push("/auth/recruiter/login");
+          router.push("/login");
           return;
         }
 
@@ -107,7 +107,18 @@ export default function RecruiterDashboard() {
             active
             onClick={() => router.push("/dashboard/recruiter")}
           />
-          <SidebarLink label="Post a Role" />
+          <SidebarLink
+            label="Community Feed"
+            onClick={() => router.push("/dashboard/recruiter/community")}
+          />
+          <SidebarLink
+            label="My Jobs"
+            onClick={() => router.push("/dashboard/recruiter/jobs")}
+          />
+          <SidebarLink
+            label="Post a Role"
+            onClick={() => router.push("/dashboard/recruiter/jobs/new")}
+          />
           <SidebarLink
             label="Candidate Pool"
             onClick={() => router.push("/dashboard/recruiter/pool")}

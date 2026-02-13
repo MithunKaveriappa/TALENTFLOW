@@ -17,20 +17,13 @@ function SidebarLink({
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all duration-300 group ${
+      className={`w-full flex items-center px-4 py-3 rounded-xl transition-all group ${
         active
-          ? "bg-slate-900 text-white shadow-xl shadow-slate-200"
-          : "text-slate-400 hover:bg-slate-50 hover:text-slate-900"
+          ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100"
+          : "text-slate-400 hover:text-slate-900 hover:bg-slate-50"
       }`}
     >
-      <div
-        className={`h-2 w-2 rounded-full transition-all duration-300 ${
-          active
-            ? "bg-indigo-400 scale-125"
-            : "bg-transparent group-hover:bg-slate-300"
-        }`}
-      />
-      <span className="text-xs font-black uppercase tracking-[0.2em]">
+      <span className="text-sm font-bold uppercase tracking-widest">
         {label}
       </span>
     </button>
@@ -61,7 +54,7 @@ export default function CandidateProfileView() {
           data: { session },
         } = await supabase.auth.getSession();
         if (!session) {
-          router.push("/auth/recruiter/login");
+          router.push("/login");
           return;
         }
 
@@ -81,7 +74,7 @@ export default function CandidateProfileView() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push("/auth/recruiter/login");
+    router.push("/login");
   };
 
   if (loading)
@@ -119,6 +112,14 @@ export default function CandidateProfileView() {
             onClick={() => router.push("/dashboard/recruiter")}
           />
           <SidebarLink
+            label="My Jobs"
+            onClick={() => router.push("/dashboard/recruiter/jobs")}
+          />
+          <SidebarLink
+            label="Post a Role"
+            onClick={() => router.push("/dashboard/recruiter/jobs/new")}
+          />
+          <SidebarLink
             label="Candidate Pool"
             active
             onClick={() => router.push("/dashboard/recruiter/pool")}
@@ -134,19 +135,6 @@ export default function CandidateProfileView() {
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all group"
           >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-              />
-            </svg>
             <span className="text-sm font-bold uppercase tracking-widest">
               Logout
             </span>

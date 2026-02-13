@@ -30,11 +30,12 @@ export default function CandidatePoolPage() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [recruiterProfile, setRecruiterProfile] = useState<RecruiterProfile | null>(null);
+  const [recruiterProfile, setRecruiterProfile] =
+    useState<RecruiterProfile | null>(null);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push("/auth/recruiter/login");
+    router.push("/login");
   };
 
   const fetchPool = useCallback(async () => {
@@ -55,7 +56,10 @@ export default function CandidatePoolPage() {
       setError(null);
     } catch (err: unknown) {
       console.error("Failed to fetch candidate pool:", err);
-      const errorMessage = err instanceof Error ? err.message : "Failed to sync with TalentFlow servers";
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Failed to sync with TalentFlow servers";
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -124,6 +128,14 @@ export default function CandidatePoolPage() {
           <SidebarLink
             label="Dashboard"
             onClick={() => router.push("/dashboard/recruiter")}
+          />
+          <SidebarLink
+            label="My Jobs"
+            onClick={() => router.push("/dashboard/recruiter/jobs")}
+          />
+          <SidebarLink
+            label="Post a Role"
+            onClick={() => router.push("/dashboard/recruiter/jobs/new")}
           />
           <SidebarLink label="Candidate Pool" active />
           <SidebarLink
@@ -250,22 +262,10 @@ export default function CandidatePoolPage() {
             </header>
 
             <div className="space-y-16">
-              <PoolSection
-                title="Leadership"
-                candidates={bands.leadership}
-              />
-              <PoolSection
-                title="Senior"
-                candidates={bands.senior}
-              />
-              <PoolSection
-                title="Mid-Level"
-                candidates={bands.mid}
-              />
-              <PoolSection
-                title="Freshers"
-                candidates={bands.fresher}
-              />
+              <PoolSection title="Leadership" candidates={bands.leadership} />
+              <PoolSection title="Senior" candidates={bands.senior} />
+              <PoolSection title="Mid-Level" candidates={bands.mid} />
+              <PoolSection title="Freshers" candidates={bands.fresher} />
             </div>
           </>
         )}

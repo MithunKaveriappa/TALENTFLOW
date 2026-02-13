@@ -113,9 +113,16 @@ export default function CandidateDashboard() {
             label="My Profile"
             onClick={() => router.push("/dashboard/candidate/profile")}
           />
+          <SidebarLink
+            label="Community Signal"
+            onClick={() => router.push("/dashboard/candidate/community")}
+          />
           <SidebarLink label="Assessments" />
           <SidebarLink label="Trust Matrix" />
-          <SidebarLink label="Job Matches" />
+          <SidebarLink
+            label="Opportunities"
+            onClick={() => router.push("/dashboard/candidate/jobs")}
+          />
           <SidebarLink label="Shield Status" />
           <SidebarLink label="Verification" />
         </nav>
