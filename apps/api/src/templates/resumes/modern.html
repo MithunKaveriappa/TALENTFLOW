@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+    @page {
+        size: a4 portrait;
+        margin: 0;
+    }
+    body {
+        font-family: 'Helvetica', sans-serif;
+        color: #333;
+        margin: 0;
+        padding: 0;
+    }
+    .sidebar {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 30%;
+        background-color: #f0f4f8;
+        padding: 40px 20px;
+    }
+    .main {
+        margin-left: 30%;
+        padding: 40px 30px;
+    }
+    .name {
+        font-size: 22pt;
+        font-weight: bold;
+        color: #1a365d;
+        margin-bottom: 5px;
+    }
+    .role {
+        font-size: 14pt;
+        color: #4a5568;
+        margin-bottom: 20px;
+    }
+    .section-title {
+        font-size: 12pt;
+        font-weight: bold;
+        color: #2b6cb0;
+        border-bottom: 2px solid #2b6cb0;
+        margin-top: 25px;
+        margin-bottom: 15px;
+        padding-bottom: 5px;
+    }
+    .contact-item {
+        font-size: 9pt;
+        margin-bottom: 8px;
+    }
+    .skill-pill {
+        display: inline-block;
+        background: #ebf8ff;
+        color: #2c5282;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 9pt;
+        margin: 2px;
+    }
+    .job-title {
+        font-weight: bold;
+        font-size: 11pt;
+    }
+    .job-meta {
+        font-size: 9pt;
+        color: #718096;
+        margin-bottom: 5px;
+    }
+</style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="name">{{ full_name }}</div>
+        <div class="role">{{ current_role }}</div>
+        
+        <div class="section-title">Contact</div>
+        <div class="contact-item"><b>Email:</b> {{ email }}</div>
+        <div class="contact-item"><b>Phone:</b> {{ phone }}</div>
+        <div class="contact-item"><b>Location:</b> {{ location }}</div>
+        
+        <div class="section-title">Skills</div>
+        {% for skill in skills %}
+        <span class="skill-pill">{{ skill }}</span>
+        {% endfor %}
+
+        <div class="section-title">Education</div>
+        <div style="font-size: 10pt; font-weight: bold;">{{ education.degree }}</div>
+        <div style="font-size: 9pt;">{{ education.institution }}</div>
+        <div style="font-size: 9pt; color: #718096;">{{ education.year }}</div>
+    </div>
+
+    <div class="main">
+        <div class="section-title">Profile</div>
+        <p style="font-size: 10pt;">{{ bio }}</p>
+
+        <div class="section-title">Experience</div>
+        {% for job in timeline %}
+        <div style="margin-bottom: 15px;">
+            <div class="job-title">{{ job.role }}</div>
+            <div class="job-meta">{{ job.company }} | {{ job.start }} - {{ job.end }}</div>
+            <div style="font-size: 10pt;">
+                {{ job.description }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</body>
+</html>

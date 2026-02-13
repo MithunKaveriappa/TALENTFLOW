@@ -85,3 +85,83 @@ class CandidateService:
             "identity_verified": profile.get("identity_verified", False),
             "account_status": profile.get("account_status", "Active"),
         }
+
+    @staticmethod
+    async def list_available_jobs(user_id: str):
+        """Fetch active jobs with company info and application status."""
+        # 1. Fetch active jobs with company data
+        jobs_res = supabase.table("jobs").select("*, companies(name, website)").eq("status", "active").order("created_at", desc=True).execute()
+        
+        # 2. Fetch user's applications
+        apps_res = supabase.table("job_applications").select("job_id").eq("candidate_id", user_id).execute()
+        applied_job_ids = {a["job_id"] for a in apps_res.data}
+        
+        jobs = []
+        for j in jobs_res.data:
+            company = j.get("companies", {})
+            
+            # Mapping for schema resilience (similar to recruiter_service)
+            title = j.get("title")
+            description = j.get("description")
+            # If columns missing, they might find themselves in metadata
+            metadata = j.get("metadata", {}) if isinstance(j.get("metadata"), dict) else {}
+            
+            experience_band = j.get("experience_band")
+            location = j.get("location")
+            salary_range = j.get("salary_range")
+            job_type = j.get("job_type", "onsite")
+            
+            jobs.append({
+                "id": j["id"],
+                "title": title,
+                "description": description,
+                "experience_band": experience_band,
+                "location": location,
+                "salary_range": salary_range,
+                "job_type": job_type,
+                "company_name": company.get("name", "Unknown Company"),
+                "company_website": company.get("website"),
+                "created_at": j["created_at"],
+                "has_applied": j["id"] in applied_job_ids
+            })
+            
+        return jobs
+
+    @staticmethod
+    async def apply_to_job(user_id: str, job_id: str):
+        """Create a new job application."""
+        # Check if already applied
+        existing = supabase.table("job_applications").select("id").eq("candidate_id", user_id).eq("job_id", job_id).execute()
+        if existing.data:
+            return {"status": "already_applied"}
+            
+        res = supabase.table("job_applications").insert({
+            "candidate_id": user_id,
+            "job_id": job_id,
+            "status": "applied"
+        }).execute()
+        
+        return {"status": "success", "data": res.data[0] if res.data else None}
+
+    @staticmethod
+    async def get_my_applications(user_id: str):
+        """Fetch all jobs the candidate has applied to."""
+        res = supabase.table("job_applications")\
+            .select("*, jobs(title, companies(name))")\
+            .eq("candidate_id", user_id)\
+            .order("created_at", desc=True).execute()
+        
+        apps = []
+        for a in res.data:
+            job = a.get("jobs", {})
+            company = job.get("companies", {})
+            apps.append({
+                "id": a["id"],
+                "job_id": a["job_id"],
+                "status": a["status"],
+                "applied_at": a["created_at"],
+                "job_title": job.get("title", "Unknown Role"),
+                "company_name": company.get("name", "Unknown Company")
+            })
+            
+        return apps

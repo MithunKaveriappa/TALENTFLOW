@@ -25,11 +25,11 @@ def verify_supabase_jwt(token: str) -> dict:
 
     except Exception as e:
         err_msg = str(e)
-        print(f"ERR: JWT Verification failed: {err_msg}")
+        print(f"CRITICAL AUTH ERROR: {err_msg}")
         
-        # Handle specific connection errors with clearer messages
-        if "disconnected" in err_msg.lower() or "connection" in err_msg.lower():
-            detail = "Identity server connection failed. Please ensure the backend can reach Supabase."
+        # Check if the error is due to Supabase connection
+        if any(word in err_msg.lower() for word in ["disconnected", "connection", "timeout", "network"]):
+            detail = f"Identity server connection failed (Technical: {err_msg[:50]}...)"
         else:
             detail = f"Invalid authentication token: {err_msg}"
             

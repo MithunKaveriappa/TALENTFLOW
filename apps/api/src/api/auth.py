@@ -65,7 +65,7 @@ def initialize_profile(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/post-login")
-def post_login(user: dict = Depends(get_current_user)):
+async def post_login(user: dict = Depends(get_current_user)):
     user_id = user["sub"]
     email = user["email"]
     
@@ -98,6 +98,10 @@ def post_login(user: dict = Depends(get_current_user)):
                     "user_id": user_id,
                     "experience": "fresher"
                 }).execute()
+            else:
+                # Recruiter recovery
+                from src.services.recruiter_service import recruiter_service
+                await recruiter_service.get_or_create_profile(user_id)
             
             return {
                 "next_step": f"/onboarding/{recovered_role}",

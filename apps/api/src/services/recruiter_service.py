@@ -1,4 +1,5 @@
 import json
+import random
 from typing import List, Dict, Optional
 from datetime import datetime
 from src.core.supabase import supabase
@@ -15,6 +16,14 @@ class RecruiterService:
         if res.data:
             return res.data[0]
         
+        # Ensure user entry exists in public.users to avoid FK violation
+        user_check = supabase.table("users").select("id").eq("id", user_id).execute()
+        if not user_check.data:
+            # Note: Fetching email from auth metadata is ideal but requires admin/service_role
+            # For now, we use a generic placeholder or assume post-login handles it.
+            # However, if we are here, we MUST have a user record.
+            supabase.table("users").upsert({"id": user_id, "role": "recruiter"}).execute()
+
         # Create default profile if not exists
         new_profile = {
             "user_id": user_id,
@@ -285,25 +294,74 @@ class RecruiterService:
             "completion_score": profile.get("completion_score", 0) # Onboarding progress
         }
 
+    async def get_assessment_questions(self, user_id: str):
+        """Fetch one random question from each of the 5 recruiter assessment categories."""
+        # Clean up any previous incomplete or old assessment responses for this user
+        # to ensure a fresh score calculation.
+        try:
+            supabase.table("recruiter_assessment_responses").delete().eq("user_id", user_id).execute()
+        except Exception as e:
+            print(f"Warning: Could not clear old responses: {e}")
+
+        categories = [
+            "recruiter_intent",
+            "recruiter_icp",
+            "recruiter_ethics",
+            "recruiter_cvp",
+            "recruiter_ownership"
+        ]
+        
+        questions = []
+        try:
+            for cat in categories:
+                res = supabase.table("recruiter_assessment_questions").select("*").eq("category", cat).execute()
+                if res.data and len(res.data) > 0:
+                    questions.append(random.choice(res.data))
+            
+            # If DB is empty, fallback to the original fixed questions logic
+            if not questions:
+                return None
+                
+            return questions
+        except Exception as e:
+            print(f"Error fetching recruiter questions: {str(e)}")
+            return None
+
     async def evaluate_recruiter_answer(self, user_id: str, question_text: str, answer: str, category: str):
         prompt = f"""
-        Category: {category}
-        Question: {question_text}
-        Recruiter Answer: {answer}
+        Act as an unbiased Corporate Quality Auditor. Your goal is to evaluate a recruiter's answer to determine the "Company Profile Score".
+        
+        STRICT EVALUATION RULES:
+        1. PERSPECTIVE: Evaluate based on structural signals, not sentiment. A polite but vague answer scores LOWER than a direct, data-rich answer.
+        2. UNBIASED: Disregard company size or flavor. Look for clarity of intent and specificity of the 'Cultural DNA'.
+        3. CATEGORY CONTEXT (Category: {category}):
+           - recruiter_intent: Evaluate the clarity of the company's "Soul" and long-term vision. Look for 'Universal DNA' traits that apply to *every* hire.
+           - recruiter_icp: Evaluate how precisely they define high performance beyond technical skills.
+           - recruiter_ethics: Evaluate the commitment to fairness and the elimination of unconscious bias.
+           - recruiter_cvp: Evaluate the strength of the "Employer Brand" and non-monetary value.
+           - recruiter_ownership: Evaluate the recruiter's accountability for the candidate's long-term success.
+        
+        SCORING RUBRIC (0.0 to 6.0):
+        - 0-2 (Weak): Irrelevant, generic platitudes, or non-committal.
+        - 3-4 (Moderate): Addresses the prompt with some concrete details.
+        - 5-6 (Strong): Exceptional precision, evidence of structured thinking, and clear accountability.
 
-        Evaluate this answer on a scale of 0 to 6 based on 4 dimensions:
-        1. Relevance (Does it answer the question?)
-        2. Specificity (Concrete details vs vague talk)
-        3. Clarity (Logical structure)
-        4. Ownership (Direct accountability)
+        QUESTION: {question_text}
+        RECRUITER ANSWER: {answer}
+
+        Dimensions to score (0-6 each):
+        1. Relevance: Did they answer the specific question?
+        2. Specificity: Presence of concrete details (names, traits, timelines, reasons).
+        3. Clarity: Is the response logically structured and professional?
+        4. Ownership: Does the answer show accountability and serious organizational intent?
 
         Return ONLY a JSON object:
         {{
-            "relevance": 5,
-            "specificity": 4,
-            "clarity": 5,
-            "ownership": 6,
-            "reasoning": "short explanation"
+            "relevance": 5.5,
+            "specificity": 4.0,
+            "clarity": 5.0,
+            "ownership": 6.0,
+            "reasoning": "Provide a brief, objective justification (max 20 words)."
         }}
         """
         try:
@@ -333,7 +391,11 @@ class RecruiterService:
                 "specificity_score": specificity,
                 "clarity_score": clarity,
                 "ownership_score": ownership,
-                "average_score": avg
+                "average_score": avg,
+                "evaluation_metadata": {
+                    "reasoning": data.get("reasoning"),
+                    "evaluator": "AI_GRADED_UNBIASED_RECRUITER"
+                }
             }).execute()
 
             if not store_res.data:
@@ -392,5 +454,234 @@ class RecruiterService:
             return {"status": "error", "message": "Failed to update profile status"}
 
         return {"status": "ok", "final_score": normalized_score}
+
+    # --- JOB MANAGEMENT ---
+
+    async def list_jobs(self, user_id: str):
+        """List all jobs for the recruiter's company."""
+        profile = await self.get_or_create_profile(user_id)
+        company_id = profile.get("company_id")
+        if not company_id:
+            return []
+        
+        res = supabase.table("jobs").select("*").eq("company_id", company_id).order("created_at", desc=True).execute()
+        
+        # Mapping for schema compatibility
+        for job in res.data:
+            if "skills" in job and "skills_required" not in job:
+                job["skills_required"] = job["skills"]
+            if "requirements" not in job and "metadata" in job and isinstance(job["metadata"], dict):
+                job["requirements"] = job["metadata"].get("requirements", [])
+        
+        return res.data
+
+    async def create_job(self, user_id: str, job_data: Dict):
+        """Create a new job posting."""
+        profile = await self.get_or_create_profile(user_id)
+        company_id = profile.get("company_id")
+        if not company_id:
+            raise Exception("No company linked to recruiter profile")
+            
+        # Standardize fields for the database
+        db_payload = {
+            "company_id": company_id,
+            "recruiter_id": user_id,
+            "title": job_data.get("title"),
+            "description": job_data.get("description"),
+            "experience_band": job_data.get("experience_band"),
+            "job_type": job_data.get("job_type", "onsite"),
+            "location": job_data.get("location"),
+            "salary_range": job_data.get("salary_range"),
+            "number_of_positions": job_data.get("number_of_positions", 1),
+            "is_ai_generated": job_data.get("is_ai_generated", False),
+            "status": "active",
+            "metadata": job_data.get("metadata", {})
+        }
+
+        # Handle 'skills' vs 'skills_required'
+        skills = job_data.get("skills_required") or job_data.get("skills")
+        if skills:
+            # TRY skills_required first as it's the intended name
+            db_payload["skills_required"] = skills
+
+        # Handle 'requirements' - if it fails, we'll put it in metadata
+        requirements = job_data.get("requirements")
+        if requirements:
+            db_payload["requirements"] = requirements
+
+        try:
+            res = supabase.table("jobs").insert(db_payload).execute()
+            if res.data:
+                job = res.data[0]
+                if "skills_required" not in job and "skills" in job:
+                    job["skills_required"] = job["skills"]
+                return job
+            return None
+        except Exception as e:
+            error_msg = str(e)
+            # If column mapping fails, try a more compatible insert
+            if any(key in error_msg for key in ["requirements", "skills_required", "skills", "number_of_positions"]):
+                # Remove problematic columns and move to metadata
+                safe_payload = db_payload.copy()
+                
+                # Handle number_of_positions
+                if "number_of_positions" in error_msg:
+                    val = safe_payload.pop("number_of_positions", None)
+                    if val:
+                        if "metadata" not in safe_payload: safe_payload["metadata"] = {}
+                        safe_payload["metadata"]["number_of_positions"] = val
+
+                # Check for skills mismatches
+                if "skills_required" in error_msg:
+                    val = safe_payload.pop("skills_required", None)
+                    if val: safe_payload["skills"] = val
+                elif "skills" in error_msg:
+                    val = safe_payload.pop("skills", None)
+                    if val: safe_payload["skills_required"] = val
+
+                if "requirements" in error_msg:
+                    val = safe_payload.pop("requirements", None)
+                    if val:
+                        if "metadata" not in safe_payload: safe_payload["metadata"] = {}
+                        safe_payload["metadata"]["requirements"] = val
+                
+                res = supabase.table("jobs").insert(safe_payload).execute()
+                if res.data:
+                    job = res.data[0]
+                    if "skills" in job and "skills_required" not in job:
+                        job["skills_required"] = job["skills"]
+                    if "requirements" not in job and "metadata" in job:
+                        job["requirements"] = job["metadata"].get("requirements", [])
+                    return job
+                return None
+            raise e
+
+    async def update_job(self, user_id: str, job_id: str, update_data: Dict):
+        """Update an existing job posting."""
+        profile = await self.get_or_create_profile(user_id)
+        company_id = profile.get("company_id")
+        
+        # Verify ownership
+        job_res = supabase.table("jobs").select("company_id").eq("id", job_id).execute()
+        if not job_res.data or job_res.data[0]["company_id"] != company_id:
+            raise Exception("Unauthorized to update this job")
+            
+        if update_data.get("status") == "closed":
+            update_data["closed_at"] = datetime.now().isoformat()
+            
+        update_data["updated_at"] = datetime.now().isoformat()
+        
+        try:
+            res = supabase.table("jobs").update(update_data).eq("id", job_id).execute()
+            if res.data:
+                job = res.data[0]
+                if "skills" in job and "skills_required" not in job:
+                    job["skills_required"] = job["skills"]
+                return job
+            return None
+        except Exception as e:
+            error_msg = str(e)
+            if any(key in error_msg for key in ["requirements", "skills_required", "skills", "number_of_positions"]):
+                # Fallback for old schema
+                safe_data = update_data.copy()
+                
+                if "number_of_positions" in error_msg:
+                    val = safe_data.pop("number_of_positions", None)
+                    if val is not None:
+                        metadata = safe_data.get("metadata", {})
+                        metadata["number_of_positions"] = val
+                        safe_data["metadata"] = metadata
+
+                if "skills_required" in error_msg:
+                    val = safe_data.pop("skills_required", None)
+                    if val is not None: safe_data["skills"] = val
+                elif "skills" in error_msg:
+                    safe_data.pop("skills", None)
+
+                if "requirements" in error_msg:
+                    val = safe_data.pop("requirements", None)
+                    if val is not None:
+                        metadata = safe_data.get("metadata", {})
+                        metadata["requirements"] = val
+                        safe_data["metadata"] = metadata
+                
+                res = supabase.table("jobs").update(safe_data).eq("id", job_id).execute()
+                if res.data:
+                    job = res.data[0]
+                    if "skills" in job and "skills_required" not in job:
+                        job["skills_required"] = job["skills"]
+                    if "requirements" not in job and "metadata" in job:
+                        job["requirements"] = job["metadata"].get("requirements", [])
+                    return job
+                return None
+            raise e
+
+    async def generate_job_description(self, prompt: str, experience_band: str):
+        """Generate a job description using Gemini AI."""
+        ai_prompt = f"""
+        Act as an elite Executive Recruiter and Role Architect. 
+        Your task is to transform a simple request into a high-impact, professional enterprise-grade job description for TalentFlow.
+
+        USER REQUEST: "{prompt}"
+        TARGET EXPERIENCE LEVEL: {experience_band}
+
+        INSTRUCTIONS:
+        1. Expand the user's request into a comprehensive, professional narrative.
+        2. Describe the vision, impact, and daily challenges of the role.
+        3. Create 5-7 distinct, high-quality professional requirements based on the {experience_band} seniority level.
+        4. Identify 5-8 specific technical and soft skills required to succeed.
+        5. Provide a realistic salary range based on current global market data for {experience_band} roles if not specified.
+        6. Do NOT simply repeat the user's input; use your expertise to fill in the professional gaps.
+        7. Ensure the tone is ambitious, clear, and corporate yet modern.
+
+        Return the result ONLY in this strict JSON format:
+        {{
+            "title": "A compelling, clear, and industry-standard Job Title",
+            "description": "A 200-300 word professional narrative about the role's mission and impact",
+            "requirements": ["Professional Requirement 1", "Professional Requirement 2", ...],
+            "skills_required": ["Specific Skill 1", "Specific Skill 2", ...],
+            "job_type": "remote/hybrid/onsite",
+            "salary_range": "e.g., $120,000 - $160,000 + Equity"
+        }}
+        """
+        
+        try:
+            # Fallback models in case one is not available
+            models_to_try = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro']
+            response = None
+            last_error = None
+
+            for model_name in models_to_try:
+                try:
+                    self.model = genai.GenerativeModel(model_name)
+                    response = self.model.generate_content(ai_prompt)
+                    if response:
+                        break
+                except Exception as e:
+                    last_error = e
+                    continue
+            
+            if not response:
+                raise last_error or Exception("All models failed")
+
+            # Extract JSON from potential markdown markers
+            text = response.text
+            if "```json" in text:
+                text = text.split("```json")[1].split("```")[0]
+            elif "```" in text:
+                text = text.split("```")[1].split("```")[0]
+            
+            return json.loads(text.strip())
+        except Exception as e:
+            print(f"AI Generation/Parsing Error: {str(e)}")
+            # Robust fallback so the UI doesn't break
+            return {
+                "title": f"New {experience_band.capitalize()} Role",
+                "description": f"Generated role for: {prompt}",
+                "requirements": ["5+ years experience", "Strong communication"],
+                "skills_required": ["Leadership", "Problem Solving"],
+                "job_type": "onsite",
+                "salary_range": "Competitive"
+            }
 
 recruiter_service = RecruiterService()

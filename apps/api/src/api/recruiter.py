@@ -2,9 +2,17 @@ from fastapi import APIRouter, Depends, HTTPException
 from src.core.dependencies import get_current_user
 from src.services.recruiter_service import recruiter_service
 from src.core.supabase import supabase
-from src.schemas.recruiter import RecruiterProfileUpdate, CompanyProfileUpdate, RecruiterStats
+from src.schemas.recruiter import (
+    RecruiterProfileUpdate, 
+    CompanyProfileUpdate, 
+    RecruiterStats,
+    JobCreate,
+    JobUpdate,
+    JobResponse,
+    JobAIPrompt
+)
 from pydantic import BaseModel
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 router = APIRouter(prefix="/recruiter", tags=["recruiter"])
 
@@ -98,11 +106,45 @@ async def get_candidate_details(candidate_id: str, user: dict = Depends(get_curr
 async def update_registration(data: RegistrationUpdate, user: dict = Depends(get_current_user)):
     return await recruiter_service.update_company_registration(user["sub"], data.registration_number)
 
+# --- JOB MANAGEMENT ---
+
+@router.get("/jobs", response_model=List[JobResponse])
+async def list_jobs(user: dict = Depends(get_current_user)):
+    return await recruiter_service.list_jobs(user["sub"])
+
+@router.post("/jobs", response_model=JobResponse)
+async def create_job(data: JobCreate, user: dict = Depends(get_current_user)):
+    try:
+        return await recruiter_service.create_job(user["sub"], data.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.patch("/jobs/{job_id}", response_model=JobResponse)
+async def update_job(job_id: str, data: JobUpdate, user: dict = Depends(get_current_user)):
+    try:
+        return await recruiter_service.update_job(user["sub"], job_id, data.model_dump(exclude_unset=True))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/jobs/generate-ai")
+async def generate_job_ai(data: JobAIPrompt, user: dict = Depends(get_current_user)):
+    """Generate job details using AI."""
+    return await recruiter_service.generate_job_description(data.prompt, data.experience_band)
+
 @router.post("/details")
 async def update_details(data: CompanyDetailsUpdate, user: dict = Depends(get_current_user)):
     details = data.dict()
     company_id = details.pop("company_id")
     return await recruiter_service.update_company_details(user["sub"], company_id, details)
+
+@router.get("/assessment-questions")
+async def get_assessment_questions(user: dict = Depends(get_current_user)):
+    """Fetch 5 dynamic assessment questions for the recruiter."""
+    questions = await recruiter_service.get_assessment_questions(user["sub"])
+    if not questions:
+        # Fallback to empty list or handle status code
+        return []
+    return questions
 
 @router.post("/submit-answer")
 async def submit_answer(submission: RecruiterAnswerSubmission, user: dict = Depends(get_current_user)):

@@ -72,6 +72,21 @@ CREATE TYPE job_type AS ENUM (
   'onsite'
 );
 
+CREATE TYPE job_status AS ENUM (
+  'active', 
+  'closed', 
+  'paused'
+);
+
+CREATE TYPE application_status AS ENUM (
+  'applied', 
+  'shortlisted', 
+  'interviewed', 
+  'rejected', 
+  'offered', 
+  'closed'
+);
+
 -- ---------- USERS ----------
 
 CREATE TABLE users (
@@ -99,9 +114,11 @@ CREATE TABLE companies (
   avg_deal_size_range TEXT,
   profile_score INTEGER DEFAULT 0,
   candidate_feedback_score FLOAT DEFAULT 0.0,
+  successful_hires_count INTEGER DEFAULT 0,
   visibility_tier TEXT DEFAULT 'Low',
   verification_status TEXT DEFAULT 'Under Review',
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
 -- ---------- CANDIDATE PROFILE ----------
@@ -184,9 +201,17 @@ CREATE TABLE assessment_questions (
     experience_band experience_band NOT NULL,
     difficulty TEXT NOT NULL, -- low, medium, high
     question_text TEXT NOT NULL,
-    keywords JSONB DEFAULT '[]',
-    action_verbs JSONB DEFAULT '[]',
-    connectors JSONB DEFAULT '[]',
+    evaluation_rubric TEXT, -- AI guidance for unbiased scoring
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ---------- RECRUITER ASSESSMENT QUESTIONS BANK ----------
+
+CREATE TABLE recruiter_assessment_questions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    category TEXT NOT NULL, -- recruiter_intent, recruiter_icp, recruiter_ethics, recruiter_cvp, recruiter_ownership
+    driver TEXT NOT NULL,   -- e.g., Strategic Intent, Universal DNA, Fairness
+    question_text TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -213,6 +238,7 @@ CREATE TABLE assessment_responses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     candidate_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     question_id UUID REFERENCES assessment_questions(id), -- Null for AI-generated
+    question_text TEXT, -- Stores the actual question asked (crucial for AI questions)
     category TEXT NOT NULL,
     driver TEXT,
     difficulty TEXT,
@@ -238,6 +264,7 @@ CREATE TABLE recruiter_assessment_responses (
     clarity_score INTEGER,
     ownership_score INTEGER,
     average_score DECIMAL(5,2),
+    evaluation_metadata JSONB DEFAULT '{}', -- Stores AI reasoning
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
@@ -267,6 +294,81 @@ CREATE TABLE profile_scores (
   calculated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
+-- ---------- JOBS ----------
+
+CREATE TABLE jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
+  recruiter_id UUID REFERENCES recruiter_profiles(user_id) ON DELETE SET NULL,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  requirements TEXT[] DEFAULT '{}',
+  skills_required TEXT[] DEFAULT '{}',
+  experience_band experience_band NOT NULL,
+  job_type job_type DEFAULT 'onsite',
+  location TEXT,
+  salary_range TEXT,
+  number_of_positions INTEGER DEFAULT 1,
+  status job_status DEFAULT 'active',
+  is_ai_generated BOOLEAN DEFAULT false,
+  closed_at TIMESTAMP WITH TIME ZONE,
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- ---------- JOB APPLICATIONS ----------
+
+CREATE TABLE job_applications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_id UUID REFERENCES jobs(id) ON DELETE CASCADE,
+  candidate_id UUID REFERENCES candidate_profiles(user_id) ON DELETE CASCADE,
+  status application_status DEFAULT 'applied',
+  feedback TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  UNIQUE(job_id, candidate_id)
+);
+
+-- ---------- SAVED JOBS ----------
+
+CREATE TABLE saved_jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  candidate_id UUID REFERENCES candidate_profiles(user_id) ON DELETE CASCADE,
+  job_id UUID REFERENCES jobs(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  UNIQUE(candidate_id, job_id)
+);
+
+-- ---------- POSTS ----------
+
+CREATE TABLE posts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  media_urls TEXT[] DEFAULT '{}',
+  type TEXT DEFAULT 'post',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- ---------- NOTIFICATIONS ----------
+
+CREATE TABLE notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  metadata JSONB DEFAULT '{}',
+  is_read BOOLEAN DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_jobs_company_id ON jobs(company_id);
+CREATE INDEX IF NOT EXISTS idx_job_applications_job_id ON job_applications(job_id);
+CREATE INDEX IF NOT EXISTS idx_job_applications_candidate_id ON job_applications(candidate_id);
+
 -- Note: 'trust_score' is a virtual field calculated in the service layer as: 
 -- (psychometric_score * 0.6) + (behavioral_score * 0.4) 
 -- to protect candidate data while providing trust signals to recruiters.
@@ -284,9 +386,15 @@ ALTER TABLE blocked_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE assessment_questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE assessment_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE assessment_responses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE recruiter_assessment_questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE recruiter_assessment_responses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE resume_data ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profile_scores ENABLE ROW LEVEL SECURITY;
+ALTER TABLE jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE job_applications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE saved_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
 -- Helper Function
 CREATE OR REPLACE FUNCTION is_authenticated_user()
@@ -301,16 +409,27 @@ CREATE POLICY "Users can read own profile" ON users FOR SELECT USING (id = auth.
 CREATE POLICY "Users can read own record" ON users FOR SELECT USING (id = auth.uid());
 
 -- Companies
-CREATE POLICY "Recruiter can read own company" 
+CREATE POLICY "Companies are viewable by all authenticated users" 
 ON companies FOR SELECT 
+USING (auth.uid() IS NOT NULL);
+
+CREATE POLICY "Recruiters can update own company" 
+ON companies FOR UPDATE 
 USING (id IN (SELECT company_id FROM recruiter_profiles WHERE user_id = auth.uid()));
 
 -- Candidate Profiles
 CREATE POLICY "Candidate can read own profile" ON candidate_profiles FOR SELECT USING (user_id = auth.uid());
 CREATE POLICY "Candidate can update own profile" ON candidate_profiles FOR UPDATE USING (user_id = auth.uid());
-CREATE POLICY "Users can manage own candidate profile" 
-ON candidate_profiles FOR ALL 
-USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+CREATE POLICY "Recruiters can view profiles of applicants" 
+ON candidate_profiles FOR SELECT 
+USING (
+  EXISTS (
+    SELECT 1 FROM job_applications 
+    JOIN jobs ON job_applications.job_id = jobs.id 
+    WHERE job_applications.candidate_id = candidate_profiles.user_id 
+    AND jobs.recruiter_id = auth.uid()
+  )
+);
 CREATE POLICY "Recruiters can view completed candidate profiles" 
 ON candidate_profiles FOR SELECT 
 USING (
@@ -321,37 +440,71 @@ USING (
 -- Recruiter Profiles
 CREATE POLICY "Recruiter can read own profile" ON recruiter_profiles FOR SELECT USING (user_id = auth.uid());
 CREATE POLICY "Recruiter can update own profile" ON recruiter_profiles FOR UPDATE USING (user_id = auth.uid());
-CREATE POLICY "Users can manage own recruiter profile" 
-ON recruiter_profiles FOR ALL 
-USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
--- Blocked Users
-CREATE POLICY "Allow users to check their own blocked status" ON blocked_users FOR SELECT TO authenticated USING (auth.uid() = user_id);
-CREATE POLICY "Read access for blocked status check" ON blocked_users FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Users can check their own blocked status" ON blocked_users FOR SELECT USING (auth.uid() = user_id);
+-- Recruiter Assessment Questions
+CREATE POLICY "Recruiters can view assessment questions" ON recruiter_assessment_questions
+    FOR SELECT USING (auth.uid() IS NOT NULL);
 
--- Assessment Questions
-CREATE POLICY "Allow authenticated read access to questions" 
-ON assessment_questions FOR SELECT TO authenticated USING (true);
+-- Jobs
+CREATE POLICY "Candidates can view active jobs" 
+ON jobs FOR SELECT 
+USING (status = 'active');
 
--- Assessment Sessions
-CREATE POLICY "Users can manage their own session" 
-ON assessment_sessions FOR ALL TO authenticated 
-USING (auth.uid() = candidate_id) WITH CHECK (auth.uid() = candidate_id);
+CREATE POLICY "Recruiters can manage their own jobs" 
+ON jobs FOR ALL 
+USING (auth.uid() = recruiter_id);
 
--- Assessment Responses
-CREATE POLICY "Users can manage their own responses" 
-ON assessment_responses FOR ALL TO authenticated 
-USING (auth.uid() = candidate_id) WITH CHECK (auth.uid() = candidate_id);
+-- Job Applications
+CREATE POLICY "Candidates can apply for jobs" 
+ON job_applications FOR INSERT 
+WITH CHECK (auth.uid() = candidate_id);
 
--- Resume Data
-CREATE POLICY "Users can manage their own resume data" 
-ON resume_data FOR ALL 
+CREATE POLICY "Candidates can view own applications" 
+ON job_applications FOR SELECT 
+USING (auth.uid() = candidate_id);
+
+CREATE POLICY "Recruiters view applicants for their jobs"
+ON job_applications FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM jobs 
+    WHERE jobs.id = job_applications.job_id 
+    AND jobs.recruiter_id = auth.uid()
+  )
+);
+
+CREATE POLICY "Recruiters can update application status" 
+ON job_applications FOR UPDATE 
+USING (
+  EXISTS (
+    SELECT 1 FROM jobs 
+    WHERE jobs.id = job_applications.job_id 
+    AND jobs.recruiter_id = auth.uid()
+  )
+);
+
+-- Saved Jobs
+CREATE POLICY "Users can manage own saved jobs" 
+ON saved_jobs FOR ALL 
+USING (auth.uid() = candidate_id);
+
+-- Posts
+CREATE POLICY "Anyone can view posts" 
+ON posts FOR SELECT 
+USING (true);
+
+CREATE POLICY "Users can manage own posts" 
+ON posts FOR ALL 
 USING (auth.uid() = user_id);
 
--- Profile Scores
-CREATE POLICY "User can read own profile score" 
-ON profile_scores FOR SELECT USING (user_id = auth.uid());
+-- Notifications
+CREATE POLICY "Users can see own notifications" 
+ON notifications FOR SELECT 
+USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own notifications" 
+ON notifications FOR UPDATE 
+USING (auth.uid() = user_id);
 
 -- ---------- STORAGE POLICIES ----------
 

@@ -49,7 +49,7 @@ export default function CandidateOnboarding() {
     linkedin: "",
     bio: "",
     timeline: [] as TimelineItem[],
-    education: { degree: "", institution: "", year: "" }
+    education: { degree: "", institution: "", year: "" },
   });
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -297,7 +297,7 @@ export default function CandidateOnboarding() {
             addMessage(
               "Next, I'll need your resume to understand your background better. You can upload it or I can help you build one right here.",
               "bot",
-              ["Upload Resume (PDF)", "I don't have a resume"]
+              ["Upload Resume (PDF)", "I don't have a resume"],
             );
             setState(nextState);
           }, 1000);
@@ -352,10 +352,11 @@ export default function CandidateOnboarding() {
             year: "2022",
           },
         }));
-        addMessage("Almost done! Which style do you prefer for your resume?", "bot", [
-          "Professional",
-          "Modern",
-        ]);
+        addMessage(
+          "Almost done! Which style do you prefer for your resume?",
+          "bot",
+          ["Professional", "Modern"],
+        );
         setState("BUILDING_RESUME_TEMPLATE");
       } else if (state === "BUILDING_RESUME_TEMPLATE") {
         const template =

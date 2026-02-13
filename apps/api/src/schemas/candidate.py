@@ -42,3 +42,24 @@ class CandidateStats(BaseModel):
     assessment_status: str
     identity_verified: bool
     account_status: str
+
+class CandidateJobResponse(BaseModel):
+    id: str
+    title: str
+    description: str
+    experience_band: str
+    location: Optional[str] = None
+    salary_range: Optional[str] = None
+    job_type: str
+    company_name: str
+    company_website: Optional[str] = None
+    created_at: datetime
+    has_applied: bool = False
+
+class JobApplicationResponse(BaseModel):
+    id: str
+    job_id: str
+    status: str
+    applied_at: datetime
+    job_title: str
+    company_name: str

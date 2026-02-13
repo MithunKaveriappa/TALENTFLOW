@@ -1,1 +1,0 @@
-﻿ALTER TABLE recruiter_profiles ADD COLUMN IF NOT EXISTS warning_count INTEGER DEFAULT 0;

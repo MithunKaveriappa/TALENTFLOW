@@ -4,8 +4,10 @@ from src.core.supabase import supabase
 from pydantic import BaseModel
 from src.services.resume_service import ResumeService
 from src.services.candidate_service import CandidateService
-from src.schemas.candidate import CandidateProfileUpdate, CandidateStats
+from src.utils.pdf_generator import PDFGenerator
+from src.schemas.candidate import CandidateProfileUpdate, CandidateStats, CandidateJobResponse, JobApplicationResponse
 from src.core.config import GOOGLE_API_KEY
+from typing import List, Optional
 
 router = APIRouter(prefix="/candidate", tags=["candidate"])
 
@@ -20,6 +22,30 @@ class SkillsUpdate(BaseModel):
 
 class StepUpdate(BaseModel):
     step: str
+
+class EducationData(BaseModel):
+    degree: str
+    institution: str
+    year: str
+
+class ExperienceData(BaseModel):
+    role: str
+    company: str
+    start: str
+    end: str
+    description: Optional[str] = None
+
+class GenerateResumeRequest(BaseModel):
+    full_name: str
+    email: str
+    phone: str
+    location: str
+    linkedin: Optional[str] = None
+    bio: Optional[str] = None
+    education: EducationData
+    timeline: List[ExperienceData]
+    skills: List[str]
+    template: str = "professional"
 
 @router.get("/profile")
 def get_profile(user: dict = Depends(get_current_user)):
@@ -127,6 +153,58 @@ async def update_resume(
         print(f"Resume Upload Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/generate-resume")
+async def generate_resume(
+    request: GenerateResumeRequest,
+    user: dict = Depends(get_current_user)
+):
+    user_id = user["sub"]
+    
+    try:
+        # 1. Prepare data for PDF
+        resume_data_dict = request.model_dump()
+        
+        # 2. Generate PDF using our utility
+        pdf_content = PDFGenerator.generate_resume_pdf(resume_data_dict, request.template)
+        
+        # 3. Upload to Supabase Storage
+        file_path = f"resumes/{user_id}-generated.pdf"
+        
+        # Check if bucket exists/overwrite
+        supabase.storage.from_("resumes").upload(
+            file_path, 
+            pdf_content, 
+            {"content-type": "application/pdf", "x-upsert": "true"}
+        )
+        
+        # 4. Update Profile
+        supabase.table("candidate_profiles").update({
+            "resume_uploaded": True,
+            "full_name": request.full_name,
+            "phone_number": request.phone,
+            "location": request.location,
+            "bio": request.bio,
+            "linkedin_url": request.linkedin,
+            "skills": request.skills,
+            "current_role": request.timeline[0].role if request.timeline else None,
+            "current_company_name": request.timeline[0].company if request.timeline else None
+        }).eq("user_id", user_id).execute()
+        
+        # 5. Store detailed data in resume_data table
+        supabase.table("resume_data").upsert({
+            "user_id": user_id,
+            "raw_text": f"Generated Resume Content:\n{str(resume_data_dict)}",
+            "timeline": [item.model_dump() for item in request.timeline],
+            "skills": request.skills,
+            "education": request.education.model_dump(),
+            "achievements": [request.bio] if request.bio else []
+        }).execute()
+        
+        return {"status": "resume_generated", "path": file_path}
+    except Exception as e:
+        print(f"Resume Generation Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/skills")
 def update_skills(
     request: SkillsUpdate,
@@ -146,3 +224,20 @@ def update_skills(
     except Exception as e:
         print(f"Update Skills Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# --- JOB DISCOVERY & APPLICATIONS ---
+
+@router.get("/jobs", response_model=List[CandidateJobResponse])
+async def list_jobs(user: dict = Depends(get_current_user)):
+    """Fetch available jobs for the candidate."""
+    return await CandidateService.list_available_jobs(user["sub"])
+
+@router.post("/jobs/{job_id}/apply")
+async def apply_to_job(job_id: str, user: dict = Depends(get_current_user)):
+    """Apply for a job."""
+    return await CandidateService.apply_to_job(user["sub"], job_id)
+
+@router.get("/applications", response_model=List[JobApplicationResponse])
+async def list_applications(user: dict = Depends(get_current_user)):
+    """Fetch jobs user has applied to."""
+    return await CandidateService.get_my_applications(user["sub"])

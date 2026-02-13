@@ -71,6 +71,21 @@ Updated: February 2026
 - `hybrid`
 - `onsite`
 
+**job_status:**
+
+- `active`
+- `closed`
+- `paused`
+
+**application_status:**
+
+- `applied`
+- `shortlisted`
+- `interviewed`
+- `rejected`
+- `offered`
+- `closed`
+
 ## Tables
 
 ### `users`
@@ -91,10 +106,10 @@ Updated: February 2026
 - `location` (text)
 - `current_role` (text)
 - `years_of_experience` (integer)
-- ... (other fields)
+- `resume_uploaded` (boolean)
 - `identity_verified` (boolean)
 - `assessment_status` (assessment_status)
-- `trust_score` (virtual/calculated, 0-100) - *Visible to Recruiters*
+- `trust_score` (virtual/calculated, 0-100) - _Visible to Recruiters_
 
 ### `recruiter_profiles`
 
@@ -140,9 +155,7 @@ Updated: February 2026
 - `experience_band` (experience_band)
 - `difficulty` (text)
 - `question_text` (text)
-- `keywords` (jsonb)
-- `action_verbs` (jsonb)
-- `connectors` (jsonb)
+- `evaluation_rubric` (text) - AI guidance for unbiased scoring.
 
 ### `assessment_sessions`
 
@@ -171,6 +184,14 @@ Updated: February 2026
 - `tab_switches` (integer)
 - `time_taken_seconds` (integer)
 
+### `recruiter_assessment_questions`
+
+- `id` (uuid)
+- `category` (text)
+- `driver` (text)
+- `question_text` (text)
+- `created_at` (timestamp)
+
 ### `recruiter_assessment_responses`
 
 - `id` (uuid)
@@ -179,6 +200,7 @@ Updated: February 2026
 - `answer_text` (text)
 - `category` (text)
 - `average_score` (decimal)
+- `evaluation_metadata` (jsonb) - Stores AI reasoning.
 
 ### `resume_data`
 
@@ -198,3 +220,75 @@ Updated: February 2026
 - `skills_score`
 - `reference_score`
 - `final_score`
+
+### `jobs`
+
+- `id` (uuid)
+- `company_id` (uuid -> companies.id)
+- `recruiter_id` (uuid -> recruiter_profiles.user_id)
+- `title` (text)
+- `description` (text)
+- `requirements` (text[])
+- `skills_required` (text[])
+- `experience_band` (experience_band)
+- `job_type` (job_type)
+- `location` (text)
+- `salary_range` (text)
+- `number_of_positions` (integer)
+- `status` (job_status)
+- `is_ai_generated` (boolean)
+- `closed_at` (timestamp)
+- `metadata` (jsonb)
+- `created_at` (timestamp)
+- `updated_at` (timestamp)
+
+### `job_applications`
+
+- `id` (uuid)
+- `job_id` (uuid -> jobs.id)
+- `candidate_id` (uuid -> candidate_profiles.user_id)
+- `status` (application_status)
+- `feedback` (text)
+- `created_at` (timestamp)
+- `updated_at` (timestamp)
+
+### `saved_jobs`
+
+- `id` (uuid)
+- `candidate_id` (uuid -> candidate_profiles.user_id)
+- `job_id` (uuid -> jobs.id)
+- `created_at` (timestamp)
+
+### `posts`
+
+- `id` (uuid)
+- `user_id` (uuid -> users.id)
+- `content` (text)
+- `media_urls` (text[])
+- `type` (text)
+- `created_at` (timestamp)
+- `updated_at` (timestamp)
+
+### `notifications`
+
+- `id` (uuid)
+- `user_id` (uuid -> users.id)
+- `type` (text)
+- `title` (text)
+- `message` (text)
+- `metadata` (jsonb)
+- `is_read` (boolean)
+- `created_at` (timestamp)
+
+## Storage Buckets
+
+### `resumes`
+- **Purpose**: Stores candidate PDF resumes (uploaded or AI-generated).
+- **Structure**: `user_id/resume_name.pdf`
+- **RLS**:
+    - Select: `(bucket_id = 'resumes' AND auth.uid()::text = (storage.foldername(name))[1])`
+    - Insert: `(bucket_id = 'resumes' AND auth.uid() IS NOT NULL)`
+
+### `profile_photos`
+- **Purpose**: User avatars.
+- **Structure**: `user_id/photo.jpg`

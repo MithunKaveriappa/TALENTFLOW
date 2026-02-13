@@ -2,201 +2,89 @@
 
 TalentFlow follows a **3-layer architecture** with an integrated AI Evaluation Engine:
 
-1. **Frontend (Next.js Thin Client)**: Conversational UI, Voice Input, and Event Tracking.
-2. **Backend (FastAPI Trust & Logic Layer)**: Orchestrates business rules, security, and AI evaluation.
-3. **Intelligence Layer (Google Gemini 1.5 Flash)**: Handles qualitative assessment scoring.
-4. **Data Layer (Supabase)**: Persistent storage for profiles, sessions, and authentication.
-
-All **business rules, assessments, scoring, and security decisions live in FastAPI**.
+1.  **Frontend (Next.js Thin Client)**: Conversational UI, Voice Input, and Event Tracking.
+2.  **Backend (FastAPI Trust & Logic Layer)**: Orchestrates business rules, security, AI evaluation, and **Document Intelligence**.
+3.  **Intelligence Layer (LLM Ensemble)**:
+    -   **Google Gemini 1.5 Flash**: Performance-optimized Multi-dimensional qualitative assessment scoring and dynamic question generation.
+    -   **Groq (Llama 3.3 70B)**: Real-time high-throughput resume parsing and data extraction.
+4.  **Data Layer (Supabase)**: Persistent storage for profiles, sessions, authentication, and **Binary Assets (PDFs)**.
 
 ## 2. Frontend Architecture (Client Layer)
 
-### Technology
+The Frontend is a **stateless thin client** designed for high engagement and accessibility.
 
-- **Next.js (App Router)**
-- TypeScript
-- Tailwind CSS
-- Web Speech API (Mic input)
-- Axios / Fetch
+### Technology Stack
+- **Next.js (App Router)** & TypeScript
+- **Tailwind CSS 4.0**
+- **Web Speech API**: Hands-free voice-to-text input.
+- **Lucide Icons**
 
 ### Responsibilities
-
-Frontend is a **thin client**.
-
-It:
-
-- Renders chat-based UI
-- Captures voice → text
-- Handles timers, mic, UI guards (copy-paste, tab switch detection)
-- Calls backend APIs
-- Displays scores, feedback, dashboards
-
-It **does NOT**:
-
-- Compute scores
-- Decide next question
-- Validate answers logically
-- Enforce assessment rules
-- Access database directly
+- **Conversational UI**: Renders chat-based flows for onboarding and assessments.
+- **Interactive Resume Builder**: Sequential data collection for candidates without a PDF.
+- **Integrity Guards**: Monitoring for tab switches, copy-paste, and timers.
+- **Micro-interactivity**: Handling mic-states, voice visualizations, and real-time UI feedback.
 
 ### Trust Level
+**Untrusted**: The frontend never computes scores or decides the "next step" in a workflow. It acts strictly as a display and input capture layer.
 
-**Untrusted**
-All frontend input is treated as untrusted and is validated/scored by the backend.
+## 3. Backend Architecture (The "Brain")
 
-## 3. Backend Architecture (FastAPI – Core of the System)
+FastAPI serves as the single source of truth for all logic and security.
 
-### Technology
+### Core Responsibilities
+- **AI Orchestration**: Sanitizing and routing data to Gemini/Groq for scoring.
+- **Adaptive Assessment Engine**: Dynamically selecting questions based on the "Priority Pipeline" (Resume -> Skills -> Traits).
+- **Unbiased Evaluation**: Implementing "Semantic Intent Matching" to eliminate linguistic and cultural bias in scoring.
+- **Document Intelligence**: Extracting structured intent from raw resume text (Career Gaps, Skill Entropy, Role Clarity).
+- **Security Handshake**: Verifying session integrity via `/auth/post-login` and auto-initializing missing profile records.
+- **Unified Trust Matrix**: Generating high-signal metrics for recruiters to bypass resume-level bias.
 
-- **FastAPI (Python)**
-- **Google Generative AI (Gemini 1.5 Flash)**: Used for multi-dimensional qualitative assessment analysis.
-- **Pydantic**: Request/Response validation.
+### Authentication & API Security
+- **JWT Verification**: Validating Supabase-issued tokens on every request.
+- **Service Role Bypass**: FastAPI uses the Supabase Service Role Key to perform admin-level operations (e.g., updating scores) while keeping user-facing APIs restricted via RLS.
 
-### Role of FastAPI (The Brain)
+## 4. Assessment & Intelligence Logic
 
-FastAPI is the **single source of truth** for:
+### 4.1 Adaptive Priority Pipeline
+The engine follows a sequential priority to build a candidate profile:
+1.  **Step 1-3 (Resume Analysis)**: Dynamic questions generated from the candidate's career gaps, achievements, and role consistency.
+2.  **Step 4-5 (Skill Depth)**: High-pressure case studies based on the candidate's specific technical/sales skills.
+3.  **Step 6+ (Seeded Traits)**: Randomized Behavioral and Psychometric questions from the 810-question bank.
 
-- **AI Orchestration**: Sending sanitized responses to Gemini for scoring.
-- **Assessment Management**: Selecting questions, managing timers, and calculating final profile scores.
-- **Data Privacy & Discovery**: Masking sensitive candidate metrics (Psychometric/Behavioral) and providing unified **Trust Matrix** signals to recruiters.
-- **Security Decisions**: Enforcing permanent bans via the `blocked_users` table.
-- **Role-Based Access Control (RBAC)**: Gating the Recruiter/Candidate dashboards.
+### 4.2 Unbiased Scoring (The AI Auditor)
+Using **Gemini 1.5 Flash** with **Neutrality Guardrails**:
+- **Semantic Scoring (0-6)**: Focuses on "Logic over Linguistics."
+- **Grammar Neutrality**: Scoring ignores non-standard grammar or accents, focusing strictly on the "Signal" of the answer.
+- **Rubric-Based Evaluation**: Every question is tied to an `evaluation_rubric` (Candidate) or specific Auditor Prompt (Recruiter) to ensure consistent grading.
 
-### How FastAPI Talks to Supabase
+### 4.3 Strategic Recruiter Assessment (Company DNA)
+The Recruiter Assessment evaluates the "Hiring Intent" and "Organizational Vision" through a dedicated engine:
+- **Pool**: 125 dynamic questions spread across 5 pillars (Strategic Intent, ICP, Ethics, CVP, Ownership).
+- **Selection**: 1 random question per pillar per session.
+- **Company Profile Score (CPS)**: A normalized percentage (0-100%) stored at the company level, serving as a trust signal for high-tier candidates.
 
-FastAPI uses the **Supabase Service Role Key** to perform admin-level database operations, bypassing RLS when necessary (e.g., updating scores, managing blocked users) while ensuring data integrity.
+## 5. Data Layer (Supabase Stack)
 
-## 4. Supabase Architecture (Platform Layer)
+### 5.1 Supabase Auth
+- **Identity Provider**: Manages Email OTP/Password login and JWT issuance.
 
-Supabase provides **three things only**:
+### 5.2 Supabase Database (Postgres + RLS)
+- **Relational Schema**: Stores `users`, `candidate_profiles`, `recruiter_profiles`, `assessment_sessions`, etc.
+- **Row Level Security (RLS)**: Enforces data isolation between users.
 
-### 4.1 Supabase Auth
+### 5.3 Supabase Storage
+- **`resumes`**: Private bucket for storing/retrieving PDF resumes.
+- **`profile_photos`**: Public-facing user avatars.
 
-- Email + OTP
-- Password login
-- JWT issuance
+## 6. Security Principles
 
-Supabase Auth handles:
+### Nuclear Ban
+Terminal-level security via the `blocked_users` table that prevents API access for sanctioned IDs.
 
-- Identity
-- Session tokens
+### Integrity Handshake
+To prevent "Onboarding Loops," the `/auth/post-login` endpoint automatically verifies and repairs missing profile data before allowing a user to see the dashboard.
 
-FastAPI handles:
-
-- Role binding
-- Access control
-- Business permissions
-
-### 4.2 Supabase Database (Postgres + RLS)
-
-- Structured relational schema
-- RLS enabled for safety
-- Backend bypass via service role
-
-Stores:
-
-- users
-- candidate_profiles
-- recruiter_profiles
-- companies
-- skills
-- assessments
-- scores
-- signals
-
-Does **not** store:
-
-- raw assessment answers
-- business logic
-
-### 4.3 Supabase Storage
-
-Used for **secure document storage**:
-
-- Resumes
-- Aadhaar files (Phase-1 upload only)
-
-Rules:
-
-- Files are private
-- No public URLs
-- Access only via backend
-- Frontend uploads via signed request handled by backend
-
-## 5. Authentication & Request Flow (Critical)
-
-### Login Flow
-
-1. User logs in via Supabase Auth
-2. Supabase returns JWT
-3. Frontend sends JWT to FastAPI
-4. FastAPI:
-   - Verifies token
-   - Reads user role from `public.users`
-   - Applies role-based logic
-
-### API Trust Model
-
-- Frontend → FastAPI → Supabase
-- Frontend never calls Supabase DB directly
-- FastAPI is the **single trusted gateway**
-
-## 6. Assessment Engine Placement
-
-### Lives entirely in FastAPI
-
-FastAPI:
-
-- Creates assessment sessions
-- Selects questions
-- Validates responses
-- Generates signals
-- Computes scores
-- Writes final results
-
-Supabase:
-
-- Stores assessment state & results
-
-Frontend:
-
-- Only displays questions
-- Sends signals
-- Shows results
-
-## 7. Matching Engine Placement
-
-### Phase-1 (Deterministic)
-
-- Implemented inside FastAPI
-- Uses:
-  - profile scores
-  - skills overlap
-  - experience match
-  - company score
-
-No ML. No embeddings.
-
-## 8. Admin Architecture
-
-- Admin login already exists
-- Admin APIs:
-  - Live inside FastAPI
-  - Use service role
-
-- Admin bypasses:
-  - RLS
-  - gating rules
-
-- Admin is **not part of marketplace flows**
-
-## 9. Why This Architecture Is Correct
-
-### Scalability
-
-- Stateless FastAPI
-- Horizontal scaling
-- DB handles consistency
 
 ### Security
 

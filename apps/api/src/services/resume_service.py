@@ -44,7 +44,7 @@ class ResumeService:
                         },
                         {
                             "role": "user",
-                            "content": f"Extract structured data from this resume. Keys: timeline (role, company, start, end), career_gaps (count, details), achievements (list), skills (list), education (degree, institution, year). Resume: {text[:10000]}"
+                            "content": f"Extract structured data from this resume. Keys: current_role (string), years_of_experience (integer), current_company (string), timeline (list of objects with role, company, start, end), career_gaps (count, details), achievements (list of strings), skills (list of strings), education (degree, institution, year). Resume: {text[:10000]}"
                         }
                     ],
                     response_format={"type": "json_object"}
@@ -64,6 +64,9 @@ class ResumeService:
                 prompt = f"""
                 Extract structured metadata from the following resume.
                 Provide the output ONLY as a valid JSON object with the following keys:
+                - current_role: string
+                - years_of_experience: integer
+                - current_company: string
                 - timeline: list of objects with {{role, company, start, end}}
                 - career_gaps: object with {{count, details}}
                 - achievements: list of strings
@@ -89,6 +92,9 @@ class ResumeService:
 
         # Final fallback - Mock data for development if keys are missing
         mock_data = {
+            "current_role": "Account Executive",
+            "years_of_experience": 3,
+            "current_company": "TechCorp",
             "skills": ["SaaS Sales", "Relationship Management", "Lead Generation"],
             "timeline": [{"role": "Account Executive", "company": "TechCorp", "start": "2021", "end": "Present"}],
             "message": "AI keys missing or failed. Using development fallback."
@@ -109,6 +115,7 @@ class ResumeService:
     @staticmethod
     async def _store_data(user_id: str, text: str, parsed_data: dict):
         try:
+            # 1. Update resume_data audit table
             supabase.table("resume_data").upsert({
                 "user_id": user_id,
                 "raw_text": text[:10000],
@@ -118,18 +125,26 @@ class ResumeService:
                 "skills": parsed_data.get("skills"),
                 "education": parsed_data.get("education")
             }).execute()
-        except Exception as e:
-            print(f"Error updating resume data with parsed results: {str(e)}")
-    async def _store_data(user_id: str, text: str, parsed_data: dict):
-        try:
-            supabase.table("resume_data").upsert({
-                "user_id": user_id,
-                "raw_text": text[:10000],
-                "timeline": parsed_data.get("timeline"),
-                "career_gaps": parsed_data.get("career_gaps"),
-                "achievements": parsed_data.get("achievements"),
-                "skills": parsed_data.get("skills"),
-                "education": parsed_data.get("education")
-            }).execute()
+
+            # 2. Sync core fields to candidate_profiles for immediate use
+            profile_updates = {}
+            if parsed_data.get("current_role"):
+                profile_updates["current_role"] = parsed_data.get("current_role")
+            
+            if parsed_data.get("years_of_experience"):
+                try:
+                    profile_updates["years_of_experience"] = int(parsed_data.get("years_of_experience"))
+                except (ValueError, TypeError):
+                    pass
+            
+            if parsed_data.get("current_company"):
+                profile_updates["current_company_name"] = parsed_data.get("current_company")
+            
+            if parsed_data.get("skills"):
+                profile_updates["skills"] = parsed_data.get("skills")
+
+            if profile_updates:
+                supabase.table("candidate_profiles").update(profile_updates).eq("user_id", user_id).execute()
+
         except Exception as e:
             print(f"Error storing resume data: {str(e)}")

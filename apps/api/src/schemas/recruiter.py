@@ -35,3 +35,56 @@ class RecruiterStats(BaseModel):
     verification_status: str
     account_status: str
     completion_score: int
+
+class JobCreate(BaseModel):
+    title: str
+    description: str
+    requirements: List[str] = []
+    skills_required: List[str] = []
+    experience_band: str  # Fixed from experience_level
+    job_type: str = "onsite"
+    location: Optional[str] = None
+    salary_range: Optional[str] = None
+    number_of_positions: int = 1
+    metadata: Dict[str, Any] = {}
+    is_ai_generated: bool = False
+
+class JobUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    requirements: Optional[List[str]] = None
+    skills_required: Optional[List[str]] = None
+    experience_band: Optional[str] = None # Fixed from experience_level
+    job_type: Optional[str] = None
+    location: Optional[str] = None
+    salary_range: Optional[str] = None
+    number_of_positions: Optional[int] = None
+    status: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+class JobResponse(BaseModel):
+    id: str
+    company_id: str
+    recruiter_id: Optional[str]
+    title: str
+    description: str
+    requirements: Optional[List[str]] = []
+    skills_required: Optional[List[str]] = []
+    experience_band: str 
+    job_type: str
+    location: Optional[str] = None
+    salary_range: Optional[str] = None
+    number_of_positions: int = 1
+    status: str
+    is_ai_generated: bool
+    closed_at: Optional[datetime] = None
+    metadata: Optional[Dict[str, Any]] = {}
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class JobAIPrompt(BaseModel):
+    prompt: str
+    experience_band: str

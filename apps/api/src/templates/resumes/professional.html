@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+    @page {
+        size: a4 portrait;
+        margin: 2cm;
+    }
+    body {
+        font-family: Arial, sans-serif;
+        color: #333;
+        line-height: 1.4;
+    }
+    .header {
+        text-align: center;
+        border-bottom: 2px solid #444;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+    }
+    .name {
+        font-size: 24pt;
+        font-weight: bold;
+        text-transform: uppercase;
+    }
+    .contact {
+        font-size: 10pt;
+        color: #666;
+    }
+    .section-title {
+        font-size: 14pt;
+        font-weight: bold;
+        color: #2c3e50;
+        border-bottom: 1px solid #ccc;
+        margin-top: 15px;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+    }
+    .entry {
+        margin-bottom: 10px;
+    }
+    .entry-header {
+        display: flex;
+        justify-content: space-between;
+        font-weight: bold;
+    }
+    .entry-sub {
+        font-style: italic;
+        color: #555;
+    }
+    ul {
+        margin-top: 5px;
+        padding-left: 20px;
+    }
+    li {
+        margin-bottom: 3px;
+    }
+</style>
+</head>
+<body>
+    <div class="header">
+        <div class="name">{{ full_name }}</div>
+        <div class="contact">
+            {{ email }} | {{ phone }} | {{ location }}
+            {% if linkedin %}| {{ linkedin }}{% endif %}
+        </div>
+    </div>
+
+    {% if bio %}
+    <div class="section-title">Professional Summary</div>
+    <div class="entry">
+        {{ bio }}
+    </div>
+    {% endif %}
+
+    <div class="section-title">Experience</div>
+    {% for job in timeline %}
+    <div class="entry">
+        <div class="entry-header">
+            <span>{{ job.role }}</span>
+            <span style="float: right;">{{ job.start }} - {{ job.end }}</span>
+        </div>
+        <div class="entry-sub">{{ job.company }}</div>
+        {% if job.description %}
+        <ul>
+            {% for line in job.description.split('\n') %}
+                {% if line.strip() %}<li>{{ line.strip() }}</li>{% endif %}
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    <div class="section-title">Education</div>
+    {% if education %}
+    <div class="entry">
+        <div class="entry-header">
+            <span>{{ education.degree }}</span>
+            <span style="float: right;">{{ education.year }}</span>
+        </div>
+        <div class="entry-sub">{{ education.institution }}</div>
+    </div>
+    {% endif %}
+
+    <div class="section-title">Skills</div>
+    <div class="entry">
+        {{ skills|join(', ') }}
+    </div>
+</body>
+</html>

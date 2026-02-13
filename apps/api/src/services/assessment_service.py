@@ -85,15 +85,29 @@ class AssessmentService:
             
             resume_count = categories_asked.count("resume")
             skill_count = categories_asked.count("skill")
-            
-            if resume_count < 3:
+
+            # 1. Quick check for data availability to avoid slow AI calls that will fail
+            resume_data_exists = False
+            try:
+                rd_res = supabase.table("resume_data").select("user_id").eq("user_id", user_id).execute()
+                resume_data_exists = len(rd_res.data) > 0
+            except: pass
+
+            skills_exist = False
+            try:
+                sk_res = supabase.table("candidate_profiles").select("skills").eq("user_id", user_id).execute()
+                skills_exist = bool(sk_res.data and sk_res.data[0].get("skills"))
+            except: pass
+
+            # 2. Adaptive Priority Logic
+            if resume_count < 3 and resume_data_exists:
                 resume_q = await self._try_generate_resume_question(user_id, resume_count)
-                if resume_q:
+                if resume_q and resume_q.get("text"):
                     return resume_q
 
-            if skill_count < 2:
+            if skill_count < 2 and skills_exist:
                 skill_q = await self._try_generate_skill_question(user_id, session.get("experience_band", "fresher"))
-                if skill_q:
+                if skill_q and skill_q.get("text"):
                     return skill_q
 
             return await self._get_predefined_question(user_id, session.get("experience_band", "fresher"))
@@ -112,21 +126,21 @@ class AssessmentService:
                 timeline = data.get("timeline", [])
                 if len(timeline) > 1:
                     prompt = f"Based on this candidate's history: {json.dumps(timeline)}. Generate ONE professional question for an assessment about their role consistency and depth of responsibility. Keep it under 30 words."
-                    q_text = self._ai_generate(prompt)
+                    q_text = await self._ai_generate(prompt)
                     return {"text": q_text, "category": "resume", "driver": "role_clarity", "difficulty": "medium"}
             
             if current_count == 1:
                 gaps = data.get("career_gaps", {})
                 if gaps and gaps.get("count", 0) > 0:
                     prompt = f"Candidate has career gaps: {json.dumps(gaps)}. Generate ONE professional question asking for transparency and growth during these periods. Under 30 words."
-                    q_text = self._ai_generate(prompt)
+                    q_text = await self._ai_generate(prompt)
                     return {"text": q_text, "category": "resume", "driver": "career_gap", "difficulty": "medium"}
 
             if current_count == 2:
                 achievements = data.get("achievements", [])
                 if achievements:
                     prompt = f"Candidate achievements: {json.dumps(achievements)}. Generate ONE question to validate specificity and ownership of one major achievement. Under 30 words."
-                    q_text = self._ai_generate(prompt)
+                    q_text = await self._ai_generate(prompt)
                     return {"text": q_text, "category": "resume", "driver": "achievement", "difficulty": "high"}
             
             return None
@@ -136,14 +150,24 @@ class AssessmentService:
 
     async def _try_generate_skill_question(self, user_id: str, band: str):
         try:
-            res = supabase.table("candidate_profiles").select("skills").eq("user_id", user_id).execute()
-            if not res.data or len(res.data) == 0:
+            # Get skills in profile
+            profile_res = supabase.table("candidate_profiles").select("skills").eq("user_id", user_id).execute()
+            if not profile_res.data or len(profile_res.data) == 0:
                 return None
-            skills = res.data[0].get("skills", [])
-            if not skills: return None
-            skill = random.choice(skills)
+            
+            all_skills = profile_res.data[0].get("skills", [])
+            if not all_skills: return None
+
+            # Filter out skills already tested
+            used_res = supabase.table("assessment_responses").select("driver").eq("candidate_id", user_id).eq("category", "skill").execute()
+            used_skills = [r["driver"] for r in (used_res.data or [])]
+            
+            available_skills = [s for s in all_skills if s not in used_skills]
+            if not available_skills: return None # No more unique skills to test
+            
+            skill = random.choice(available_skills)
             prompt = f"Context: It Tech Sales Assessment. Experience Band: {band}. Candidate Skill: {skill}. Generate a high-pressure SCENARIO based question (Case study) that tests technical accuracy and sales process understanding. The question must end with 'How would you proceed?'. Under 50 words."
-            q_text = self._ai_generate(prompt)
+            q_text = await self._ai_generate(prompt)
             return {"text": q_text, "category": "skill", "driver": skill, "difficulty": "high"}
         except Exception as e:
             print(f"Error skill question: {str(e)}")
@@ -177,18 +201,17 @@ class AssessmentService:
             "text": q["question_text"],
             "category": q["category"],
             "driver": q["driver"],
-            "difficulty": q["difficulty"],
-            "keywords": q["keywords"],
-            "action_verbs": q["action_verbs"],
-            "connectors": q["connectors"]
+            "difficulty": q["difficulty"]
         }
 
-    def _ai_generate(self, prompt: str) -> str:
+    async def _ai_generate(self, prompt: str) -> Optional[str]:
         try:
-            response = self.model.generate_content(prompt)
+            # Use async version of generate_content with a safety timeout
+            response = await self.model.generate_content_async(prompt)
             return response.text.strip()
-        except:
-            return "Could you please elaborate on your professional experience in your own words?"
+        except Exception as e:
+            print(f"DEBUG: Gemini Generation Error: {str(e)}")
+            return None 
 
     async def evaluate_answer(self, user_id: str, question_id: Optional[str], category: str, answer: str, difficulty: str, metadata: dict = {}):
         # 1. Handle Skip
@@ -196,57 +219,43 @@ class AssessmentService:
             return await self._store_response(user_id, question_id, category, answer, 0, True, metadata)
 
         # 2. Evaluation Method
-        score = 0
-        eval_meta = {}
-        
-        if category in ["behavioral", "psychometric"]:
-            # Rule-based evaluation
-            score, eval_meta = self._evaluate_rule_based(answer, metadata)
-        else:
-            # AI evaluation for Resume, Skills, Cultural
-            score, eval_meta = await self._evaluate_ai(answer, category, metadata)
+        # Shifted to full semantic AI evaluation to eliminate linguistic and keyword bias
+        score, eval_meta = await self._evaluate_ai(answer, category, metadata)
 
-        # 3. Difficulty Multiplier (Visual/Internal adjustment)
-        # Your request said "score 0-6", difficulty just makes it harder to get that 6.
-        # We'll stick to 0-6 base but the normalization will handle the weights.
-        
-        return await self._store_response(user_id, question_id, category, answer, score, False, eval_meta)
-
-    def _evaluate_rule_based(self, answer: str, q_metadata: dict):
-        answer_lower = answer.lower()
-        keywords = q_metadata.get("keywords", [])
-        verbs = q_metadata.get("action_verbs", [])
-        connectors = q_metadata.get("connectors", [])
-        
-        matched_k = [k for k in keywords if k.lower() in answer_lower]
-        matched_v = [v for v in verbs if v.lower() in answer_lower]
-        matched_c = [c for c in connectors if c.lower() in answer_lower]
-        
-        # Scoring Logic (Recommendation):
-        # Keywords: 3 pts max
-        # Verbs: 2 pts max
-        # Connectors: 1 pt max
-        k_score = min(3, len(matched_k))
-        v_score = min(2, len(matched_v))
-        c_score = 1 if matched_c else 0
-        
-        total = k_score + v_score + c_score
-        return total, {"matched_keywords": matched_k, "matched_verbs": matched_v, "matched_connectors": matched_c}
+        # Merge original question metadata with AI evaluation results
+        full_metadata = {**metadata, **eval_meta}
+        return await self._store_response(user_id, question_id, category, answer, score, False, full_metadata)
 
     async def _evaluate_ai(self, answer: str, category: str, q_metadata: dict):
+        rubric = q_metadata.get('evaluation_rubric')
+        rubric_instruction = f"Evaluation Rubric: {rubric}" if rubric else "No specific rubric provided. Use the STAR (Situation, Task, Action, Result) framework to identify logical depth and evidence."
+
+        # Bias-aware system prompt focusing on intent, logic, and evidence
         prompt = f"""
         Category: {category}
         Question: {q_metadata.get('text', 'Professional question')}
         Candidate Answer: {answer}
-        Evaluate this answer on a scale of 0 to 6 based on professional depth, accuracy, and clarity.
-        Return ONLY a JSON object: {{"score": 4, "reasoning": "short explanation"}}
+        
+        {rubric_instruction}
+        
+        System Instruction:
+        Evaluate this answer on a scale of 0 to 6 based on professional depth, logic, and evidence.
+        
+        Neutrality Guardrails:
+        1. Ignore non-standard grammar, regional idioms, or non-native phrasing.
+        2. Focus on the core 'Signal' and 'Intent' rather than linguistic polish.
+        3. Do not penalize for brevity if the response is technically accurate or demonstrates ownership.
+        4. Look for specific logic, evidence, or specific examples provided.
+        
+        Return ONLY a JSON object: {{"score": 4, "reasoning": "short explanation of the signal detected"}}
         """
         try:
-            res = self.model.generate_content(prompt)
-            data = json.loads(res.text.replace('```json', '').replace('```', '').strip())
-            return data.get("score", 0), {"reasoning": data.get("reasoning", "")}
-        except:
-            return 3, {"reasoning": "Fallback score due to AI timeout"}
+            res = await self.model.generate_content_async(prompt)
+            data = json.loads(res.text.replace('```json', '').replace('```', '').replace('json', '').strip())
+            return data.get("score", 0), {"reasoning": data.get("reasoning", ""), "evaluator": "AI_GRADED_UNBIASED"}
+        except Exception as e:
+            print(f"DEBUG: AI Eval Error: {str(e)}")
+            return 3, {"reasoning": "Fallback score due to AI timeout", "evaluator": "FALLBACK"}
 
     async def _store_response(self, user_id: str, q_id: Optional[str], category: str, answer: str, score: int, is_skipped: bool, metadata: dict):
         # 1. Fetch current session for updates (Safe fetch)
@@ -274,7 +283,9 @@ class AssessmentService:
         res_data = {
             "candidate_id": user_id,
             "question_id": q_id,
+            "question_text": metadata.get("text"), # Store the actual question text
             "category": category,
+            "driver": metadata.get("driver"),
             "raw_answer": answer,
             "score": score,
             "is_skipped": is_skipped,
