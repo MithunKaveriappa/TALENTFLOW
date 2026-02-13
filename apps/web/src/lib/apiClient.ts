@@ -1,7 +1,7 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export const apiClient = {
-  async post(path: string, body: any, token?: string) {
+  async post(path: string, body: unknown, token?: string) {
     const url = `${API_URL}${path}`;
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -20,17 +20,20 @@ export const apiClient = {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || `Request failed with status ${response.status}`);
+        throw new Error(
+          error.detail || `Request failed with status ${response.status}`,
+        );
       }
 
       return response.json();
-    } catch (err: any) {
-      console.error(`API POST Error [${url}]:`, err.message);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      console.error(`API POST Error [${url}]:`, errorMessage);
       throw err;
     }
   },
 
-  async patch(path: string, body: any, token?: string) {
+  async patch(path: string, body: unknown, token?: string) {
     const url = `${API_URL}${path}`;
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -49,12 +52,15 @@ export const apiClient = {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || `Request failed with status ${response.status}`);
+        throw new Error(
+          error.detail || `Request failed with status ${response.status}`,
+        );
       }
 
       return response.json();
-    } catch (err: any) {
-      console.error(`API PATCH Error [${url}]:`, err.message);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      console.error(`API PATCH Error [${url}]:`, errorMessage);
       throw err;
     }
   },
@@ -74,12 +80,15 @@ export const apiClient = {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || `Request failed with status ${response.status}`);
+        throw new Error(
+          error.detail || `Request failed with status ${response.status}`,
+        );
       }
 
       return response.json();
-    } catch (err: any) {
-      console.error(`API GET Error [${url}]:`, err.message);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      console.error(`API GET Error [${url}]:`, errorMessage);
       throw err;
     }
   },
@@ -100,12 +109,15 @@ export const apiClient = {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || `Request failed with status ${response.status}`);
+        throw new Error(
+          error.detail || `Request failed with status ${response.status}`,
+        );
       }
 
       return response.json();
-    } catch (err: any) {
-      console.error(`API DELETE Error [${url}]:`, err.message);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      console.error(`API DELETE Error [${url}]:`, errorMessage);
       throw err;
     }
   },

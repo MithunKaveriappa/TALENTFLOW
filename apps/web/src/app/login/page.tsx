@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
 import { useVoice } from "@/hooks/useVoice";
@@ -60,12 +61,33 @@ function LoginForm() {
   };
 
   useEffect(() => {
+    async function checkSession() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session) {
+        // If already logged in, run the post-login handshake to find where they belong
+        try {
+          const handshake = await apiClient.get(
+            "/auth/post-login",
+            session.access_token,
+          );
+          router.replace(handshake.next_step);
+        } catch {
+          // If handshake fails, they might be partially initialized
+          await supabase.auth.signOut();
+        }
+      }
+    }
+
     if (state === "INITIAL" && !initialized.current) {
       initialized.current = true;
-      addMessage("Welcome back! Please enter your email to sign in.", "bot");
-      setState("AWAITING_EMAIL");
+      checkSession().then(() => {
+        addMessage("Welcome back! Please enter your email to sign in.", "bot");
+        setState("AWAITING_EMAIL");
+      });
     }
-  }, [state]);
+  }, [state, router]);
 
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -83,7 +105,7 @@ function LoginForm() {
         addMessage(`Got it, ${name}. Now, please enter your password.`, "bot");
         setState("AWAITING_PASSWORD");
       } else if (state === "AWAITING_PASSWORD") {
-        const { data, error } = await supabase.auth.signInWithPassword({
+        const { data: authData, error } = await supabase.auth.signInWithPassword({
           email,
           password: workingInput,
         });
@@ -102,8 +124,8 @@ function LoginForm() {
           );
 
           try {
-            const session = await supabase.auth.getSession();
-            const token = session.data.session?.access_token;
+            const token = authData.session?.access_token;
+            if (!token) throw new Error("Authentication failed: No token received.");
 
             const handshake = await apiClient.get("/auth/post-login", token);
 
@@ -114,35 +136,68 @@ function LoginForm() {
             setState("COMPLETED");
 
             setTimeout(() => {
-              router.push(handshake.next_step);
+              router.replace(handshake.next_step);
             }, 2000);
-          } catch (err: any) {
+          } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : "Unknown error";
             addMessage(
-              `Security handshake failed: ${err.message}. Please contact support.`,
+              `Security handshake failed: ${errorMessage}. Please contact support.`,
               "bot",
             );
           }
         }
       }
-    } catch (err) {
+    } catch {
       addMessage("Something went wrong. Let's try that again.", "bot");
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.reload(); // Refresh to clear state and re-initialize
+  };
+
   return (
     <div className="flex flex-col h-screen bg-slate-50">
       {/* Header */}
       <header className="bg-white border-b px-6 py-4 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center">
-            <div className="h-4 w-4 rounded-sm bg-white rotate-45" />
+        <div className="flex items-center gap-4">
+          <Link
+            href="/"
+            className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500 hover:text-indigo-600"
+            aria-label="Back to home"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10 19l-7-7m0 0l7-7m-7 7h18"
+              />
+            </svg>
+          </Link>
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+              <div className="h-4 w-4 rounded-sm bg-white rotate-45" />
+            </div>
+            <span className="font-bold text-slate-900 tracking-tight">
+              TalentFlow Sign In
+            </span>
           </div>
-          <span className="font-bold text-slate-900 tracking-tight">
-            TalentFlow Sign In
-          </span>
         </div>
+        <button
+          onClick={handleLogout}
+          className="text-xs font-semibold uppercase tracking-wider text-slate-400 hover:text-red-500 transition-colors"
+        >
+          Logout / Clear Session
+        </button>
       </header>
 
       {/* Chat Area */}

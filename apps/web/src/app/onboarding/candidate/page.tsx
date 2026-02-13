@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
 import { useVoice } from "@/hooks/useVoice";
@@ -16,10 +17,22 @@ type Message = {
   options?: string[];
 };
 
+interface TimelineItem {
+  role: string;
+  company: string;
+  start: string;
+  end: string;
+  description: string;
+}
+
 type OnboardingState =
   | "INITIAL"
   | "AWAITING_EXPERIENCE"
   | "AWAITING_RESUME"
+  | "BUILDING_RESUME_BASIC"
+  | "BUILDING_RESUME_EXPERIENCE"
+  | "BUILDING_RESUME_EDUCATION"
+  | "BUILDING_RESUME_TEMPLATE"
   | "AWAITING_SKILLS"
   | "CONSENT"
   | "COMPLETED";
@@ -30,6 +43,14 @@ export default function CandidateOnboarding() {
   const [state, setState] = useState<OnboardingState>("INITIAL");
   const [experienceBand, setExperienceBand] = useState<string>("fresher");
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [resumeBuilder, setResumeBuilder] = useState({
+    phone: "",
+    location: "",
+    linkedin: "",
+    bio: "",
+    timeline: [] as TimelineItem[],
+    education: { degree: "", institution: "", year: "" }
+  });
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -110,7 +131,7 @@ export default function CandidateOnboarding() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        router.push("/login");
+        router.replace("/login");
         return;
       }
 
@@ -141,11 +162,15 @@ export default function CandidateOnboarding() {
         session?.access_token,
       );
 
+      if (profile && profile.onboarding_step === "COMPLETED") {
+        router.replace("/assessment/candidate");
+        return;
+      }
+
       if (
         profile &&
         profile.onboarding_step &&
-        profile.onboarding_step !== "INITIAL" &&
-        profile.onboarding_step !== "COMPLETED"
+        profile.onboarding_step !== "INITIAL"
       ) {
         const savedStep = profile.onboarding_step as OnboardingState;
         setExperienceBand(profile.experience || "fresher");
@@ -270,12 +295,107 @@ export default function CandidateOnboarding() {
 
           setTimeout(() => {
             addMessage(
-              "Next, I'll need your resume to understand your background better. Please upload it (PDF only).",
+              "Next, I'll need your resume to understand your background better. You can upload it or I can help you build one right here.",
               "bot",
+              ["Upload Resume (PDF)", "I don't have a resume"]
             );
             setState(nextState);
           }, 1000);
         }
+      } else if (state === "AWAITING_RESUME") {
+        if (workingInput === "I don't have a resume") {
+          addMessage(
+            "No problem! Let's build a professional one together. I'll need a few details. What's your contact number and current location (e.g. +1 555-0199, London)?",
+            "bot",
+          );
+          setState("BUILDING_RESUME_BASIC");
+        } else if (workingInput === "Upload Resume (PDF)") {
+          addMessage(
+            "Please use the upload button at the bottom to share your PDF.",
+            "bot",
+          );
+        }
+      } else if (state === "BUILDING_RESUME_BASIC") {
+        setResumeBuilder((prev) => ({ ...prev, phone: workingInput }));
+        addMessage(
+          "Got it. Now, tell me about your most recent job. What's the Job Title and Company (e.g. Sales Manager at TechCorp)?",
+          "bot",
+        );
+        setState("BUILDING_RESUME_EXPERIENCE");
+      } else if (state === "BUILDING_RESUME_EXPERIENCE") {
+        const parts = workingInput.split(" at ");
+        const role = parts[0] || workingInput;
+        const company = parts[1] || "Previous Company";
+        setResumeBuilder((prev) => ({
+          ...prev,
+          timeline: [
+            {
+              role,
+              company,
+              start: "2020",
+              end: "Present",
+              description: "Responsible for driving revenue and growth.",
+            },
+          ],
+        }));
+        addMessage(
+          "Excellent. Lastly, what's your highest level of education (Degree and University)?",
+          "bot",
+        );
+        setState("BUILDING_RESUME_EDUCATION");
+      } else if (state === "BUILDING_RESUME_EDUCATION") {
+        setResumeBuilder((prev) => ({
+          ...prev,
+          education: {
+            degree: workingInput,
+            institution: "University",
+            year: "2022",
+          },
+        }));
+        addMessage("Almost done! Which style do you prefer for your resume?", "bot", [
+          "Professional",
+          "Modern",
+        ]);
+        setState("BUILDING_RESUME_TEMPLATE");
+      } else if (state === "BUILDING_RESUME_TEMPLATE") {
+        const template =
+          workingInput.toLowerCase() === "modern" ? "modern" : "professional";
+        addMessage(`Generating your ${template} resume...`, "bot");
+
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        await apiClient.post(
+          "/candidate/generate-resume",
+          {
+            full_name: extractNameFromEmail(user?.email || "Candidate"),
+            email: user?.email || "",
+            phone: resumeBuilder.phone,
+            location: "Remote",
+            bio: `Experienced ${experienceBand} professional in IT Tech Sales.`,
+            education: resumeBuilder.education,
+            timeline: resumeBuilder.timeline,
+            skills: ["Sales", "Negotiation", "CRM"],
+            template: template,
+          },
+          session?.access_token,
+        );
+
+        addMessage("Resume generated and saved to your profile!", "bot");
+
+        setTimeout(() => {
+          addMessage(
+            "Are there any other top 3 tech sales skills (e.g., SaaS, Lead Gen, Negotiation) you'd like to add?",
+            "bot",
+          );
+          const nextState = "AWAITING_SKILLS";
+          saveStep(nextState);
+          setState(nextState);
+        }, 1500);
       } else if (state === "AWAITING_SKILLS") {
         const skillsFromInput = workingInput
           .split(",")
@@ -370,9 +490,13 @@ export default function CandidateOnboarding() {
 
       if (res.parsed && res.data) {
         const skills: string[] = res.data.skills || [];
+        const role = res.data.current_role;
+        const exp = res.data.years_of_experience;
+        const company = res.data.current_company;
+
         setSelectedSkills(skills);
         addMessage(
-          `Resume uploaded and scanned successfully! I've extracted your core work history.`,
+          `Resume uploaded and scanned successfully! I see you've been working as ${role || "a professional"} at ${company || "your current firm"}${exp ? ` with about ${exp} years of experience` : ""}.`,
           "bot",
         );
         if (skills.length > 0) {
@@ -405,13 +529,34 @@ export default function CandidateOnboarding() {
   return (
     <div className="flex flex-col h-screen bg-slate-50">
       <header className="bg-white border-b px-6 py-4 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center">
-            <div className="h-4 w-4 rounded-sm bg-white rotate-45" />
+        <div className="flex items-center gap-4">
+          <Link
+            href="/"
+            className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500 hover:text-indigo-600"
+            aria-label="Back to home"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10 19l-7-7m0 0l7-7m-7 7h18"
+              />
+            </svg>
+          </Link>
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+              <div className="h-4 w-4 rounded-sm bg-white rotate-45" />
+            </div>
+            <span className="font-bold text-slate-900">
+              TalentFlow Onboarding
+            </span>
           </div>
-          <span className="font-bold text-slate-900">
-            TalentFlow Onboarding
-          </span>
         </div>
         <button
           onClick={handleLogout}
@@ -607,17 +752,16 @@ export default function CandidateOnboarding() {
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
               placeholder={
                 state === "AWAITING_RESUME"
-                  ? "Please use the upload box above"
+                  ? "Select an option above..."
                   : state === "AWAITING_SKILLS"
                     ? "Add custom skills (comma separated)..."
                     : "Type your response..."
               }
-              disabled={isLoading || state === "AWAITING_RESUME"}
+              disabled={isLoading}
               className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
             />
             <button
               onClick={isListening ? stopListening : startListening}
-              disabled={state === "AWAITING_RESUME"}
               className={`p-3 rounded-xl ${isListening ? "bg-red-500 text-white animate-pulse" : "bg-slate-100 text-slate-600"} disabled:opacity-50`}
             >
               <svg
@@ -638,8 +782,9 @@ export default function CandidateOnboarding() {
               onClick={() => handleSend()}
               disabled={
                 isLoading ||
-                state === "AWAITING_RESUME" ||
-                (!input.trim() && state !== "AWAITING_SKILLS") ||
+                (!input.trim() &&
+                  state !== "AWAITING_SKILLS" &&
+                  state !== "AWAITING_RESUME") ||
                 (state === "AWAITING_SKILLS" &&
                   !input.trim() &&
                   selectedSkills.length === 0)

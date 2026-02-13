@@ -20,19 +20,19 @@ export default function Home() {
               href="#logic"
               className="hover:text-slate-900 transition-colors"
             >
-              The Logic
+              How it Works
             </Link>
             <Link
               href="#trust"
               className="hover:text-slate-900 transition-colors"
             >
-              Trust Signals
+              Why Trust Us
             </Link>
             <Link
               href="/login"
               className="px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-blue-600 transition-all shadow-xl shadow-slate-200"
             >
-              Executive Portal
+              Sign In
             </Link>
           </div>
         </div>
@@ -46,19 +46,19 @@ export default function Home() {
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-100 mb-8">
                 <div className="h-1.5 w-1.5 rounded-full bg-blue-600 animate-pulse" />
                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600">
-                  Assessment-Driven Marketplace
+                  Skill-Verified Network
                 </span>
               </div>
 
               <h1 className="text-6xl md:text-8xl font-black tracking-tighter text-slate-900 leading-[0.9] mb-8">
-                HIRE ON <span className="text-blue-600">SIGNALS</span>,<br />
-                NOT SPECULATION.
+                HIRE ON <span className="text-blue-600">TALENT</span>,<br />
+                NOT GUESSWORK.
               </h1>
 
               <p className="text-xl md:text-2xl text-slate-500 font-medium leading-relaxed max-w-2xl mb-12">
-                The high-trust ecosystem for executive talent. We verify intent
-                and skills through real-time AI assessments, providing
-                deterministic matches for serious teams.
+                The trusted home for professional talent. We verify skills
+                through simple AI conversations, ensuring a perfect fit for
+                every team.
               </p>
 
               <div className="flex flex-col sm:flex-row items-center gap-6">
@@ -108,7 +108,7 @@ export default function Home() {
           <div className="mx-auto max-w-7xl px-6 lg:px-12">
             <div className="mb-20">
               <h2 className="text-4xl font-black tracking-tighter text-slate-900 uppercase italic">
-                The TalentFlow Framework
+                How TalentFlow Works
               </h2>
               <div className="h-1.5 w-24 bg-blue-600 mt-4" />
             </div>
@@ -123,7 +123,7 @@ export default function Home() {
                 </h3>
                 <p className="text-slate-500 leading-relaxed font-medium">
                   We don&apos;t just accept profiles. Every candidate undergoes
-                  Aadhaar verification and professional screening before they
+                  identity verification and professional screening before they
                   see a single job.
                 </p>
               </div>
@@ -133,12 +133,12 @@ export default function Home() {
                   02
                 </span>
                 <h3 className="text-xl font-bold uppercase tracking-tight">
-                  AI Signal Capture
+                  Verified Skills
                 </h3>
                 <p className="text-slate-500 leading-relaxed font-medium">
-                  Our proprietary assessor evaluates depth, specificity, and
-                  ownership through 16 behavioral dimensions. We quantify the
-                  qualitative.
+                  Our AI interviewer evaluates depth and experience through
+                  natural conversations. We measure what truly matters in a
+                  role.
                 </p>
               </div>
 
@@ -147,12 +147,12 @@ export default function Home() {
                   03
                 </span>
                 <h3 className="text-xl font-bold uppercase tracking-tight">
-                  Zero-Spam Dashboard
+                  Spam-Free Hiring
                 </h3>
                 <p className="text-slate-500 leading-relaxed font-medium">
-                  No cold messages. No generic applications. The ecosystem is
-                  gated by score-driven visibility, ensuring every match is
-                  intentional.
+                  No cold messages. No generic applications. The network is
+                  built on skill-based visibility, ensuring every match is a
+                  real opportunity.
                 </p>
               </div>
             </div>
@@ -165,13 +165,13 @@ export default function Home() {
             <div className="bg-slate-900 rounded-[3rem] p-12 md:p-24 text-white relative overflow-hidden shadow-2xl">
               <div className="relative z-10 max-w-3xl">
                 <h2 className="text-4xl md:text-6xl font-black tracking-tighter leading-none mb-8">
-                  ELIMINATE THE <br />
-                  <span className="text-blue-500">SCREENING TAX.</span>
+                  HIRE FASTER, <br />
+                  <span className="text-blue-500">HIRE BETTER.</span>
                 </h2>
                 <p className="text-xl text-slate-400 font-medium mb-12">
-                  Stop reading resumes. Start analyzing scores. Our
-                  trust-verified marketplace reduces your time-to-hire by 70% by
-                  pre-validating every signal.
+                  Stop scanning resumes. Start seeing potential. Our
+                  verified network reduces your hiring time by 70% by
+                  pre-verifying every candidate beforehand.
                 </p>
                 <div className="flex flex-wrap gap-8 items-center pt-8 border-t border-slate-800">
                   <div>
@@ -183,13 +183,13 @@ export default function Home() {
                   <div>
                     <div className="text-3xl font-black tabular-nums">0.0%</div>
                     <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
-                      Spam Tolerance
+                      Spam Policy
                     </div>
                   </div>
                   <div>
                     <div className="text-3xl font-black tabular-nums">16+</div>
                     <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
-                      Psychometric Signals
+                      Skill Metrics
                     </div>
                   </div>
                 </div>
@@ -223,11 +223,11 @@ export default function Home() {
               </span>
             </div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-              © 2026 TalentFlow Precision Systems. All Rights Reserved.
+              © 2026 TalentFlow. All Rights Reserved.
             </p>
             <div className="flex gap-6 text-[10px] font-black uppercase tracking-widest text-slate-500">
               <Link href="#" className="hover:text-slate-900 transition-colors">
-                Integrity Policy
+                Trust Policy
               </Link>
               <Link href="#" className="hover:text-slate-900 transition-colors">
                 Privacy

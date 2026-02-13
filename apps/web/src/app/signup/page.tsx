@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
 import { useVoice } from "@/hooks/useVoice";
@@ -69,13 +70,32 @@ function SignupForm() {
   };
 
   useEffect(() => {
+    async function checkSession() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session) {
+        try {
+          const handshake = await apiClient.get(
+            "/auth/post-login",
+            session.access_token,
+          );
+          router.replace(handshake.next_step);
+        } catch {
+          // Handshake fail usually means they are in middle of signup; stay here
+        }
+      }
+    }
+
     if (state === "INITIAL" && !initialized.current) {
       initialized.current = true;
-      const greeting = `Hello! I'm your onboarding assistant. I see you want to join as a ${role}. What is your email address?`;
-      addMessage(greeting, "bot");
-      setState("AWAITING_EMAIL");
+      checkSession().then(() => {
+        const greeting = `Hello! I'm your onboarding assistant. I see you want to join as a ${role}. What is your email address?`;
+        addMessage(greeting, "bot");
+        setState("AWAITING_EMAIL");
+      });
     }
-  }, [state, role]);
+  }, [state, role, router]);
 
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -140,9 +160,10 @@ function SignupForm() {
                 );
                 setState("AWAITING_OTP");
               }
-            } catch (err: any) {
+            } catch (err) {
+              const errorMessage = err instanceof Error ? err.message : "Email validation failed.";
               console.error("Validation Error:", err);
-              addMessage(err.message || "Email validation failed.", "bot");
+              addMessage(errorMessage, "bot");
             }
           }
         }
@@ -191,7 +212,7 @@ function SignupForm() {
             "bot",
           );
         } else {
-          const { data, error } = await supabase.auth.updateUser({
+          const { error } = await supabase.auth.updateUser({
             password: workingInput,
           });
 
@@ -221,18 +242,19 @@ function SignupForm() {
               // Sign out and redirect after a short delay
               setTimeout(async () => {
                 await supabase.auth.signOut();
-                router.push("/login");
+                router.replace("/login");
               }, 3000);
-            } catch (err: any) {
+            } catch (err) {
+              const errorMessage = err instanceof Error ? err.message : "Unknown error";
               addMessage(
-                `We created your account, but couldn't initialize your profile: ${err.message}. Please contact support.`,
+                `We created your account, but couldn't initialize your profile: ${errorMessage}. Please contact support.`,
                 "bot",
               );
             }
           }
         }
       }
-    } catch (err) {
+    } catch {
       addMessage("Something went wrong. Let's try that again.", "bot");
     } finally {
       setIsLoading(false);
@@ -243,13 +265,34 @@ function SignupForm() {
     <div className="flex flex-col h-screen bg-slate-50">
       {/* Header */}
       <header className="bg-white border-b px-6 py-4 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center">
-            <div className="h-4 w-4 rounded-sm bg-white rotate-45" />
+        <div className="flex items-center gap-4">
+          <Link
+            href="/"
+            className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500 hover:text-indigo-600"
+            aria-label="Back to home"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10 19l-7-7m0 0l7-7m-7 7h18"
+              />
+            </svg>
+          </Link>
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+              <div className="h-4 w-4 rounded-sm bg-white rotate-45" />
+            </div>
+            <span className="font-bold text-slate-900 tracking-tight">
+              TalentFlow Onboarding
+            </span>
           </div>
-          <span className="font-bold text-slate-900 tracking-tight">
-            TalentFlow Onboarding
-          </span>
         </div>
         <div className="text-xs font-medium text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded">
           {role} signup

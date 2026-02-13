@@ -1,22 +1,84 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+
+interface SpeechRecognitionResult {
+  transcript: string;
+}
+
+interface SpeechRecognitionResultList {
+  [index: number]: {
+    [index: number]: SpeechRecognitionResult;
+  };
+}
+
+interface SpeechRecognitionEvent {
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionInstance {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: (event: SpeechRecognitionEvent) => void;
+  onerror: (event: unknown) => void;
+  onend: () => void;
+  start: () => void;
+  stop: () => void;
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition?: new () => SpeechRecognitionInstance;
+    webkitSpeechRecognition?: new () => SpeechRecognitionInstance;
+  }
+}
 
 export const useVoice = () => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
-  const [recognition, setRecognition] = useState<any>(null);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
   useEffect(() => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SpeechRecognition =
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
     if (SpeechRecognition) {
-      const rec = new SpeechRecognition();
+      const rec = new SpeechRecognition() as SpeechRecognitionInstance;
       rec.continuous = false;
       rec.interimResults = false;
       rec.lang = "en-US";
 
-      rec.onresult = (event: any) => {
-        const text = event.results[0][0].transcript;
+      rec.onresult = (event: SpeechRecognitionEvent) => {
+        let text = event.results[0][0].transcript;
+
+        // Initial trim and remove trailing period (often auto-inserted by speech engines)
+        text = text.trim();
+        if (text.endsWith(".")) {
+          text = text.slice(0, -1);
+        }
+
+        // Normalize technical inputs (especially emails)
+        // Convert " dot " to ".", " at " to "@", etc.
+        text = text
+          .toLowerCase()
+          .replace(/\s+dot\s+/gi, ".")
+          .replace(/\s+at\s+/gi, "@")
+          .replace(/\s+underscore\s+/gi, "_")
+          .replace(/\s+dash\s+/gi, "-")
+          .replace(/\s+hyphen\s+/gi, "-");
+
+        // Remove spaces if it looks like an email attempt
+        if (text.includes("@") || text.includes(".")) {
+          text = text.replace(/\s+/g, "");
+        }
+
+        // Final sanity check: remove any trailing dot that might have persisted
+        // after space removal (e.g., "gmail . com ." -> "gmail.com.")
+        if (text.endsWith(".")) {
+          text = text.slice(0, -1);
+        }
+
         setTranscript(text);
         setIsListening(false);
       };
@@ -29,26 +91,32 @@ export const useVoice = () => {
         setIsListening(false);
       };
 
-      setRecognition(rec);
+      recognitionRef.current = rec;
     }
   }, []);
 
   const startListening = useCallback(() => {
-    if (recognition) {
+    if (recognitionRef.current) {
       setTranscript("");
       setIsListening(true);
-      recognition.start();
+      recognitionRef.current.start();
     } else {
       alert("Speech recognition not supported in this browser.");
     }
-  }, [recognition]);
+  }, []);
 
   const stopListening = useCallback(() => {
-    if (recognition) {
-      recognition.stop();
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
       setIsListening(false);
     }
-  }, [recognition]);
+  }, []);
 
-  return { isListening, transcript, startListening, stopListening, hasSupport: !!recognition };
+  return {
+    isListening,
+    transcript,
+    startListening,
+    stopListening,
+    hasSupport: !!recognition,
+  };
 };

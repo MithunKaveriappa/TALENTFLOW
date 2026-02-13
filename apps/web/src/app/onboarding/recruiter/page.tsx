@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
 import { useVoice } from "@/hooks/useVoice";
@@ -23,26 +24,31 @@ type OnboardingState =
   | "ASSESSMENT_CHAT"
   | "COMPLETED";
 
-const ASSESSMENT_QUESTIONS = [
+interface AssessmentQuestion {
+  text: string;
+  category: string;
+}
+
+const ASSESSMENT_QUESTIONS: AssessmentQuestion[] = [
   {
-    text: "What specific business challenge is this role intended to solve, and what does success look like for this position after six months?",
-    category: "Hiring Intent & Role Clarity",
+    text: "Why is your company expanding its team right now, and what are the three primary reasons a top-tier candidate should join your organization regardless of their specific role?",
+    category: "recruiter_intent",
   },
   {
-    text: "Beyond technical skills, what are the three non-obvious traits that characterize your most successful team members in this department?",
-    category: "Ideal Candidate Profile (ICP) Understanding",
+    text: "Beyond technical skills, what are the fundamental traits and 'Cultural DNA' that define every successful hire at your company?",
+    category: "recruiter_icp",
   },
   {
     text: "How do you ensure a fair and consistent experience for all candidates, and how do you handle internal disagreements regarding a candidate's fit?",
-    category: "Ethics & Fair Hiring Practices",
+    category: "recruiter_ethics",
   },
   {
     text: "What is one unique aspect of your culture or growth path that isn't in the job description, and why should a top candidate choose you over a competitor?",
-    category: "Candidate Value Proposition",
+    category: "recruiter_cvp",
   },
   {
     text: "Who are the key decision-makers in your hiring process, and what is your target timeline for providing final feedback to candidates?",
-    category: "Decision-Making & Ownership",
+    category: "recruiter_ownership",
   },
 ];
 
@@ -57,12 +63,12 @@ export default function RecruiterOnboarding() {
     location: "",
     description: "",
   });
+  const [dynamicQuestions, setDynamicQuestions] = useState<AssessmentQuestion[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState(60);
   const [isAssessmentActive, setIsAssessmentActive] = useState(false);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [warningCount, setWarningCount] = useState(0);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -70,11 +76,11 @@ export default function RecruiterOnboarding() {
 
   const { isListening, transcript, startListening, stopListening } = useVoice();
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     localStorage.removeItem("tf_recruiter_onboarding");
     await supabase.auth.signOut();
     router.push("/login");
-  };
+  }, [router]);
 
   // Scroll to bottom
   useEffect(() => {
@@ -112,7 +118,6 @@ export default function RecruiterOnboarding() {
             window.location.href = "/login?error=blocked";
           } else {
             addMessage(res.message, "bot");
-            setWarningCount((prev) => prev + 1);
           }
         } catch (err) {
           console.error("Failed to report tab switch:", err);
@@ -123,7 +128,7 @@ export default function RecruiterOnboarding() {
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () =>
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [isAssessmentActive]);
+  }, [isAssessmentActive, addMessage]);
 
   // Timer logic for assessment
   useEffect(() => {
@@ -139,9 +144,9 @@ export default function RecruiterOnboarding() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isAssessmentActive, timeLeft]);
+  }, [isAssessmentActive, timeLeft, handleSend]);
 
-  const addMessage = (
+  const addMessage = useCallback((
     text: string,
     sender: "bot" | "user",
     options?: string[],
@@ -156,7 +161,7 @@ export default function RecruiterOnboarding() {
         options,
       },
     ]);
-  };
+  }, []);
 
   useEffect(() => {
     async function init() {
@@ -167,7 +172,7 @@ export default function RecruiterOnboarding() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        router.push("/login");
+        router.replace("/login");
         return;
       }
 
@@ -219,9 +224,9 @@ export default function RecruiterOnboarding() {
       }
     }
     init();
-  }, []);
+  }, [addMessage, promptNextDetail, router, showAssessmentPrompt]);
 
-  const promptNextDetail = (details: any) => {
+  const promptNextDetail = useCallback((details: Record<string, string | null>) => {
     if (!details.name || details.name === "Pending Verification") {
       addMessage("What is the full legal name of your company?", "bot");
     } else if (!details.website) {
@@ -231,9 +236,9 @@ export default function RecruiterOnboarding() {
     } else if (!details.description) {
       addMessage("Please provide a short description of your company.", "bot");
     }
-  };
+  }, [addMessage]);
 
-  const showAssessmentPrompt = () => {
+  const showAssessmentPrompt = useCallback(() => {
     addMessage(
       "Your company profile is set! Now, as part of onboarding, we require a short Recruiter Assessment.",
       "bot",
@@ -247,17 +252,50 @@ export default function RecruiterOnboarding() {
       "bot",
       ["Start Assessment", "Do It Later"],
     );
-  };
+  }, [addMessage]);
 
-  const startAssessment = () => {
-    setIsAssessmentActive(true);
-    setState("ASSESSMENT_CHAT");
-    setCurrentQuestionIndex(0);
-    setTimeLeft(60);
-    addMessage(ASSESSMENT_QUESTIONS[0].text, "bot");
-  };
+  const startAssessment = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const questions = await apiClient.get(
+        "/recruiter/assessment-questions",
+        session?.access_token,
+      );
 
-  const handleSend = async (textOverride?: string) => {
+      if (questions && questions.length > 0) {
+        setDynamicQuestions(questions);
+        setIsAssessmentActive(true);
+        setState("ASSESSMENT_CHAT");
+        setCurrentQuestionIndex(0);
+        setTimeLeft(60);
+        addMessage(questions[0].question_text, "bot");
+      } else {
+        // Fallback to static if API fails or returns empty
+        setDynamicQuestions(ASSESSMENT_QUESTIONS);
+        setIsAssessmentActive(true);
+        setState("ASSESSMENT_CHAT");
+        setCurrentQuestionIndex(0);
+        setTimeLeft(60);
+        addMessage(ASSESSMENT_QUESTIONS[0].text, "bot");
+      }
+    } catch (err) {
+      console.error("Failed to load questions:", err);
+      // Fallback
+      setDynamicQuestions(ASSESSMENT_QUESTIONS);
+      setIsAssessmentActive(true);
+      setState("ASSESSMENT_CHAT");
+      setCurrentQuestionIndex(0);
+      setTimeLeft(60);
+      addMessage(ASSESSMENT_QUESTIONS[0].text, "bot");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [addMessage]);
+
+  const handleSend = useCallback(async (textOverride?: string) => {
     const val = textOverride || input.trim();
     if (!val && !isLoading) return;
     if (isLoading) return;
@@ -312,10 +350,15 @@ export default function RecruiterOnboarding() {
         }
       } else if (state === "DETAILS") {
         const nextDetails = { ...companyDetails };
-        if (!nextDetails.name) nextDetails.name = val;
-        else if (!nextDetails.website) nextDetails.website = val;
-        else if (!nextDetails.location) nextDetails.location = val;
-        else if (!nextDetails.description) nextDetails.description = val;
+        if (!nextDetails.name || nextDetails.name === "Pending Verification") {
+          nextDetails.name = val;
+        } else if (!nextDetails.website) {
+          nextDetails.website = val;
+        } else if (!nextDetails.location) {
+          nextDetails.location = val;
+        } else if (!nextDetails.description) {
+          nextDetails.description = val;
+        }
 
         setCompanyDetails(nextDetails);
 
@@ -347,11 +390,11 @@ export default function RecruiterOnboarding() {
           setTimeout(() => router.push("/dashboard/recruiter"), 2000);
         }
       } else if (state === "ASSESSMENT_CHAT") {
-        const currentQ = ASSESSMENT_QUESTIONS[currentQuestionIndex];
+        const currentQ = dynamicQuestions[currentQuestionIndex];
         await apiClient.post(
           "/recruiter/submit-answer",
           {
-            question_text: currentQ.text,
+            question_text: currentQ.question_text || currentQ.text,
             answer: val,
             category: currentQ.category,
           },
@@ -359,10 +402,14 @@ export default function RecruiterOnboarding() {
         );
 
         const nextIndex = currentQuestionIndex + 1;
-        if (nextIndex < ASSESSMENT_QUESTIONS.length) {
+        if (nextIndex < dynamicQuestions.length) {
           setCurrentQuestionIndex(nextIndex);
           setTimeLeft(60);
-          addMessage(ASSESSMENT_QUESTIONS[nextIndex].text, "bot");
+          addMessage(
+            dynamicQuestions[nextIndex].question_text ||
+              dynamicQuestions[nextIndex].text,
+            "bot",
+          );
         } else {
           setIsAssessmentActive(false);
           await apiClient.post("/recruiter/complete-assessment", {}, token);
@@ -379,25 +426,68 @@ export default function RecruiterOnboarding() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [
+    input,
+    isLoading,
+    addMessage,
+    handleLogout,
+    state,
+    router,
+    companyId,
+    companyDetails,
+    showAssessmentPrompt,
+    promptNextDetail,
+    startAssessment,
+    dynamicQuestions,
+    currentQuestionIndex,
+  ]);
 
   return (
     <div className="flex flex-col h-screen bg-black text-white p-4 max-w-2xl mx-auto border-x border-zinc-800">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-xl font-bold tracking-tighter text-blue-500 italic">
-          TALENTFLOW
-        </h1>
+      <div className="flex justify-between items-center mb-6 border-b border-zinc-800 pb-4">
+        <div className="flex items-center gap-4">
+          <Link
+            href="/"
+            className="p-2 hover:bg-zinc-800 rounded-full transition-colors text-zinc-500 hover:text-blue-500"
+            aria-label="Back to home"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10 19l-7-7m0 0l7-7m-7 7h18"
+              />
+            </svg>
+          </Link>
+          <div className="flex items-center gap-2">
+            <div className="h-7 w-7 rounded bg-blue-600 flex items-center justify-center">
+              <div className="h-3 w-3 rounded-sm bg-black rotate-45" />
+            </div>
+            <h1 className="text-lg font-bold tracking-tighter text-white uppercase italic">
+              TalentFlow
+            </h1>
+          </div>
+        </div>
         <div className="flex items-center gap-4">
           {isAssessmentActive && (
             <div
-              className={`px-4 py-1 rounded-full text-sm font-mono ${timeLeft < 15 ? "bg-red-900 animate-pulse" : "bg-zinc-800"}`}
+              className={`px-3 py-1 rounded-full text-xs font-mono border ${timeLeft < 15 ? "bg-red-950 border-red-500 text-red-500 animate-pulse" : "bg-zinc-900 border-zinc-700 text-zinc-400"}`}
             >
-              00:{timeLeft.toString().padStart(2, "0")}
+              {Math.floor(timeLeft / 60)
+                .toString()
+                .padStart(2, "0")}
+              :{(timeLeft % 60).toString().padStart(2, "0")}
             </div>
           )}
           <button
             onClick={handleLogout}
-            className="text-xs font-bold text-zinc-500 hover:text-red-500 transition-colors uppercase tracking-widest"
+            className="text-[10px] font-bold text-zinc-600 hover:text-red-500 transition-colors uppercase tracking-[0.2em]"
           >
             Logout
           </button>

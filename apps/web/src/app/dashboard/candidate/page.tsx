@@ -53,7 +53,7 @@ export default function CandidateDashboard() {
           data: { session: authSession },
         } = await supabase.auth.getSession();
         if (!authSession) {
-          router.push("/login");
+          router.replace("/login");
           return;
         }
 

@@ -51,7 +51,7 @@ export default function RecruiterDashboard() {
           data: { session: authSession },
         } = await supabase.auth.getSession();
         if (!authSession) {
-          router.push("/login");
+          router.replace("/login");
           return;
         }
 
