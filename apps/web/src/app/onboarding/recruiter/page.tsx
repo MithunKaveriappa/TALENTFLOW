@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
@@ -20,12 +20,14 @@ type OnboardingState =
   | "INITIAL"
   | "REGISTRATION"
   | "DETAILS"
+  | "BIO_CONFIRM"
   | "ASSESSMENT_PROMPT"
   | "ASSESSMENT_CHAT"
   | "COMPLETED";
 
 interface AssessmentQuestion {
   text: string;
+  question_text?: string;
   category: string;
 }
 
@@ -97,23 +99,56 @@ export default function RecruiterOnboarding() {
   const handleLogout = useCallback(async () => {
     localStorage.removeItem("tf_recruiter_onboarding");
     await supabase.auth.signOut();
-    router.push("/login");
+    router.replace("/login");
   }, [router]);
 
-  const showAssessmentPrompt = useCallback(() => {
-    addMessage(
-      "Your company profile is set! Now, as part of onboarding, we require a short Recruiter Assessment.",
-      "bot",
-    );
-    addMessage(
-      "This helps us generate your Company Profile Score, which impacts candidate matching and trust signals.",
-      "bot",
-    );
-    addMessage(
-      "Rules: 5 questions, 60s per question, no retakes, one continuous attempt. Copy-paste and tab-switching are strictly monitored.",
-      "bot",
-      ["Start Assessment", "Do It Later"],
-    );
+  const showAssessmentPrompt = useCallback(async () => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const status = await apiClient.get(
+        "/recruiter/company-status",
+        session?.access_token,
+      );
+
+      if (status && status.has_score) {
+        addMessage(
+          `Great news! A colleague from ${status.company_name} has already certified your company with a Profile Score of ${status.score}%.`,
+          "bot",
+        );
+        addMessage(
+          "You can skip the assessment and use this score, or take it yourself to try and improve the rating. Only the highest score is kept.",
+          "bot",
+          ["Skip & Use Existing", "Take Assessment & Improve"],
+        );
+      } else {
+        addMessage(
+          "Your company profile is set! Now, as part of onboarding, we require a short Recruiter Assessment.",
+          "bot",
+        );
+        addMessage(
+          "This helps us generate your Company Profile Score, which impacts candidate matching and trust signals.",
+          "bot",
+        );
+        addMessage(
+          "Rules: 5 questions, 60s per question, no retakes, one continuous attempt. Copy-paste and tab-switching are strictly monitored.",
+          "bot",
+          ["Start Assessment", "Do It Later"],
+        );
+      }
+    } catch (err) {
+      console.error("Failed to check assessment status:", err);
+      // Fallback to standard prompt
+      addMessage(
+        "Your company profile is set! Now, we require a short Recruiter Assessment.",
+        "bot",
+      );
+      addMessage("Rules: 5 questions, no retakes.", "bot", [
+        "Start Assessment",
+        "Do It Later",
+      ]);
+    }
   }, [addMessage]);
 
   const promptNextDetail = useCallback(
@@ -222,7 +257,7 @@ export default function RecruiterOnboarding() {
                 "Your company is already vetted! Fast-tracking you to the Command Center...",
                 "bot",
               );
-              setTimeout(() => router.push("/dashboard/recruiter"), 2000);
+              setTimeout(() => router.replace("/dashboard/recruiter"), 2000);
             } else {
               setState("DETAILS");
               addMessage("Registration confirmed.", "bot");
@@ -231,6 +266,8 @@ export default function RecruiterOnboarding() {
           }
         } else if (state === "DETAILS") {
           const nextDetails = { ...companyDetails };
+          let bioGenerated = false;
+
           if (
             !nextDetails.name ||
             nextDetails.name === "Pending Verification"
@@ -238,6 +275,27 @@ export default function RecruiterOnboarding() {
             nextDetails.name = val;
           } else if (!nextDetails.website) {
             nextDetails.website = val;
+            // Generate Bio
+            addMessage(
+              "Interesting! Let me see what I can find out about your company's mission...",
+              "bot",
+            );
+            try {
+              const res = await apiClient.post(
+                "/recruiter/generate-bio",
+                { website: val },
+                token,
+              );
+              if (res.bio) {
+                nextDetails.description = res.bio;
+                bioGenerated = true;
+              }
+            } catch (err) {
+              console.error(
+                "Bio generation failed, falling back to manual",
+                err,
+              );
+            }
           } else if (!nextDetails.location) {
             nextDetails.location = val;
           } else if (!nextDetails.description) {
@@ -246,7 +304,18 @@ export default function RecruiterOnboarding() {
 
           setCompanyDetails(nextDetails);
 
-          if (
+          if (bioGenerated) {
+            setState("BIO_CONFIRM");
+            addMessage(
+              `I've found this mission description on your website: "${nextDetails.description}"`,
+              "bot",
+            );
+            addMessage(
+              "Would you like to keep this, or would you prefer to enter a custom description?",
+              "bot",
+              ["Keep this", "Edit description"],
+            );
+          } else if (
             nextDetails.name &&
             nextDetails.website &&
             nextDetails.location &&
@@ -262,8 +331,40 @@ export default function RecruiterOnboarding() {
           } else {
             promptNextDetail(nextDetails);
           }
+        } else if (state === "BIO_CONFIRM") {
+          if (val === "Keep this") {
+            setState("DETAILS");
+            addMessage(
+              "Excellent. Now, where is your company headquartered?",
+              "bot",
+            );
+          } else if (val === "Edit description") {
+            setState("DETAILS");
+            setCompanyDetails((prev) => ({ ...prev, description: "" }));
+            addMessage(
+              "Understood. Please provide a short description of your company manually.",
+              "bot",
+            );
+          } else {
+            // Treat as custom entry
+            const customDetails = { ...companyDetails, description: val };
+            setCompanyDetails(customDetails);
+            setState("DETAILS");
+            if (!customDetails.location) {
+              addMessage(
+                "Bio updated. Now, where is your company headquartered?",
+                "bot",
+              );
+            } else {
+              // If location was somehow already there, move forward
+              handleSend("Proceed"); // Internal trigger
+            }
+          }
         } else if (state === "ASSESSMENT_PROMPT") {
-          if (val === "Start Assessment") {
+          if (
+            val === "Start Assessment" ||
+            val === "Take Assessment & Improve"
+          ) {
             startAssessment();
           } else if (val === "Do It Later") {
             await apiClient.post("/recruiter/skip-assessment", {}, token);
@@ -271,7 +372,14 @@ export default function RecruiterOnboarding() {
               "No problem! You can complete it later. Note that your dashboard features will remain locked until then.",
               "bot",
             );
-            setTimeout(() => router.push("/dashboard/recruiter"), 2000);
+            setTimeout(() => router.replace("/dashboard/recruiter/profile"), 2000);
+          } else if (val === "Skip & Use Existing") {
+            await apiClient.post("/recruiter/skip-assessment", {}, token);
+            addMessage(
+              "Perfect! You've inherited your company's certified trust signal. Unlocking your dashboard...",
+              "bot",
+            );
+            setTimeout(() => router.replace("/dashboard/recruiter"), 2000);
           }
         } else if (state === "ASSESSMENT_CHAT") {
           const currentQ = dynamicQuestions[currentQuestionIndex];
@@ -301,7 +409,7 @@ export default function RecruiterOnboarding() {
               "Assessment complete! Onboarding is finished. Unlocking your dashboard...",
               "bot",
             );
-            setTimeout(() => router.push("/dashboard/recruiter"), 2000);
+            setTimeout(() => router.replace("/dashboard/recruiter"), 2000);
           }
         }
       } catch (err) {
@@ -327,8 +435,6 @@ export default function RecruiterOnboarding() {
       currentQuestionIndex,
     ],
   );
-
-  const { isListening, transcript, startListening, stopListening } = useVoice();
 
   // Scroll to bottom
   useEffect(() => {
@@ -399,64 +505,89 @@ export default function RecruiterOnboarding() {
       if (initialized.current) return;
       initialized.current = true;
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        router.replace("/login");
-        return;
-      }
-
-      const name = extractNameFromEmail(user.email || "");
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const profile = await apiClient.get(
-        "/recruiter/profile",
-        session?.access_token,
-      );
-
-      if (profile) {
-        setCompanyId(profile.company_id);
-        if (profile.companies) {
-          setCompanyDetails({
-            name: profile.companies.name || "",
-            website: profile.companies.website || "",
-            location: profile.companies.location || "",
-            description: profile.companies.description || "",
-          });
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) {
+          router.replace("/login");
+          return;
         }
 
-        const currentStep = profile.onboarding_step as OnboardingState;
-        setState(currentStep);
+        const name = extractNameFromEmail(user.email || "");
 
-        if (currentStep === "REGISTRATION" || currentStep === "INITIAL") {
-          addMessage(
-            `Welcome, ${name}! Let's set up your company profile.`,
-            "bot",
-          );
-          addMessage(
-            "First, please enter your Company Registration Number (CIN or GSTIN).",
-            "bot",
-          );
-          setState("REGISTRATION");
-        } else if (currentStep === "DETAILS") {
-          addMessage(
-            "Let's complete the basic details for your company.",
-            "bot",
-          );
-          promptNextDetail(profile.companies || {});
-        } else if (currentStep === "ASSESSMENT_PROMPT") {
-          showAssessmentPrompt();
-        } else if (currentStep === "COMPLETED") {
-          router.push("/dashboard/recruiter");
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const profile = await apiClient.get(
+          "/recruiter/profile",
+          session?.access_token,
+        );
+
+        if (profile) {
+          setCompanyId(profile.company_id);
+          if (profile.companies) {
+            setCompanyDetails({
+              name: profile.companies.name || "",
+              website: profile.companies.website || "",
+              location: profile.companies.location || "",
+              description: profile.companies.description || "",
+            });
+          }
+
+          if (profile.assessment_status === "disqualified") {
+            addMessage(
+              "Security Protocol: Your access to the assessment has been revoked due to multiple infractions (tab switching/copy-paste).",
+              "bot",
+            );
+            addMessage(
+              "Please contact system administration to appeal this decision.",
+              "bot",
+            );
+            return;
+          }
+
+          const currentStep = profile.onboarding_step as OnboardingState;
+          setState(currentStep);
+
+          if (currentStep === "REGISTRATION" || currentStep === "INITIAL") {
+            addMessage(
+              `Welcome, ${name}! Let's set up your company profile.`,
+              "bot",
+            );
+            addMessage(
+              "First, please enter your Company Registration Number (CIN or GSTIN).",
+              "bot",
+            );
+            setState("REGISTRATION");
+          } else if (currentStep === "DETAILS") {
+            addMessage(
+              "Let's complete the basic details for your company.",
+              "bot",
+            );
+            promptNextDetail(profile.companies || {});
+          } else if (currentStep === "ASSESSMENT_PROMPT") {
+            showAssessmentPrompt();
+          } else if (currentStep === "COMPLETED") {
+            if (profile.assessment_status !== "completed") {
+              // If they are here even if marked COMPLETED, it means they need to finish the assessment
+              setState("ASSESSMENT_PROMPT");
+              showAssessmentPrompt();
+            } else {
+              router.replace("/dashboard/recruiter");
+            }
+          }
         }
+      } catch (err) {
+        console.error("Initialization error:", err);
+        addMessage(
+          "Connection unstable. Please refresh the page to restart the sync.",
+          "bot",
+        );
       }
     }
     init();
   }, [addMessage, promptNextDetail, router, showAssessmentPrompt]);
-
 
   return (
     <div className="flex flex-col h-screen bg-black text-white p-4 max-w-2xl mx-auto border-x border-zinc-800">
@@ -628,3 +759,4 @@ function SendIcon() {
     </svg>
   );
 }
+

@@ -7,6 +7,8 @@ from src.api.candidate import router as candidate_router
 from src.api.assessment import router as assessment_router
 from src.api.recruiter import router as recruiter_router
 from src.api.posts import router as posts_router
+from src.api.notifications import router as notifications_router
+from src.api.chat import router as chat_router
 import time
 
 app = FastAPI(title="TalentFlow API")
@@ -43,6 +45,8 @@ app.include_router(candidate_router)
 app.include_router(assessment_router, prefix="/assessment")
 app.include_router(recruiter_router)
 app.include_router(posts_router, prefix="/posts")
+app.include_router(notifications_router)
+app.include_router(chat_router)
 
 @app.get("/")
 def root():

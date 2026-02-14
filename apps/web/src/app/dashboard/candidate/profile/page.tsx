@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import CandidateSidebar from "@/components/CandidateSidebar";
 
 interface ProfileData {
   full_name?: string;
@@ -18,6 +19,7 @@ interface ProfileData {
   linkedin_url?: string;
   portfolio_url?: string;
   job_type?: string;
+  assessment_status?: string;
   completion_score?: number;
   experience?: string;
 }
@@ -37,7 +39,7 @@ export default function CandidateProfilePage() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push("/login");
+    router.replace("/login");
   };
 
   useEffect(() => {
@@ -47,7 +49,7 @@ export default function CandidateProfilePage() {
           data: { session },
         } = await supabase.auth.getSession();
         if (!session) {
-          router.push("/login");
+          router.replace("/login");
           return;
         }
 
@@ -192,20 +194,30 @@ export default function CandidateProfilePage() {
     );
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-12">
-      <div className="max-w-4xl mx-auto space-y-8">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
+    <div className="flex min-h-screen bg-slate-50 overflow-hidden">
+      <CandidateSidebar />
+
+      <main className="flex-1 overflow-y-auto ml-64 p-12">
+        <div className="max-w-5xl mx-auto space-y-8">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-12">
+            <div>
+              <button
+                onClick={() => router.push("/dashboard/candidate")}
+                className="text-slate-400 hover:text-indigo-600 font-bold text-[10px] uppercase tracking-[0.2em] mb-2 flex items-center gap-2 transition-colors"
+              >
+                ← Back to Dashboard
+              </button>
+              <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase">
+                Profile Settings
+              </h1>
+            </div>
             <button
-              onClick={() => router.push("/dashboard/candidate")}
-              className="text-slate-400 hover:text-indigo-600 font-bold text-[10px] uppercase tracking-[0.2em] mb-2 flex items-center gap-2 transition-colors"
+              onClick={handleLogout}
+              className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-red-500 hover:bg-red-50 hover:border-red-100 transition-all shadow-sm active:scale-95"
             >
-              ← Back to Command Center
+              Logout
             </button>
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight italic uppercase">
-              Manage Profile
-            </h1>
           </div>
 
           <div className="flex items-center gap-8">
@@ -376,12 +388,47 @@ export default function CandidateProfilePage() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                  Experience Band (Read Only)
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-2">
+                  Experience Band
+                  {profile?.assessment_status === "completed" && (
+                    <div className="flex items-center gap-1 text-[8px] text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                      <svg
+                        className="h-2.5 w-2.5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={3}
+                          d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                        />
+                      </svg>
+                      LOCKED
+                    </div>
+                  )}
                 </label>
-                <div className="w-full px-6 py-4 rounded-xl bg-slate-100 border border-slate-200 font-black text-slate-400 uppercase tracking-widest">
-                  {profile?.experience || "Not Set"}
-                </div>
+                {profile?.assessment_status === "completed" ? (
+                  <div className="w-full px-6 py-4 rounded-xl bg-slate-100 border border-slate-200 font-black text-slate-400 uppercase tracking-widest flex justify-between items-center group/lock">
+                    <span>{profile?.experience || "Not Set"}</span>
+                    <span className="text-[8px] opacity-0 group-hover/lock:opacity-100 transition-opacity">
+                      Requires Assessment Reset to change
+                    </span>
+                  </div>
+                ) : (
+                  <select
+                    name="experience"
+                    value={profile?.experience || "fresher"}
+                    onChange={handleInputChange}
+                    className="w-full px-6 py-4 rounded-xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all font-bold text-slate-700 appearance-none"
+                  >
+                    <option value="fresher">Fresher</option>
+                    <option value="mid">Mid-Level</option>
+                    <option value="senior">Senior</option>
+                    <option value="leadership">Leadership</option>
+                  </select>
+                )}
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
@@ -452,11 +499,26 @@ export default function CandidateProfilePage() {
                 </div>
               </div>
 
-              <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 italic text-slate-400 text-xs text-center">
-                Skills, CRM Tools, and Sales Methodologies are synchronized from
-                your initial assessment and resume analysis. Manual editing of
-                these core signals is restricted in Phase 1 to ensure system
-                trust.
+              <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 italic text-slate-400 text-xs text-center flex items-center justify-center gap-3">
+                <svg
+                  className="h-4 w-4 text-slate-300"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                  />
+                </svg>
+                <span>
+                  Skills, CRM Tools, and Sales Methodologies are synchronized
+                  from your initial assessment and resume analysis. Manual
+                  editing of these core signals is restricted to ensure system
+                  trust.
+                </span>
               </div>
             </div>
           </div>
@@ -578,7 +640,7 @@ export default function CandidateProfilePage() {
             RE-INITIALIZE EVALUATION ENGINE
           </button>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

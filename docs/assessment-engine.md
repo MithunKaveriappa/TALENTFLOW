@@ -12,8 +12,8 @@ The engine utilizes **Generative AI (Gemini 1.5 Flash)** for qualitative evaluat
 
 ## 1. Core Principles
 
-1. **One-time assessment**
-   - Assessments are high-stakes and cannot be retaken in Phase-1.
+1. **Persistent Scoring with Improvement Path**
+   - Assessments are high-stakes. Retakes are allowed via settings, and the system follows a **Best Score Wins (MAX)** logic to ensure a user's profile is always represented by their peak performance.
 2. **AI-Driven Qualitative Scoring**
    - Answers are evaluated across multiple dimensions (Relevance, Specificity, Clarity, Ownership) on a 0-6 scale.
 3. **Voice/Text Hybrid**
@@ -34,16 +34,17 @@ The engine utilizes **Generative AI (Gemini 1.5 Flash)** for qualitative evaluat
   - Skill-based practical questions.
   - Predefined psychometric/cultural dimensions (Resilience, Adaptability, etc.).
 
-### Recruiter Assessment (Fixed)
+### Recruiter Assessment (Fixed Structure, Dynamic Bank)
 
-- **Goal**: Verify company intent and recruitment ethics.
-- **Structure**: Exactly **5 dimensions**.
-- **Dimensions**:
-  1. **Hiring Intent**: Urgency and necessity.
-  2. **Ethics & Fairness**: Integrity in the hiring process.
-  3. **Role Clarity**: Precision in requirements.
-  4. **Value Proposition**: What the candidate gains.
-  5. **Fit Definition**: Clear success criteria.
+- **Goal**: Verify company intent and recruitment quality.
+- **Structure**: Exactly **5 questions**, one from each core pillar.
+- **Pillar Bank**: Questions are randomly sampled from a bank of **125 validated prompts** (25 per category).
+- **Core Pillars**:
+  1. **Strategic Intent**: Hiring urgency and vision.
+  2. **ICP Definition**: Deep character traits for the role.
+  3. **Ethics & Fairness**: Integrity in evaluation.
+  4. **Value Proposition (CVP)**: Competitive advantages of the firm.
+  5. **Outcome Ownership**: Feedback and decision-making accountability.
 
 ## 3. Security & Anti-Cheat
 

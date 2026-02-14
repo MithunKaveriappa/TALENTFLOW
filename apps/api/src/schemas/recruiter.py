@@ -88,3 +88,8 @@ class JobResponse(BaseModel):
 class JobAIPrompt(BaseModel):
     prompt: str
     experience_band: str
+
+class ApplicationStatusUpdate(BaseModel):
+    application_id: str
+    status: str
+    feedback: Optional[str] = None

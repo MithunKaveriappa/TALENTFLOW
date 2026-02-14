@@ -4,6 +4,7 @@ from src.core.supabase import supabase
 from pydantic import BaseModel
 from src.services.resume_service import ResumeService
 from src.services.candidate_service import CandidateService
+from src.services.notification_service import NotificationService
 from src.utils.pdf_generator import PDFGenerator
 from src.schemas.candidate import CandidateProfileUpdate, CandidateStats, CandidateJobResponse, JobApplicationResponse
 from src.core.config import GOOGLE_API_KEY
@@ -66,8 +67,17 @@ def update_profile(
 ):
     user_id = user["sub"]
     try:
+        # 0. Check Integrity Lock
+        profile_check = supabase.table("candidate_profiles").select("assessment_status").eq("user_id", user_id).execute()
+        is_completed = profile_check.data and profile_check.data[0].get("assessment_status") == "completed"
+
         # 1. Update Profile Fields
         update_data = request.model_dump(exclude_unset=True, by_alias=True)
+        
+        # Prevent experience change if locked
+        if is_completed and ("experience" in update_data or "years_of_experience" in update_data):
+            raise HTTPException(status_code=403, detail="Seniority signals are locked post-assessment. Use Performance Reset to update.")
+
         supabase.table("candidate_profiles").update(update_data).eq("user_id", user_id).execute()
         
         # 2. Recalculate Completion Score (Safe fetch)
@@ -122,6 +132,11 @@ def update_experience(
         raise HTTPException(status_code=400, detail="Invalid experience band")
     
     try:
+        # Check integrity lock
+        profile_check = supabase.table("candidate_profiles").select("assessment_status").eq("user_id", user_id).execute()
+        if profile_check.data and profile_check.data[0].get("assessment_status") == "completed":
+             raise HTTPException(status_code=403, detail="Experience band is locked after assessment completion.")
+
         supabase.table("candidate_profiles").update({
             "experience": request.experience
         }).eq("user_id", user_id).execute()
@@ -213,16 +228,52 @@ def update_skills(
     user_id = user["sub"]
     
     try:
-        # Update both the skills list, step, and assessment status
+        # Update skills and progress step
         supabase.table("candidate_profiles").update({
             "skills": request.skills,
-            "onboarding_step": "CONSENT",
-            "assessment_status": "not_started"
+            "onboarding_step": "AWAITING_ID"
         }).eq("user_id", user_id).execute()
         
-        return {"status": "skills_updated", "next": "assessment"}
+        return {"status": "skills_updated", "next": "id_verification"}
     except Exception as e:
         print(f"Update Skills Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/verify-id")
+def verify_id(
+    request: dict, # {id_path: str}
+    user: dict = Depends(get_current_user)
+):
+    user_id = user["sub"]
+    try:
+        supabase.table("candidate_profiles").update({
+            "identity_verified": True,
+            "onboarding_step": "AWAITING_TC"
+        }).eq("user_id", user_id).execute()
+        return {"status": "id_uploaded"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/accept-tc")
+def accept_tc(
+    user: dict = Depends(get_current_user)
+):
+    user_id = user["sub"]
+    try:
+        supabase.table("candidate_profiles").update({
+            "terms_accepted": True,
+            "onboarding_step": "COMPLETED",
+            "assessment_status": "not_started"
+        }).eq("user_id", user_id).execute()
+
+        NotificationService.create_notification(
+            user_id=user_id,
+            type="ONBOARDING_COMPLETED",
+            title="Profile Synchronized",
+            message="Your high-trust profile is now fully active. You can now transmit signals to enterprise recruiters."
+        )
+        return {"status": "tc_accepted"}
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 # --- JOB DISCOVERY & APPLICATIONS ---

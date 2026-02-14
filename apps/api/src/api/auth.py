@@ -124,7 +124,13 @@ async def post_login(user: dict = Depends(get_current_user)):
         
         # 3. Determine next step
         if role == "candidate":
-            if status == "completed":
+            # RELAXED GATING: Allow dashboard access if basic profile is ready (experience + resume)
+            # even if assessment is not completed.
+            profile_data = profile_res.data[0] if profile_res.data else {}
+            has_experience = profile_data.get("experience") is not None
+            has_resume = profile_data.get("resume_uploaded", False)
+            
+            if status == "completed" or (has_experience and has_resume):
                 next_step = "/dashboard/candidate"
             else:
                 next_step = "/onboarding/candidate"

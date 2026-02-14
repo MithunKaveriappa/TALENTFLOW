@@ -73,9 +73,9 @@ function LoginForm() {
             session.access_token,
           );
           router.replace(handshake.next_step);
-        } catch {
-          // If handshake fails, they might be partially initialized
-          await supabase.auth.signOut();
+        } catch (err) {
+          console.error("Handshake failed during session check:", err);
+          // Don't auto-logout here, let the user stay on the page or try again
         }
       }
     }

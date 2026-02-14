@@ -55,11 +55,11 @@ class ResumeService:
             except Exception as e:
                 print(f"Groq parsing failed: {str(e)}")
 
-        # 4. Call Gemini via SDK (Reliable for 3.11)
-        if google_key and not google_key.startswith("AIzaSyArx"): # Skip if it's the placeholder
+        # 4. Call AI via SDK (using gemma-3-27b-it)
+        if google_key:
             try:
                 genai.configure(api_key=google_key)
-                model = genai.GenerativeModel('gemini-1.5-flash')
+                model = genai.GenerativeModel('gemma-3-27b-it')
                 
                 prompt = f"""
                 Extract structured metadata from the following resume.

@@ -3,98 +3,40 @@
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import CommunityFeed from "@/components/CommunityFeed";
+import CandidateSidebar from "@/components/CandidateSidebar";
 
 export default function CandidateCommunity() {
   const router = useRouter();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push("/login");
+    router.replace("/login");
   };
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-slate-100 flex flex-col shrink-0">
-        <div className="p-8">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-100">
-              <div className="h-5 w-5 rounded-sm bg-white rotate-45" />
-            </div>
-            <span className="font-black text-slate-900 tracking-tighter uppercase text-lg">
-              TalentFlow
-            </span>
+      <CandidateSidebar />
+
+      <main className="flex-1 overflow-y-auto ml-64 p-12">
+        <header className="mb-12 flex justify-between items-start">
+          <div>
+            <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase">
+              Feed
+            </h1>
+            <p className="text-slate-500 font-medium">
+              Engage with the ecosystem, share learnings, and build presence.
+            </p>
           </div>
-        </div>
-
-        <nav className="flex-1 p-6 space-y-2">
-          <SidebarLink
-            label="Dashboard"
-            onClick={() => router.push("/dashboard/candidate")}
-          />
-          <SidebarLink
-            label="My Profile"
-            onClick={() => router.push("/dashboard/candidate/profile")}
-          />
-          <SidebarLink
-            label="Community"
-            active
-            onClick={() => router.push("/dashboard/candidate/community")}
-          />
-          <SidebarLink
-            label="Opportunities"
-            onClick={() => router.push("/dashboard/candidate/jobs")}
-          />
-        </nav>
-
-        <div className="p-6 border-t border-slate-50 space-y-4">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 text-slate-500 font-bold text-xs uppercase tracking-widest hover:bg-red-50 hover:text-red-600 rounded-xl transition-all"
+            className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-red-500 hover:bg-red-50 hover:border-red-100 transition-all shadow-sm active:scale-95 translate-y-2"
           >
             Logout
           </button>
-        </div>
-      </aside>
-
-      <main className="flex-1 overflow-y-auto p-12">
-        <header className="mb-12">
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase">
-            Community Signal
-          </h1>
-          <p className="text-slate-500 font-medium">
-            Engage with the ecosystem, share learnings, and build presence.
-          </p>
         </header>
 
         <CommunityFeed userRole="candidate" />
       </main>
     </div>
-  );
-}
-
-function SidebarLink({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all group ${
-        active
-          ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100"
-          : "text-slate-500 hover:bg-slate-50"
-      }`}
-    >
-      <span className="font-bold text-xs uppercase tracking-widest">
-        {label}
-      </span>
-      {active && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
-    </button>
   );
 }

@@ -81,8 +81,9 @@ function SignupForm() {
             session.access_token,
           );
           router.replace(handshake.next_step);
-        } catch {
-          // Handshake fail usually means they are in middle of signup; stay here
+        } catch (err) {
+          console.error("Handshake failed during session check:", err);
+          // Don't auto-logout, allow them to continue signup or refresh
         }
       }
     }
@@ -235,15 +236,33 @@ function SignupForm() {
               );
 
               addMessage(
-                "Perfect! Your account is ready. I'll redirect you to the login page now.",
+                "Perfect! Your account is ready. Taking you to the next step...",
                 "bot",
               );
               setState("COMPLETED");
 
-              // Sign out and redirect after a short delay
+              // Redirect directly to the correct destination after a short delay
               setTimeout(async () => {
-                await supabase.auth.signOut();
-                router.replace("/login");
+                const {
+                  data: { session },
+                } = await supabase.auth.getSession();
+                if (session) {
+                  try {
+                    const res = await apiClient.get(
+                      "/auth/post-login",
+                      session.access_token,
+                    );
+                    if (res.next_step) {
+                      router.replace(res.next_step);
+                    } else {
+                      router.replace("/login");
+                    }
+                  } catch (err) {
+                    router.replace("/login");
+                  }
+                } else {
+                  router.replace("/login");
+                }
               }, 3000);
             } catch (err) {
               const errorMessage =

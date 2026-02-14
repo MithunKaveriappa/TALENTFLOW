@@ -1,37 +1,32 @@
 # Database Schema Reference (Authoritative)
 
-Updated: February 2026
+Updated: February 14, 2026 (Verified against Supabase live database)
 
 ## Enums
 
 **user_role:**
-
 - `candidate`
 - `recruiter`
 - `admin`
 
 **experience_band:**
-
 - `fresher`
 - `mid`
 - `senior`
 - `leadership`
 
 **assessment_status:**
-
 - `not_started`
 - `in_progress`
 - `completed`
 - `disqualified`
 
 **employment_status:**
-
 - `Employed`
 - `Unemployed`
 - `Student`
 
 **company_size_band:**
-
 - `1-10`
 - `11-50`
 - `51-200`
@@ -40,48 +35,43 @@ Updated: February 2026
 - `1000+`
 
 **sales_model_type:**
-
 - `Inbound`
 - `Outbound`
 - `Hybrid`
 
 **target_market:**
-
 - `SMB`
 - `Mid-market`
 - `Enterprise`
 
 **account_status:**
-
 - `Active`
 - `Restricted`
 - `Suspended`
 - `Blocked`
 
 **profile_strength:**
-
 - `Low`
 - `Moderate`
 - `Strong`
 - `Elite`
 
 **job_type:**
-
 - `remote`
 - `hybrid`
 - `onsite`
 
 **job_status:**
-
 - `active`
-- `closed`
 - `paused`
+- `closed`
 
 **application_status:**
-
+- `recommended`
 - `applied`
+- `invited`
 - `shortlisted`
-- `interviewed`
+- `interview_scheduled`
 - `rejected`
 - `offered`
 - `closed`
@@ -89,15 +79,13 @@ Updated: February 2026
 ## Tables
 
 ### `users`
-
-- `id` (uuid, auth.users.id)
+- `id` (uuid, Primary Key)
 - `role` (user_role)
 - `email` (text)
-- `created_at` (timestamp)
+- `created_at` (timestamp with time zone)
 
 ### `candidate_profiles`
-
-- `user_id` (uuid, users.id)
+- `user_id` (uuid, Primary Key, Foreign Key -> users.id)
 - `full_name` (text)
 - `phone_number` (text)
 - `profile_photo_url` (text)
@@ -106,32 +94,58 @@ Updated: February 2026
 - `location` (text)
 - `current_role` (text)
 - `years_of_experience` (integer)
+- `primary_industry_focus` (text)
+- `current_employment_status` (employment_status)
+- `current_company_name` (text)
+- `previous_companies` (text[])
+- `key_responsibilities` (text)
+- `major_achievements` (text)
 - `resume_uploaded` (boolean)
-- `identity_verified` (boolean)
 - `assessment_status` (assessment_status)
-- `trust_score` (virtual/calculated, 0-100) - _Visible to Recruiters_
+- `skills` (text[])
+- `sales_metrics` (jsonb)
+- `crm_tools` (text[])
+- `sales_methodologies` (text[])
+- `product_domain_expertise` (text[])
+- `target_market_exposure` (text)
+- `linkedin_url` (text)
+- `portfolio_url` (text)
+- `learning_links` (jsonb)
+- `career_interests` (text[])
+- `learning_interests` (text[])
+- `job_type` (job_type)
+- `social_links` (jsonb)
+- `onboarding_step` (text)
+- `profile_strength` (profile_strength)
+- `completion_score` (integer)
+- `final_profile_score` (integer)
+- `identity_verified` (boolean)
+- `terms_accepted` (boolean)
+- `account_status` (account_status)
+- `created_at` (timestamp with time zone)
+- `updated_at` (timestamp with time zone)
 
 ### `recruiter_profiles`
-
-- `user_id` (uuid, users.id)
-- `company_id` (uuid, companies.id)
+- `user_id` (uuid, Primary Key, Foreign Key -> users.id)
+- `company_id` (uuid, Foreign Key -> companies.id)
 - `full_name` (text)
 - `phone_number` (text)
 - `job_title` (text)
 - `linkedin_url` (text)
+- `bio` (text)
 - `onboarding_step` (text)
 - `warning_count` (integer)
 - `completion_score` (integer)
 - `assessment_status` (assessment_status)
 - `terms_accepted` (boolean)
 - `account_status` (account_status)
-- `updated_at` (timestamp)
+- `created_at` (timestamp with time zone)
+- `updated_at` (timestamp with time zone)
 
 ### `companies`
-
-- `id` (uuid)
+- `id` (uuid, Primary Key)
 - `name` (text)
-- `registration_number` (text, unique)
+- `registration_number` (text)
 - `website` (text)
 - `domain` (text)
 - `location` (text)
@@ -143,89 +157,97 @@ Updated: February 2026
 - `hiring_focus_areas` (text[])
 - `avg_deal_size_range` (text)
 - `profile_score` (integer)
-- `candidate_feedback_score` (float)
+- `candidate_feedback_score` (double precision)
+- `successful_hires_count` (integer)
 - `visibility_tier` (text)
 - `verification_status` (text)
+- `created_at` (timestamp with time zone)
+- `updated_at` (timestamp with time zone)
 
 ### `assessment_questions`
-
-- `id` (uuid)
-- `category` (text) - behavioral, psychometric, etc.
-- `driver` (text) - resilience, communication, etc.
-- `experience_band` (experience_band)
+- `id` (uuid, Primary Key)
+- `category` (text)
+- `driver` (text)
+- `experience_band` (text)
 - `difficulty` (text)
 - `question_text` (text)
-- `evaluation_rubric` (text) - AI guidance for unbiased scoring.
+- `evaluation_rubric` (text)
+- `created_at` (timestamp with time zone)
 
 ### `assessment_sessions`
-
-- `id` (uuid)
-- `candidate_id` (uuid, unique)
-- `experience_band` (experience_band)
-- `status` (text) - started, completed
+- `id` (uuid, Primary Key)
+- `candidate_id` (uuid)
+- `experience_band` (text)
+- `status` (text)
 - `total_budget` (integer)
 - `current_step` (integer)
-- `warning_count` (integer)
-- `overall_score` (float)
+- `overall_score` (double precision)
 - `component_scores` (jsonb)
 - `driver_confidence` (jsonb)
+- `started_at` (timestamp with time zone)
+- `completed_at` (timestamp with time zone)
 
 ### `assessment_responses`
-
-- `id` (uuid)
+- `id` (uuid, Primary Key)
 - `candidate_id` (uuid)
-- `question_id` (uuid)
+- `question_id` (uuid, Foreign Key -> assessment_questions.id)
+- `question_text` (text)
 - `category` (text)
 - `driver` (text)
 - `difficulty` (text)
 - `raw_answer` (text)
-- `score` (0-6)
+- `score` (integer)
 - `evaluation_metadata` (jsonb)
+- `is_skipped` (boolean)
 - `tab_switches` (integer)
 - `time_taken_seconds` (integer)
+- `created_at` (timestamp with time zone)
 
 ### `recruiter_assessment_questions`
-
-- `id` (uuid)
+- `id` (uuid, Primary Key)
 - `category` (text)
 - `driver` (text)
 - `question_text` (text)
-- `created_at` (timestamp)
+- `created_at` (timestamp with time zone)
 
 ### `recruiter_assessment_responses`
-
-- `id` (uuid)
-- `user_id` (uuid)
+- `id` (uuid, Primary Key)
+- `user_id` (uuid, Foreign Key -> users.id)
 - `question_text` (text)
 - `answer_text` (text)
 - `category` (text)
-- `average_score` (decimal)
-- `evaluation_metadata` (jsonb) - Stores AI reasoning.
+- `relevance_score` (integer)
+- `specificity_score` (integer)
+- `clarity_score` (integer)
+- `ownership_score` (integer)
+- `average_score` (numeric)
+- `evaluation_metadata` (jsonb)
+- `created_at` (timestamp with time zone)
 
 ### `resume_data`
-
-- `user_id` (uuid, users.id)
+- `user_id` (uuid, Primary Key, Foreign Key -> users.id)
 - `raw_text` (text)
 - `timeline` (jsonb)
 - `career_gaps` (jsonb)
+- `achievements` (text[])
 - `skills` (text[])
 - `education` (jsonb)
+- `parsed_at` (timestamp with time zone)
 
 ### `profile_scores`
-
-- `user_id` (uuid)
-- `resume_score`
-- `behavioral_score`
-- `psychometric_score`
-- `skills_score`
-- `reference_score`
-- `final_score`
+- `user_id` (uuid, Primary Key, Foreign Key -> users.id)
+- `resume_score` (integer)
+- `behavioral_score` (integer)
+- `psychometric_score` (integer)
+- `skills_score` (integer)
+- `reference_score` (integer)
+- `final_score` (integer)
+- `calculated_at` (timestamp with time zone)
 
 ### `jobs`
-
-- `id` (uuid)
-- `company_id` (uuid -> companies.id)
-- `recruiter_id` (uuid -> recruiter_profiles.user_id)
+- `id` (uuid, Primary Key)
+- `company_id` (uuid, Foreign Key -> companies.id)
+- `recruiter_id` (uuid, Foreign Key -> recruiter_profiles.user_id)
 - `title` (text)
 - `description` (text)
 - `requirements` (text[])
@@ -237,58 +259,111 @@ Updated: February 2026
 - `number_of_positions` (integer)
 - `status` (job_status)
 - `is_ai_generated` (boolean)
-- `closed_at` (timestamp)
+- `closed_at` (timestamp with time zone)
 - `metadata` (jsonb)
-- `created_at` (timestamp)
-- `updated_at` (timestamp)
+- `created_at` (timestamp with time zone)
+- `updated_at` (timestamp with time zone)
 
 ### `job_applications`
-
-- `id` (uuid)
-- `job_id` (uuid -> jobs.id)
-- `candidate_id` (uuid -> candidate_profiles.user_id)
+- `id` (uuid, Primary Key)
+- `job_id` (uuid, Foreign Key -> jobs.id)
+- `candidate_id` (uuid, Foreign Key -> candidate_profiles.user_id)
 - `status` (application_status)
 - `feedback` (text)
-- `created_at` (timestamp)
-- `updated_at` (timestamp)
+- `created_at` (timestamp with time zone)
+- `updated_at` (timestamp with time zone)
 
 ### `saved_jobs`
-
-- `id` (uuid)
-- `candidate_id` (uuid -> candidate_profiles.user_id)
-- `job_id` (uuid -> jobs.id)
-- `created_at` (timestamp)
+- `id` (uuid, Primary Key)
+- `candidate_id` (uuid, Foreign Key -> candidate_profiles.user_id)
+- `job_id` (uuid, Foreign Key -> jobs.id)
+- `created_at` (timestamp with time zone)
 
 ### `posts`
-
-- `id` (uuid)
-- `user_id` (uuid -> users.id)
+- `id` (uuid, Primary Key)
+- `user_id` (uuid, Foreign Key -> users.id)
 - `content` (text)
 - `media_urls` (text[])
 - `type` (text)
-- `created_at` (timestamp)
-- `updated_at` (timestamp)
+- `created_at` (timestamp with time zone)
+- `updated_at` (timestamp with time zone)
 
 ### `notifications`
-
-- `id` (uuid)
-- `user_id` (uuid -> users.id)
+- `id` (uuid, Primary Key)
+- `user_id` (uuid, Foreign Key -> users.id)
 - `type` (text)
 - `title` (text)
 - `message` (text)
 - `metadata` (jsonb)
 - `is_read` (boolean)
-- `created_at` (timestamp)
+- `created_at` (timestamp with time zone)
+
+### `follows`
+- `id` (uuid, Primary Key)
+- `follower_id` (uuid, Foreign Key -> users.id)
+- `following_id` (uuid, Foreign Key -> users.id)
+- `created_at` (timestamp with time zone)
+
+### `blocked_users`
+- `user_id` (uuid, Primary Key)
+- `reason` (text)
+- `blocked_at` (timestamp with time zone)
 
 ## Storage Buckets
 
 ### `resumes`
-- **Purpose**: Stores candidate PDF resumes (uploaded or AI-generated).
-- **Structure**: `user_id/resume_name.pdf`
-- **RLS**:
-    - Select: `(bucket_id = 'resumes' AND auth.uid()::text = (storage.foldername(name))[1])`
-    - Insert: `(bucket_id = 'resumes' AND auth.uid() IS NOT NULL)`
+- **Purpose**: Stores candidate PDF resumes.
+- **RLS**: Restricted to own folder.
 
 ### `profile_photos`
 - **Purpose**: User avatars.
-- **Structure**: `user_id/photo.jpg`
+
+## Row Level Security (RLS) Policies
+
+### `users`
+- **Individual Access**: Users can read their own record (`id = auth.uid()`).
+
+### `candidate_profiles`
+- **Self**: Users can read and update their own profile.
+- **Recruiters (Applicant View)**: Recruiters can view profiles of candidates who have applied to their jobs.
+- **Recruiters (Discovery View)**: Recruiters can view any profile where `assessment_status` is `completed`.
+
+### `recruiter_profiles`
+- **Self**: Recruiters can read and update their own profile.
+
+### `companies`
+- **Public/Authenticated**: Viewable by all authenticated users.
+- **Recruiters**: Can update their own company's details.
+
+### `jobs`
+- **Public/Candidate**: Viewable if `status` is `active`.
+- **Recruiter**: Full management access for jobs they created.
+
+### `job_applications`
+- **Candidate**: Can insert (apply) and view their own applications.
+- **Recruiter**: Can view and update (change status/feedback) for applications to their own jobs.
+
+### `saved_jobs`
+- **Candidate**: Full management of their own saved jobs.
+
+### `posts`
+- **Public**: Viewable by anyone.
+- **Creator**: Can manage (edit/delete) their own posts.
+
+### `follows`
+- **Public**: Viewable by anyone.
+- **Follower**: Can manage their own follows.
+
+### `notifications`
+- **User**: Can view and mark their own notifications as read.
+
+### `resume_data` & `profile_scores`
+- **Self**: Users can view their own parsed data and scores.
+- **Recruiters**: Viewable if the candidate profile is accessible (via applicants or discovery).
+
+### `assessment_questions`
+- **Discovery**: Questions for candidates and recruiters are viewable by authenticated users during sessions.
+
+### `assessment_responses` & `assessment_sessions`
+- **Candidate**: Can manage their own specific session and responses.
+- **AI Audit**: Restricted access for system processes.

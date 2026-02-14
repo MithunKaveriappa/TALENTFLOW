@@ -1,5 +1,6 @@
 from src.core.supabase import supabase
 from typing import Dict, Any
+from src.services.notification_service import NotificationService
 
 class CandidateService:
     @staticmethod
@@ -44,6 +45,7 @@ class CandidateService:
         if not profile_res.data:
             return {
                 "applications_count": 0,
+                "daily_applications_count": 0,
                 "shortlisted_count": 0,
                 "invites_received": 0,
                 "posts_count": 0,
@@ -53,6 +55,7 @@ class CandidateService:
                 "completion_score": 0,
                 "assessment_status": "not_started",
                 "identity_verified": False,
+                "terms_accepted": False,
                 "account_status": "Active",
             }
         
@@ -61,6 +64,13 @@ class CandidateService:
         # 2. Fetch Engagement Counts
         apps_res = supabase.table("job_applications").select("status", count="exact").eq("candidate_id", user_id).execute()
         applications_count = apps_res.count or 0
+
+        # Daily count for quota display
+        from datetime import date
+        today = date.today().isoformat()
+        daily_count_res = supabase.table("job_applications").select("id", count="exact")\
+            .eq("candidate_id", user_id).gte("created_at", today).execute()
+        daily_applications_count = daily_count_res.count or 0
         
         shortlisted_count = supabase.table("job_applications").select("status", count="exact")\
             .eq("candidate_id", user_id).eq("status", "shortlisted").execute().count or 0
@@ -74,6 +84,7 @@ class CandidateService:
 
         return {
             "applications_count": applications_count,
+            "daily_applications_count": daily_applications_count,
             "shortlisted_count": shortlisted_count,
             "invites_received": invites_count,
             "posts_count": posts_count,
@@ -83,6 +94,7 @@ class CandidateService:
             "completion_score": profile.get("completion_score", 0),
             "assessment_status": profile.get("assessment_status", "not_started"),
             "identity_verified": profile.get("identity_verified", False),
+            "terms_accepted": profile.get("terms_accepted", False),
             "account_status": profile.get("account_status", "Active"),
         }
 
@@ -129,18 +141,49 @@ class CandidateService:
 
     @staticmethod
     async def apply_to_job(user_id: str, job_id: str):
-        """Create a new job application."""
-        # Check if already applied
+        """Create a new job application with daily limits."""
+        # 1. Check if already applied
         existing = supabase.table("job_applications").select("id").eq("candidate_id", user_id).eq("job_id", job_id).execute()
         if existing.data:
             return {"status": "already_applied"}
             
+        # 2. Enforce Daily Limit (5 applications)
+        from datetime import datetime, date
+        today = date.today().isoformat()
+        
+        # Count apps created today
+        daily_count_res = supabase.table("job_applications")\
+            .select("id", count="exact")\
+            .eq("candidate_id", user_id)\
+            .gte("created_at", today)\
+            .execute()
+            
+        if (daily_count_res.count or 0) >= 5:
+            return {
+                "status": "limit_reached", 
+                "message": "Daily transmission limit reached (5/5). Your signal buffer will reset tomorrow."
+            }
+
+        # 3. Create application
         res = supabase.table("job_applications").insert({
             "candidate_id": user_id,
             "job_id": job_id,
             "status": "applied"
         }).execute()
         
+        # 4. Trigger Notification
+        if res.data:
+            # Fetch job title for better message
+            job_data = supabase.table("jobs").select("title").eq("id", job_id).single().execute()
+            job_title = job_data.data.get("title", "a job") if job_data.data else "a job"
+            NotificationService.create_notification(
+                user_id=user_id,
+                type="APPLICATION_SUBMITTED",
+                title="Application Sent",
+                message=f"Your signal for {job_title} has been successfully transmitted to the recruiter.",
+                metadata={"job_id": job_id}
+            )
+
         return {"status": "success", "data": res.data[0] if res.data else None}
 
     @staticmethod

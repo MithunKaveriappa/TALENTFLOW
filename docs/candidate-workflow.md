@@ -120,15 +120,17 @@ Unlocked only if:
 Assessment completed
 Aadhaar uploaded
 
-7. Candidate Dashboard Access
+7. Candidate Dashboard Access (Matrix Unified Layout)
 
-Candidate can now access:
-Profile score & feedback
-Job recommendations
-Company recommendations
-Career GPS
-Applications & tracking
-Posts
-Controlled chat
-Notifications
-Account settings
+The candidate workspace utilizes the Shared Sidebar (`CandidateSidebar.tsx`) with indigo accents, providing persistence across the platform.
+
+**Core Navigation Hub:**
+- **Dashboard**: High-level overview of scores, profile completion, and active status.
+- **Jobs**: AI-driven job recommendations matched to the candidate's core profile.
+- **Feed**: Community interaction hub and company updates.
+- **Applications**: Tracking status of active and past job applications.
+- **Profile**: Detailed view of resume, skills, and experience.
+- **Log Out**: Secure session termination.
+
+**Verification Hub (Sidebar Widget):**
+A real-time status tracker in the sidebar that guides the candidate through missing requirements (Assessment, Aadhaar, etc.) until 100% completion is reached.

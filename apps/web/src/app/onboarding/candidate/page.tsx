@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
 import { useVoice } from "@/hooks/useVoice";
 import { extractNameFromEmail } from "@/utils/emailValidation";
 import { SKILLS_BY_EXPERIENCE } from "./skillsData";
+import { TermsModal } from "@/components/TermsModal";
 
 type Message = {
   id: string;
@@ -17,51 +18,37 @@ type Message = {
   options?: string[];
 };
 
-interface TimelineItem {
-  role: string;
-  company: string;
-  start: string;
-  end: string;
-  description: string;
-}
-
 type OnboardingState =
   | "INITIAL"
   | "AWAITING_EXPERIENCE"
   | "AWAITING_RESUME"
-  | "BUILDING_RESUME_BASIC"
-  | "BUILDING_RESUME_EXPERIENCE"
-  | "BUILDING_RESUME_EDUCATION"
-  | "BUILDING_RESUME_TEMPLATE"
   | "AWAITING_SKILLS"
-  | "CONSENT"
+  | "AWAITING_ID"
+  | "AWAITING_TC"
   | "COMPLETED";
 
-export default function CandidateOnboarding() {
+function CandidateOnboardingContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [messages, setMessages] = useState<Message[]>([]);
   const [state, setState] = useState<OnboardingState>("INITIAL");
   const [experienceBand, setExperienceBand] = useState<string>("fresher");
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
-  const [resumeBuilder, setResumeBuilder] = useState({
-    phone: "",
-    location: "",
-    linkedin: "",
-    bio: "",
-    timeline: [] as TimelineItem[],
-    education: { degree: "", institution: "", year: "" },
-  });
+  const userIdRef = useRef<string | null>(null);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const initialized = useRef(false);
 
   const { isListening, transcript, startListening, stopListening } = useVoice();
 
   const handleLogout = async () => {
-    localStorage.removeItem("tf_onboarding_chat"); // Clear chat on logout
+    if (userIdRef.current) {
+      localStorage.removeItem(`tf_onboarding_chat_${userIdRef.current}`);
+    }
     await supabase.auth.signOut();
-    router.push("/login");
+    router.replace("/login");
   };
 
   const saveStep = async (step: OnboardingState) => {
@@ -112,9 +99,9 @@ export default function CandidateOnboarding() {
         },
       ];
       // Store in localStorage for refresh persistence
-      if (typeof window !== "undefined") {
+      if (typeof window !== "undefined" && userIdRef.current) {
         localStorage.setItem(
-          `tf_onboarding_chat`,
+          `tf_onboarding_chat_${userIdRef.current}`,
           JSON.stringify(newMsgs.slice(-20)),
         ); // Keep last 20
       }
@@ -135,10 +122,12 @@ export default function CandidateOnboarding() {
         return;
       }
 
+      userIdRef.current = user.id;
       const name = extractNameFromEmail(user.email || "");
 
       // 1. Load chat history from localStorage if it exists
-      const savedChat = localStorage.getItem(`tf_onboarding_chat`);
+      const storageKey = `tf_onboarding_chat_${user.id}`;
+      const savedChat = localStorage.getItem(storageKey);
       if (savedChat) {
         try {
           const parsed = JSON.parse(savedChat);
@@ -149,7 +138,7 @@ export default function CandidateOnboarding() {
           }));
           setMessages(hydrated);
         } catch {
-          localStorage.removeItem(`tf_onboarding_chat`);
+          localStorage.removeItem(storageKey);
         }
       }
 
@@ -162,15 +151,44 @@ export default function CandidateOnboarding() {
         session?.access_token,
       );
 
-      if (profile && profile.onboarding_step === "COMPLETED") {
-        router.replace("/assessment/candidate");
+      const targetStep = searchParams.get("target") as OnboardingState | null;
+
+      if (
+        targetStep &&
+        (targetStep === "AWAITING_ID" || targetStep === "AWAITING_TC")
+      ) {
+        setState(targetStep);
+        setExperienceBand(profile?.experience || "fresher");
+        setSelectedSkills(profile?.skills || []);
+
+        if (targetStep === "AWAITING_ID") {
+          addMessage(
+            `Welcome back, ${name}! Let's get your identity verified.`,
+            "bot",
+          );
+          addMessage(
+            "Please upload any government-issued ID (DL, Passport, or any ID proof).",
+            "bot",
+          );
+        } else {
+          addMessage(
+            `Welcome back, ${name}! Final step: Legal synchronization.`,
+            "bot",
+          );
+          addMessage(
+            "Please review and accept our Terms and Conditions to complete your onboarding.",
+            "bot",
+            ["Read Terms", "Accept Terms & Conditions"],
+          );
+        }
         return;
       }
 
       if (
         profile &&
         profile.onboarding_step &&
-        profile.onboarding_step !== "INITIAL"
+        profile.onboarding_step !== "INITIAL" &&
+        profile.onboarding_step !== "COMPLETED"
       ) {
         const savedStep = profile.onboarding_step as OnboardingState;
         setExperienceBand(profile.experience || "fresher");
@@ -193,11 +211,16 @@ export default function CandidateOnboarding() {
               "We were just finalizing your skills. Feel free to refine them below.",
               "bot",
             );
-          } else if (savedStep === "CONSENT") {
+          } else if (savedStep === "AWAITING_ID") {
             addMessage(
-              "Welcome back! You are now ready for the formal assessment phase. Please note: the session takes 10-15 minutes, with a 60-second limit per question. Tab switching is strictly prohibited and will be flagged. This assessment significantly impacts your profile score. Ready to begin?",
+              "I just need to verify your identity. Please upload any government-issued ID (DL, Passport, or any ID proof).",
               "bot",
-              ["Start Assessment"],
+            );
+          } else if (savedStep === "AWAITING_TC") {
+            addMessage(
+              "Almost done! Please review and accept our Terms and Conditions to complete your onboarding.",
+              "bot",
+              ["Read Terms", "Accept Terms & Conditions"],
             );
           }
         }
@@ -225,7 +248,7 @@ export default function CandidateOnboarding() {
       }
     }
     init();
-  }, [router]);
+  }, [router, searchParams]);
 
   const handleSend = async (textOverride?: string) => {
     const workingInput = textOverride || input.trim();
@@ -245,6 +268,10 @@ export default function CandidateOnboarding() {
     if (isLoading) return;
 
     if (workingInput) {
+      if (workingInput === "Read Terms") {
+        setShowTerms(true);
+        return;
+      }
       addMessage(workingInput, "user");
     } else if (state === "AWAITING_SKILLS" && selectedSkills.length > 0) {
       addMessage(`Confirmed ${selectedSkills.length} skills`, "user");
@@ -295,108 +322,12 @@ export default function CandidateOnboarding() {
 
           setTimeout(() => {
             addMessage(
-              "Next, I'll need your resume to understand your background better. You can upload it or I can help you build one right here.",
+              "Next, I'll need your resume to understand your background better. Please upload it (PDF only).",
               "bot",
-              ["Upload Resume (PDF)", "I don't have a resume"],
             );
             setState(nextState);
           }, 1000);
         }
-      } else if (state === "AWAITING_RESUME") {
-        if (workingInput === "I don't have a resume") {
-          addMessage(
-            "No problem! Let's build a professional one together. I'll need a few details. What's your contact number and current location (e.g. +1 555-0199, London)?",
-            "bot",
-          );
-          setState("BUILDING_RESUME_BASIC");
-        } else if (workingInput === "Upload Resume (PDF)") {
-          addMessage(
-            "Please use the upload button at the bottom to share your PDF.",
-            "bot",
-          );
-        }
-      } else if (state === "BUILDING_RESUME_BASIC") {
-        setResumeBuilder((prev) => ({ ...prev, phone: workingInput }));
-        addMessage(
-          "Got it. Now, tell me about your most recent job. What's the Job Title and Company (e.g. Sales Manager at TechCorp)?",
-          "bot",
-        );
-        setState("BUILDING_RESUME_EXPERIENCE");
-      } else if (state === "BUILDING_RESUME_EXPERIENCE") {
-        const parts = workingInput.split(" at ");
-        const role = parts[0] || workingInput;
-        const company = parts[1] || "Previous Company";
-        setResumeBuilder((prev) => ({
-          ...prev,
-          timeline: [
-            {
-              role,
-              company,
-              start: "2020",
-              end: "Present",
-              description: "Responsible for driving revenue and growth.",
-            },
-          ],
-        }));
-        addMessage(
-          "Excellent. Lastly, what's your highest level of education (Degree and University)?",
-          "bot",
-        );
-        setState("BUILDING_RESUME_EDUCATION");
-      } else if (state === "BUILDING_RESUME_EDUCATION") {
-        setResumeBuilder((prev) => ({
-          ...prev,
-          education: {
-            degree: workingInput,
-            institution: "University",
-            year: "2022",
-          },
-        }));
-        addMessage(
-          "Almost done! Which style do you prefer for your resume?",
-          "bot",
-          ["Professional", "Modern"],
-        );
-        setState("BUILDING_RESUME_TEMPLATE");
-      } else if (state === "BUILDING_RESUME_TEMPLATE") {
-        const template =
-          workingInput.toLowerCase() === "modern" ? "modern" : "professional";
-        addMessage(`Generating your ${template} resume...`, "bot");
-
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        await apiClient.post(
-          "/candidate/generate-resume",
-          {
-            full_name: extractNameFromEmail(user?.email || "Candidate"),
-            email: user?.email || "",
-            phone: resumeBuilder.phone,
-            location: "Remote",
-            bio: `Experienced ${experienceBand} professional in IT Tech Sales.`,
-            education: resumeBuilder.education,
-            timeline: resumeBuilder.timeline,
-            skills: ["Sales", "Negotiation", "CRM"],
-            template: template,
-          },
-          session?.access_token,
-        );
-
-        addMessage("Resume generated and saved to your profile!", "bot");
-
-        setTimeout(() => {
-          addMessage(
-            "Are there any other top 3 tech sales skills (e.g., SaaS, Lead Gen, Negotiation) you'd like to add?",
-            "bot",
-          );
-          const nextState = "AWAITING_SKILLS";
-          saveStep(nextState);
-          setState(nextState);
-        }, 1500);
       } else if (state === "AWAITING_SKILLS") {
         const skillsFromInput = workingInput
           .split(",")
@@ -419,49 +350,43 @@ export default function CandidateOnboarding() {
 
           addMessage("Skills saved! Your profile is now enriched.", "bot");
 
-          const nextState = "CONSENT";
+          const nextState = "AWAITING_ID";
           await saveStep(nextState);
           setState(nextState); // Change state immediately to hide skills UI
 
           setTimeout(() => {
             addMessage(
-              "Thank you. Your profile is now ready for the evaluation phase. Before we proceed, please review these important instructions:",
+              "For verification and security, please provide a scan or photo of any government-issued ID (DL, Passport, or other proof).",
               "bot",
             );
           }, 1000);
+        }
+      } else if (state === "AWAITING_TC") {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
-          setTimeout(() => {
-            addMessage(
-              "The assessment requires 10-15 minutes of focus. You will have exactly 60 seconds to answer each question. Please ensure you do not switch tabs or minimize the window, as this is a monitored environment. This stage is critical; your performance will directly determine your profile trust score and impact your career matching. Are you ready to start?",
-              "bot",
-              ["Start Assessment", "Take Later"],
-            );
-          }, 2500);
-        }
-      } else if (state === "CONSENT") {
-        if (workingInput === "Take Later") {
+        // Call backend to mark TC accepted
+        await apiClient.post("/candidate/accept-tc", {}, session?.access_token);
+
+        addMessage("Terms accepted! Your onboarding is now complete.", "bot");
+
+        const nextState = "COMPLETED";
+        await saveStep(nextState);
+        setState(nextState);
+
+        setTimeout(() => {
           addMessage(
-            "No problem. You can access the dashboard to browse, but remember to complete the assessment later to unlock all features. Redirecting to your command center...",
+            "Welcome aboard! You are now eligible to apply for jobs. However, to get a 'Verified' badge and attract premium recruiters, you should take the assessment. Ready?",
             "bot",
+            ["Start Assessment"],
           );
-          const nextState = "COMPLETED";
-          await saveStep(nextState);
-          setState(nextState);
-          setTimeout(() => {
-            router.push("/dashboard/candidate");
-          }, 2500);
-        } else {
-          const nextState = "COMPLETED";
-          await saveStep(nextState);
-          addMessage(
-            "Good luck! Redirecting you to the assessment suite...",
-            "bot",
-          );
-          setState(nextState);
-          setTimeout(() => {
-            router.push("/assessment/candidate");
-          }, 2000);
-        }
+        }, 1500);
+      } else if (state === "COMPLETED") {
+        addMessage("Redirecting you to the assessment suite...", "bot");
+        setTimeout(() => {
+          router.replace("/assessment/candidate");
+        }, 1500);
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Unknown error";
@@ -488,50 +413,68 @@ export default function CandidateOnboarding() {
       if (!user || !session) throw new Error("Not authenticated");
 
       const fileExt = file.name.split(".").pop();
-      const filePath = `resumes/${user.id}-${Math.random()}.${fileExt}`;
+      const folder = state === "AWAITING_RESUME" ? "resumes" : "documents";
+      const filePath = `${folder}/${user.id}-${Math.random()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
-        .from("resumes")
+        .from(folder)
         .upload(filePath, file);
 
       if (uploadError) throw uploadError;
 
-      const res = await apiClient.post(
-        "/candidate/resume",
-        { resume_path: filePath },
-        session.access_token,
-      );
-
-      if (res.parsed && res.data) {
-        const skills: string[] = res.data.skills || [];
-        const role = res.data.current_role;
-        const exp = res.data.years_of_experience;
-        const company = res.data.current_company;
-
-        setSelectedSkills(skills);
-        addMessage(
-          `Resume uploaded and scanned successfully! I see you've been working as ${role || "a professional"} at ${company || "your current firm"}${exp ? ` with about ${exp} years of experience` : ""}.`,
-          "bot",
+      if (state === "AWAITING_RESUME") {
+        const res = await apiClient.post(
+          "/candidate/resume",
+          { resume_path: filePath },
+          session.access_token,
         );
-        if (skills.length > 0) {
-          addMessage(`Extracted Skills: ${skills.join(", ")}`, "bot");
+
+        if (res.parsed && res.data) {
+          const skills: string[] = res.data.skills || [];
+          setSelectedSkills(skills);
+          addMessage(
+            `Resume uploaded and scanned successfully! I've extracted your core work history.`,
+            "bot",
+          );
+          if (skills.length > 0) {
+            addMessage(`Extracted Skills: ${skills.join(", ")}`, "bot");
+          }
+        } else {
+          addMessage(
+            "Resume uploaded! However, I couldn't automatically scan it because the AI keys are not set up yet.",
+            "bot",
+          );
         }
-      } else {
-        addMessage(
-          "Resume uploaded! However, I couldn't automatically scan it because the AI keys are not set up yet.",
-          "bot",
-        );
-      }
 
-      setTimeout(async () => {
-        addMessage(
-          "Are there any other top 3 tech sales skills (e.g., SaaS, Lead Gen, Negotiation) you'd like to add?",
-          "bot",
+        setTimeout(async () => {
+          addMessage(
+            "Are there any other top 3 tech sales skills (e.g., SaaS, Lead Gen, Negotiation) you'd like to add?",
+            "bot",
+          );
+          const nextState = "AWAITING_SKILLS";
+          await saveStep(nextState);
+          setState(nextState);
+        }, 1000);
+      } else if (state === "AWAITING_ID") {
+        await apiClient.post(
+          "/candidate/verify-id",
+          { id_path: filePath },
+          session.access_token,
         );
-        const nextState = "AWAITING_SKILLS";
-        await saveStep(nextState);
-        setState(nextState);
-      }, 1000);
+
+        addMessage("ID document uploaded and received!", "bot");
+
+        setTimeout(async () => {
+          addMessage(
+            "Last step: Please accept our Terms and Conditions to finalize your profile.",
+            "bot",
+            ["Read Terms", "Accept Terms & Conditions"],
+          );
+          const nextState = "AWAITING_TC";
+          await saveStep(nextState);
+          setState(nextState);
+        }, 1000);
+      }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Upload failed";
       addMessage(`Upload failed: ${errorMsg}`, "bot");
@@ -728,11 +671,11 @@ export default function CandidateOnboarding() {
             </div>
           )}
 
-          {state === "AWAITING_RESUME" && (
+          {(state === "AWAITING_RESUME" || state === "AWAITING_ID") && (
             <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer relative">
               <input
                 type="file"
-                accept=".pdf"
+                accept={state === "AWAITING_RESUME" ? ".pdf" : "image/*,.pdf"}
                 onChange={handleFileUpload}
                 disabled={isLoading}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
@@ -752,7 +695,9 @@ export default function CandidateOnboarding() {
                   />
                 </svg>
                 <span className="text-sm font-medium">
-                  Click to upload Resume (PDF)
+                  {state === "AWAITING_RESUME"
+                    ? "Click to upload Resume (PDF)"
+                    : "Click to upload Govt ID Proof (Image/PDF)"}
                 </span>
               </div>
             </div>
@@ -765,17 +710,22 @@ export default function CandidateOnboarding() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
               placeholder={
-                state === "AWAITING_RESUME"
-                  ? "Select an option above..."
+                state === "AWAITING_RESUME" || state === "AWAITING_ID"
+                  ? "Please use the upload box above"
                   : state === "AWAITING_SKILLS"
                     ? "Add custom skills (comma separated)..."
                     : "Type your response..."
               }
-              disabled={isLoading}
+              disabled={
+                isLoading ||
+                state === "AWAITING_RESUME" ||
+                state === "AWAITING_ID"
+              }
               className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
             />
             <button
               onClick={isListening ? stopListening : startListening}
+              disabled={state === "AWAITING_RESUME"}
               className={`p-3 rounded-xl ${isListening ? "bg-red-500 text-white animate-pulse" : "bg-slate-100 text-slate-600"} disabled:opacity-50`}
             >
               <svg
@@ -796,9 +746,8 @@ export default function CandidateOnboarding() {
               onClick={() => handleSend()}
               disabled={
                 isLoading ||
-                (!input.trim() &&
-                  state !== "AWAITING_SKILLS" &&
-                  state !== "AWAITING_RESUME") ||
+                state === "AWAITING_RESUME" ||
+                (!input.trim() && state !== "AWAITING_SKILLS") ||
                 (state === "AWAITING_SKILLS" &&
                   !input.trim() &&
                   selectedSkills.length === 0)
@@ -822,6 +771,15 @@ export default function CandidateOnboarding() {
           </div>
         </div>
       </div>
+      <TermsModal isOpen={showTerms} onClose={() => setShowTerms(false)} />
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <CandidateOnboardingContent />
+    </Suspense>
   );
 }

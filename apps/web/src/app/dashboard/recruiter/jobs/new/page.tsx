@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
 import { useRouter } from "next/navigation";
+import RecruiterSidebar from "@/components/RecruiterSidebar";
 
 export default function NewJobPage() {
   const router = useRouter();
@@ -26,6 +27,30 @@ export default function NewJobPage() {
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [showAiAssistant, setShowAiAssistant] = useState(true);
+
+  const [profile, setProfile] = useState<{ assessment_status?: string } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    async function loadProfile() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session) {
+        try {
+          const profileData = await apiClient.get(
+            "/recruiter/profile",
+            session.access_token,
+          );
+          setProfile(profileData);
+        } catch (err) {
+          console.error("Failed to load profile:", err);
+        }
+      }
+    }
+    loadProfile();
+  }, []);
 
   const handleCreateJob = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,58 +102,12 @@ export default function NewJobPage() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push("/login");
+    router.replace("/login");
   };
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      {/* Sidebar - Consistent with other recruiter pages */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col fixed h-full z-30">
-        <div className="p-8 border-b border-slate-50">
-          <div
-            className="flex items-center gap-3 cursor-pointer"
-            onClick={() => router.push("/dashboard/recruiter")}
-          >
-            <div className="h-10 w-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-100">
-              <div className="h-5 w-5 rounded bg-white rotate-45" />
-            </div>
-            <span className="font-black text-slate-900 tracking-tighter uppercase text-lg">
-              TalentFlow
-            </span>
-          </div>
-        </div>
-
-        <nav className="flex-1 p-6 space-y-2 overflow-y-auto custom-scrollbar">
-          <SidebarLink
-            label="Dashboard"
-            onClick={() => router.push("/dashboard/recruiter")}
-          />
-          <SidebarLink
-            label="My Jobs"
-            onClick={() => router.push("/dashboard/recruiter/jobs")}
-          />
-          <SidebarLink label="Post a Role" active />
-          <SidebarLink
-            label="Candidate Pool"
-            onClick={() => router.push("/dashboard/recruiter/pool")}
-          />
-          <SidebarLink
-            label="Company Profile"
-            onClick={() => router.push("/dashboard/recruiter/profile")}
-          />
-        </nav>
-
-        <div className="p-6 border-t border-slate-50">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all group"
-          >
-            <span className="text-sm font-bold uppercase tracking-widest">
-              Logout
-            </span>
-          </button>
-        </div>
-      </aside>
+      <RecruiterSidebar assessmentStatus={profile?.assessment_status} />
 
       <main className="flex-1 ml-64 p-6 md:p-12 min-h-screen overflow-y-auto">
         <div className="max-w-350 w-full mx-auto">
@@ -142,24 +121,32 @@ export default function NewJobPage() {
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
               <div>
                 <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase">
-                  Deploy Role
+                  Post a Job
                 </h1>
                 <p className="text-slate-500 font-medium">
                   Broadcast your signals to the elite candidate pool.
                 </p>
               </div>
-              <button
-                onClick={() => setShowAiAssistant(!showAiAssistant)}
-                className={`px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${
-                  showAiAssistant
-                    ? "bg-indigo-50 text-indigo-600 border border-indigo-100"
-                    : "bg-white text-slate-400 border border-slate-200 hover:border-indigo-600 hover:text-indigo-600"
-                }`}
-              >
-                {showAiAssistant
-                  ? "Close AI Assistant"
-                  : "Open AI Assistant ✨"}
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowAiAssistant(!showAiAssistant)}
+                  className={`px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${
+                    showAiAssistant
+                      ? "bg-indigo-50 text-indigo-600 border border-indigo-100"
+                      : "bg-white text-slate-400 border border-slate-200 hover:border-indigo-600 hover:text-indigo-600"
+                  }`}
+                >
+                  {showAiAssistant
+                    ? "Close AI Assistant"
+                    : "Open AI Assistant ✨"}
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="px-6 py-3 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-red-500 hover:bg-red-50 hover:border-red-100 transition-all shadow-sm active:scale-95"
+                >
+                  Logout
+                </button>
+              </div>
             </div>
           </header>
 
@@ -409,27 +396,3 @@ export default function NewJobPage() {
   );
 }
 
-function SidebarLink({
-  label,
-  active = false,
-  onClick,
-}: {
-  label: string;
-  active?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full flex items-center px-4 py-3 rounded-xl transition-all group ${
-        active
-          ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100"
-          : "text-slate-400 hover:text-slate-900 hover:bg-slate-50"
-      }`}
-    >
-      <span className="text-sm font-bold uppercase tracking-widest">
-        {label}
-      </span>
-    </button>
-  );
-}

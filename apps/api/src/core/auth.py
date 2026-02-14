@@ -1,12 +1,23 @@
 from fastapi import HTTPException, status
 from .supabase import supabase
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type(Exception),
+    reraise=True
+)
+def _get_user_with_retry(token: str):
+    return supabase.auth.get_user(token)
 
 def verify_supabase_jwt(token: str) -> dict:
     try:
-        # Instead of manual JWT verification with JWKS (which fails for HS256),
-        # we let Supabase's own Auth service verify the token.
-        # This works for both HS256 and RS256.
-        user_res = supabase.auth.get_user(token)
+        # Debugging timeout issues
+        print(f"DEBUG AUTH: Verifying token (length: {len(token)})")
+        
+        # Use retry logic for network-flaky SSL handshakes
+        user_res = _get_user_with_retry(token)
         
         if not user_res.user:
             raise HTTPException(

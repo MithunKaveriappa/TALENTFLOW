@@ -16,6 +16,7 @@ A sophisticated platform for high-assurance recruitment using OpenAI/Gemini for 
 
 - **Adaptive Priority Pipeline**: Dynamically sequences questions based on candidate data (Resume -> Skills -> Seeded Behavioral Traits).
 - **Strategic Recruiter Auditor**: Dynamic 125-question bank for recruiters evaluating Company DNA and Strategic Intent.
+- **Competitive Progress Model**: Multi-recruiter score inheritance and performance benchmarking for organizational trust.
 - **Unbiased Semantic Scoring**: Powered by Gemini 1.5 Flash, focusing on "Logic over Linguistics" to eliminate cultural and linguistic bias.
 - **Nuclear Ban**: Integrity monitoring (tab switching) to ensure assessment validity.
 - **Driver Evolution**: Comprehensive 810-question bank across Resilience, Communication, Adaptability, Growth Potential, and Sales DNA.
@@ -38,10 +39,11 @@ A sophisticated platform for high-assurance recruitment using OpenAI/Gemini for 
 ### Backend (FastAPI)
 
 ```powershell
+# Navigate to the API app
 cd apps/api
-../../.venv_311/Scripts/python.exe -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
-```
-```./.venv/Scripts/python.exe -m uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+
+# Run uvicorn using the root virtual environment
+../../.venv/Scripts/python.exe -m uvicorn src.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 ### Frontend (Next.js)

@@ -79,9 +79,11 @@ CREATE TYPE job_status AS ENUM (
 );
 
 CREATE TYPE application_status AS ENUM (
+  'recommended',
   'applied', 
+  'invited',
   'shortlisted', 
-  'interviewed', 
+  'interview_scheduled',
   'rejected', 
   'offered', 
   'closed'
@@ -174,6 +176,7 @@ CREATE TABLE recruiter_profiles (
   phone_number TEXT,
   job_title TEXT,
   linkedin_url TEXT,
+  bio TEXT,
   onboarding_step TEXT DEFAULT 'REGISTRATION',
   warning_count INTEGER DEFAULT 0,
   completion_score INTEGER DEFAULT 0,
@@ -365,6 +368,16 @@ CREATE TABLE notifications (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
+-- ---------- FOLLOWS ----------
+
+CREATE TABLE follows (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  follower_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  following_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  UNIQUE(follower_id, following_id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_jobs_company_id ON jobs(company_id);
 CREATE INDEX IF NOT EXISTS idx_job_applications_job_id ON job_applications(job_id);
 CREATE INDEX IF NOT EXISTS idx_job_applications_candidate_id ON job_applications(candidate_id);
@@ -372,6 +385,38 @@ CREATE INDEX IF NOT EXISTS idx_job_applications_candidate_id ON job_applications
 -- Note: 'trust_score' is a virtual field calculated in the service layer as: 
 -- (psychometric_score * 0.6) + (behavioral_score * 0.4) 
 -- to protect candidate data while providing trust signals to recruiters.
+
+CREATE TABLE chat_threads (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  candidate_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  recruiter_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  is_active BOOLEAN DEFAULT false,
+  last_message_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  UNIQUE(candidate_id, recruiter_id)
+);
+
+CREATE TABLE chat_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  thread_id UUID NOT NULL REFERENCES chat_threads(id) ON DELETE CASCADE,
+  sender_id UUID NOT NULL REFERENCES users(id),
+  text TEXT NOT NULL,
+  is_read BOOLEAN DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+CREATE TYPE report_status AS ENUM ('pending', 'under_review', 'resolved', 'dismissed');
+
+CREATE TABLE chat_reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  message_id UUID REFERENCES chat_messages(id) ON DELETE SET NULL,
+  reporter_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  thread_id UUID REFERENCES chat_threads(id) ON DELETE CASCADE,
+  reason TEXT NOT NULL,
+  status report_status DEFAULT 'pending',
+  admin_notes TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
 
 -- =========================================
 -- SECURITY & RLS POLICIES
@@ -395,6 +440,10 @@ ALTER TABLE job_applications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE saved_jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE follows ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_threads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_reports ENABLE ROW LEVEL SECURITY;
 
 -- Helper Function
 CREATE OR REPLACE FUNCTION is_authenticated_user()
@@ -505,6 +554,79 @@ USING (auth.uid() = user_id);
 CREATE POLICY "Users can update own notifications" 
 ON notifications FOR UPDATE 
 USING (auth.uid() = user_id);
+
+-- Follows
+CREATE POLICY "Users can view follows" 
+ON follows FOR SELECT 
+USING (true);
+
+CREATE POLICY "Users can manage own follows" 
+ON follows FOR ALL 
+USING (auth.uid() = follower_id);
+
+-- Chat Threads
+CREATE POLICY "Users can view own threads" 
+ON chat_threads FOR SELECT 
+USING (auth.uid() = candidate_id OR auth.uid() = recruiter_id);
+
+-- Chat Messages
+CREATE POLICY "Users can view message history" 
+ON chat_messages FOR SELECT 
+USING (
+  EXISTS (
+    SELECT 1 FROM chat_threads 
+    WHERE chat_threads.id = chat_messages.thread_id 
+    AND (chat_threads.candidate_id = auth.uid() OR chat_threads.recruiter_id = auth.uid())
+  )
+);
+
+CREATE POLICY "Users can send messages" 
+ON chat_messages FOR INSERT 
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM chat_threads 
+    WHERE chat_threads.id = chat_messages.thread_id 
+    AND chat_threads.is_active = true
+    AND (chat_threads.candidate_id = auth.uid() OR chat_threads.recruiter_id = auth.uid())
+  )
+  AND (auth.uid() = sender_id)
+);
+
+-- Chat Reports
+CREATE POLICY "Users can file reports" 
+ON chat_reports FOR INSERT 
+WITH CHECK (auth.uid() = reporter_id);
+
+-- Resume Data & Scores
+CREATE POLICY "Users can view own resume data" ON resume_data FOR SELECT USING (user_id = auth.uid());
+CREATE POLICY "Users can view own scores" ON profile_scores FOR SELECT USING (user_id = auth.uid());
+
+CREATE POLICY "Recruiters can view applicant data" 
+ON resume_data FOR SELECT 
+USING (
+  EXISTS (
+    SELECT 1 FROM job_applications 
+    JOIN jobs ON job_applications.job_id = jobs.id 
+    WHERE job_applications.candidate_id = resume_data.user_id 
+    AND jobs.recruiter_id = auth.uid()
+  )
+);
+
+CREATE POLICY "Recruiters can view applicant scores" 
+ON profile_scores FOR SELECT 
+USING (
+  EXISTS (
+    SELECT 1 FROM job_applications 
+    JOIN jobs ON job_applications.job_id = jobs.id 
+    WHERE job_applications.candidate_id = profile_scores.user_id 
+    AND jobs.recruiter_id = auth.uid()
+  )
+);
+
+-- Recruiter Assessment Responses
+CREATE POLICY "Recruiters can manage own responses" 
+ON recruiter_assessment_responses FOR ALL 
+USING (user_id = auth.uid());
 
 -- ---------- STORAGE POLICIES ----------
 

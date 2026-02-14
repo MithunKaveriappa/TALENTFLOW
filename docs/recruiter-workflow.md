@@ -18,18 +18,14 @@ Redirect to login
 After first login, recruiter is not sent to dashboard.
 
 Recruiter must:
-Enter company registration number
 
-If found → auto-populate details
-
-Else → manually enter:
-company name
-website
-location
-description
-Company entity created.
+- **Identification**: Enter CIN/GSTIN (Validated via Regex).
+- **Auto-Bio Suggestion**: Upon entering the company website, the system scrapes the site and generates a 2-3 sentence bio using Gemini AI.
+- **Manual Verification**: Recruiter confirms, edits, or replaces the suggested bio and enters the location.
 
 3. Recruiter Assessment (The Quality Gate)
+
+4. Recruiter Assessment (The Quality Gate)
 
 Exactly **5 questions** assessing the following dimensions:
 
@@ -83,17 +79,18 @@ Once the dashboard is unlocked, recruiters gain access to the **TalentFlow Candi
 - **Privacy First**: Raw assessment answers and component scores are hidden from recruiters to prevent bias and protect candidate data integrity.
 - **Real-time Sync**: The pool updates instantly as candidates complete assessments or update profiles.
 
-7. Recruiter Actions
+7. Recruiter Dashboard Access (Matrix Unified Layout)
 
-Recruiter can now:
+The recruiter workspace utilizes the Shared Sidebar (`RecruiterSidebar.tsx`) with professional blue accents, ensuring navigation consistency with the candidate experience.
 
-Manage company profile
-Post jobs
-View applied & recommended candidates
-Invite candidates
-Shortlist / reject with feedback
-Schedule interviews
-Post engagement content
-Use controlled chat
-View notifications
-Manage account settings
+**Core Navigation Hub:**
+- **Dashboard**: High-level overview of active jobs, applicant volume, and company trust score.
+- **Post a Job**: Direct entry into the job creation flow with AI assistance.
+- **Jobs**: Management interface for active, closed, and drafted job listings.
+- **Feed**: Talent engagement platform for company branding and ecosystem updates.
+- **Candidates**: Access to the AI-curated talent pool and applicant management.
+- **Settings**: Configuration for company profile and recruiter preferences.
+- **Log Out**: Secure session termination.
+
+**Verification Hub (Sidebar Widget):**
+A real-time status tracker in the sidebar that ensures the recruiter maintains a high-quality profile and completes required identity or company verification steps.

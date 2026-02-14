@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
 import { useRouter } from "next/navigation";
+import RecruiterSidebar from "@/components/RecruiterSidebar";
 
 interface Candidate {
   user_id: string;
@@ -35,7 +36,7 @@ export default function CandidatePoolPage() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push("/login");
+    router.replace("/login");
   };
 
   const fetchPool = useCallback(async () => {
@@ -44,14 +45,14 @@ export default function CandidatePoolPage() {
         data: { session },
       } = await supabase.auth.getSession();
       if (!session) {
-        router.push("/login");
+        router.replace("/login");
         return;
       }
       const [poolData, profileData] = await Promise.all([
         apiClient.get("/recruiter/candidate-pool", session.access_token),
         apiClient.get("/recruiter/profile", session.access_token),
       ]);
-      setCandidates(poolData);
+      setCandidates(poolData || []);
       setRecruiterProfile(profileData);
       setError(null);
     } catch (err: unknown) {
@@ -108,68 +109,47 @@ export default function CandidatePoolPage() {
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col fixed h-full z-30">
-        <div className="p-8 border-b border-slate-50">
-          <div
-            className="flex items-center gap-3 cursor-pointer"
-            onClick={() => router.push("/dashboard/recruiter")}
-          >
-            <div className="h-10 w-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-100">
-              <div className="h-5 w-5 rounded bg-white rotate-45" />
-            </div>
-            <span className="font-black text-slate-900 tracking-tighter uppercase text-lg">
-              TalentFlow
-            </span>
-          </div>
-        </div>
-
-        <nav className="flex-1 p-6 space-y-2 overflow-y-auto custom-scrollbar">
-          <SidebarLink
-            label="Dashboard"
-            onClick={() => router.push("/dashboard/recruiter")}
-          />
-          <SidebarLink
-            label="My Jobs"
-            onClick={() => router.push("/dashboard/recruiter/jobs")}
-          />
-          <SidebarLink
-            label="Post a Role"
-            onClick={() => router.push("/dashboard/recruiter/jobs/new")}
-          />
-          <SidebarLink label="Candidate Pool" active />
-          <SidebarLink
-            label="Company Profile"
-            onClick={() => router.push("/dashboard/recruiter/profile")}
-          />
-        </nav>
-
-        <div className="p-6 border-t border-slate-50">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all group"
-          >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-              />
-            </svg>
-            <span className="text-sm font-bold uppercase tracking-widest">
-              Logout
-            </span>
-          </button>
-        </div>
-      </aside>
+      <RecruiterSidebar
+        assessmentStatus={recruiterProfile?.assessment_status}
+      />
 
       <main className="flex-1 ml-64 p-6 md:p-12">
+        {!isAssessmentCompleted && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 mb-8 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="h-10 w-10 bg-amber-100 rounded-full flex items-center justify-center text-amber-600">
+                <svg
+                  className="h-6 w-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-amber-900 font-bold">
+                  Trust Verification Needed
+                </h3>
+                <p className="text-amber-700 text-sm">
+                  Onboarding signals help verify recruiter intent. Complete your
+                  assessment to finalize pairing.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => router.push("/onboarding/recruiter")}
+              className="px-6 py-2 bg-amber-600 text-white rounded-xl font-bold text-sm hover:bg-amber-700 transition"
+            >
+              Complete Now
+            </button>
+          </div>
+        )}
         {error ? (
           <div className="min-h-[70vh] flex items-center justify-center">
             <div className="text-center p-8 bg-white rounded-3xl border border-red-100 shadow-xl max-w-sm">
@@ -204,42 +184,6 @@ export default function CandidatePoolPage() {
               </button>
             </div>
           </div>
-        ) : !isAssessmentCompleted ? (
-          <div className="min-h-[70vh] flex items-center justify-center">
-            <div className="text-center p-12 bg-white rounded-4xl shadow-2xl shadow-slate-200/50 border border-slate-100 max-w-md w-full relative overflow-hidden group">
-              <div className="absolute top-0 left-0 w-full h-1.5 bg-linear-to-r from-blue-400 to-indigo-500" />
-              <div className="h-20 w-20 bg-indigo-50 rounded-2xl flex items-center justify-center mx-auto mb-8 group-hover:scale-110 transition-transform duration-500">
-                <svg
-                  className="h-10 w-10 text-indigo-500"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                  />
-                </svg>
-              </div>
-              <h1 className="text-3xl font-black text-slate-900 mb-3 tracking-tight">
-                ACCESS LOCKED
-              </h1>
-              <p className="text-slate-500 mb-10 text-sm font-medium leading-relaxed">
-                To unlock the{" "}
-                <span className="text-slate-900 font-bold">Candidate Pool</span>{" "}
-                and see trust-verified matches, you must complete your
-                onboarding assessment.
-              </p>
-              <button
-                onClick={() => router.push("/onboarding/recruiter")}
-                className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold shadow-xl shadow-slate-200 hover:bg-indigo-600 transition-all duration-300 flex items-center justify-center gap-3 group"
-              >
-                <span>COMPLETE ONBOARDING</span>
-              </button>
-            </div>
-          </div>
         ) : (
           <>
             <header className="mb-12 flex justify-between items-end">
@@ -258,6 +202,12 @@ export default function CandidatePoolPage() {
                     Live Pool
                   </span>
                 </div>
+                <button
+                  onClick={handleLogout}
+                  className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-red-500 hover:bg-red-50 hover:border-red-100 transition-all shadow-sm active:scale-95"
+                >
+                  Logout
+                </button>
               </div>
             </header>
 
@@ -371,7 +321,7 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
       </p>
 
       <div className="flex flex-wrap gap-1 mb-6">
-        {candidate.skills.slice(0, 3).map((s) => (
+        {candidate.skills?.slice(0, 3)?.map((s) => (
           <span
             key={s}
             className="px-2 py-1 bg-white border border-slate-100 rounded-lg text-[8px] font-bold text-slate-500 uppercase tracking-tighter"
@@ -396,27 +346,3 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
   );
 }
 
-function SidebarLink({
-  label,
-  active = false,
-  onClick,
-}: {
-  label: string;
-  active?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full flex items-center px-4 py-3 rounded-xl transition-all group ${
-        active
-          ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100"
-          : "text-slate-400 hover:text-slate-900 hover:bg-slate-50"
-      }`}
-    >
-      <span className="text-sm font-bold uppercase tracking-widest">
-        {label}
-      </span>
-    </button>
-  );
-}

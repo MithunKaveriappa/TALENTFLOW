@@ -9,7 +9,8 @@ from src.schemas.recruiter import (
     JobCreate,
     JobUpdate,
     JobResponse,
-    JobAIPrompt
+    JobAIPrompt,
+    ApplicationStatusUpdate
 )
 from pydantic import BaseModel
 from typing import Dict, Any, List
@@ -18,6 +19,9 @@ router = APIRouter(prefix="/recruiter", tags=["recruiter"])
 
 class RegistrationUpdate(BaseModel):
     registration_number: str
+
+class BioRequest(BaseModel):
+    website: str
 
 class CompanyDetailsUpdate(BaseModel):
     company_id: str
@@ -40,6 +44,34 @@ async def get_profile(user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Account blocked")
         
     return await recruiter_service.get_or_create_profile(user_id)
+
+@router.get("/company-status")
+async def get_company_status(user: dict = Depends(get_current_user)):
+    """Check if the recruiter's company has already completed an assessment."""
+    user_id = user["sub"]
+    profile = await recruiter_service.get_or_create_profile(user_id)
+    company_id = profile.get("company_id")
+    
+    if not company_id:
+        return {"has_score": False, "score": 0}
+        
+    res = supabase.table("companies").select("profile_score").eq("id", company_id).execute()
+    if res.data and res.data[0].get("profile_score", 0) > 0:
+        return {
+            "has_score": True, 
+            "score": res.data[0]["profile_score"],
+            "company_name": profile.get("companies", {}).get("name")
+        }
+    
+    return {"has_score": False, "score": 0}
+
+@router.post("/generate-bio")
+async def generate_bio(data: BioRequest, user: dict = Depends(get_current_user)):
+    """Scrapes the company website and generates a bio."""
+    bio = await recruiter_service.generate_company_bio(data.website)
+    if not bio:
+        raise HTTPException(status_code=500, detail="Failed to generate bio from website")
+    return {"bio": bio}
 
 @router.patch("/profile")
 async def update_profile(data: RecruiterProfileUpdate, user: dict = Depends(get_current_user)):
@@ -118,7 +150,18 @@ async def create_job(data: JobCreate, user: dict = Depends(get_current_user)):
         return await recruiter_service.create_job(user["sub"], data.model_dump())
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
+@router.post("/applications/status")
+async def update_application_status(data: ApplicationStatusUpdate, user: dict = Depends(get_current_user)):
+    """Update status for a job application."""
+    try:
+        return await recruiter_service.update_application_status(
+            user["sub"], 
+            data.application_id, 
+            data.status, 
+            data.feedback
+        )
+    except Exception as e:
+        raise HTTPException(status_code=403 if "Unauthorized" in str(e) else 500, detail=str(e))
 @router.patch("/jobs/{job_id}", response_model=JobResponse)
 async def update_job(job_id: str, data: JobUpdate, user: dict = Depends(get_current_user)):
     try:
@@ -167,11 +210,26 @@ async def complete_assessment(user: dict = Depends(get_current_user)):
 
 @router.post("/skip-assessment")
 async def skip_assessment(user: dict = Depends(get_current_user)):
-    # Just update the step to COMPLETED but leave assessment_status as not_started
+    user_id = user["sub"]
+    profile = await recruiter_service.get_or_create_profile(user_id)
+    company_id = profile.get("company_id")
+    
+    # Check if company already has a score
+    has_score = False
+    if company_id:
+        res = supabase.table("companies").select("profile_score").eq("id", company_id).execute()
+        if res.data and res.data[0].get("profile_score", 0) > 0:
+            has_score = True
+
+    # If company has score, they are fully COMPLETED
+    # If not, they are marked as COMPLETED but assessment_status is not_started 
+    # (The dashboard should check assessment_status for feature locking)
     supabase.table("recruiter_profiles").update({
-        "onboarding_step": "COMPLETED"
-    }).eq("user_id", user["sub"]).execute()
-    return {"status": "skipped"}
+        "onboarding_step": "COMPLETED",
+        "assessment_status": "completed" if has_score else "not_started"
+    }).eq("user_id", user_id).execute()
+    
+    return {"status": "skipped", "inherited": has_score}
 
 @router.post("/tab-switch")
 async def handle_tab_switch(user: dict = Depends(get_current_user)):

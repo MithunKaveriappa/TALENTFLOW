@@ -37,6 +37,7 @@ export default function AssessmentExam() {
   const [isBlocked, setIsBlocked] = useState(false);
   const [warning, setWarning] = useState<string | null>(null);
   const [showAadhaar, setShowAadhaar] = useState(false);
+  const [identityVerified, setIdentityVerified] = useState(false);
   const [aadhaarFile, setAadhaarFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -85,7 +86,7 @@ export default function AssessmentExam() {
         } = await supabase.auth.getSession();
 
         if (!user || !authSession) {
-          router.push("/login");
+          router.replace("/login");
           return;
         }
 
@@ -101,13 +102,28 @@ export default function AssessmentExam() {
           return;
         }
 
+        // Check if identity is already verified (for retakes)
+        const { data: profile } = await supabase
+          .from("candidate_profiles")
+          .select("identity_verified")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        const isVerified = profile?.identity_verified || false;
+        setIdentityVerified(isVerified);
+
         const startRes = await apiClient.post(
           "/assessment/start",
           {},
           authSession.access_token,
         );
+
         if (startRes.status === "completed") {
-          setShowAadhaar(true);
+          if (isVerified) {
+            router.replace("/dashboard/candidate");
+          } else {
+            setShowAadhaar(true);
+          }
           setIsLoading(false);
           return;
         }
@@ -118,7 +134,11 @@ export default function AssessmentExam() {
           authSession.access_token,
         );
         if (qRes.status === "completed") {
-          setShowAadhaar(true);
+          if (isVerified) {
+            router.replace("/dashboard/candidate");
+          } else {
+            setShowAadhaar(true);
+          }
         } else {
           setCurrentQuestion(qRes);
         }
@@ -133,7 +153,7 @@ export default function AssessmentExam() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push("/login");
+    router.replace("/login");
   };
 
   const handleNext = useCallback(
@@ -167,7 +187,16 @@ export default function AssessmentExam() {
         );
 
         if (nextQ.status === "completed") {
-          setShowAadhaar(true);
+          if (identityVerified) {
+            setIsFinishing(true);
+            // Wait for backend to finalize
+            await apiClient
+              .get("/assessment/results", authSession.access_token)
+              .catch(() => null);
+            router.replace("/dashboard/candidate");
+          } else {
+            setShowAadhaar(true);
+          }
         } else {
           setCurrentQuestion(nextQ);
           setAnswer("");
@@ -186,7 +215,7 @@ export default function AssessmentExam() {
         setIsLoading(false);
       }
     },
-    [isLoading, isFinishing, currentQuestion, answer],
+    [isLoading, isFinishing, currentQuestion, answer, identityVerified, router],
   );
 
   // Timer logic
@@ -213,7 +242,7 @@ export default function AssessmentExam() {
       } = await supabase.auth.getUser();
       if (!user) {
         alert("Session expired. Please login again.");
-        router.push("/login");
+        router.replace("/login");
         return;
       }
 
@@ -228,18 +257,25 @@ export default function AssessmentExam() {
 
       setIsFinishing(true);
 
-      // Final sync check - make sure backend marked as completed
       const {
         data: { session: authSession },
       } = await supabase.auth.getSession();
+
       if (authSession) {
+        // Mark identity as verified in the profile
+        await apiClient.patch(
+          "/candidate/profile",
+          { identity_verified: true },
+          authSession.access_token,
+        );
+
         await apiClient
           .get("/assessment/results", authSession.access_token)
           .catch(() => null);
       }
 
       setTimeout(() => {
-        router.push("/dashboard/candidate");
+        router.replace("/dashboard/candidate");
       }, 1500);
     } catch (err: unknown) {
       console.error("Upload error:", err);
@@ -540,3 +576,4 @@ export default function AssessmentExam() {
     </div>
   );
 }
+

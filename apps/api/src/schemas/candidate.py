@@ -22,16 +22,19 @@ class CandidateProfileUpdate(BaseModel):
     target_market_exposure: Optional[str] = None
     linkedin_url: Optional[str] = None
     portfolio_url: Optional[str] = None
+    location: Optional[str] = None
     learning_links: Optional[List[Dict[str, str]]] = None
     career_interests: Optional[List[str]] = None
     learning_interests: Optional[List[str]] = None
     job_type: Optional[str] = None
+    identity_verified: Optional[bool] = None
 
     class Config:
         populate_by_name = True
 
 class CandidateStats(BaseModel):
     applications_count: int
+    daily_applications_count: int
     shortlisted_count: int
     invites_received: int
     posts_count: int
@@ -41,6 +44,7 @@ class CandidateStats(BaseModel):
     completion_score: int
     assessment_status: str
     identity_verified: bool
+    terms_accepted: bool
     account_status: str
 
 class CandidateJobResponse(BaseModel):

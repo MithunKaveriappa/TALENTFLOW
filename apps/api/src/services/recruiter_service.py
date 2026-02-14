@@ -1,5 +1,7 @@
 import json
 import random
+import httpx
+from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
 from datetime import datetime
 from src.core.supabase import supabase
@@ -9,7 +11,53 @@ from src.core.config import GOOGLE_API_KEY
 class RecruiterService:
     def __init__(self):
         genai.configure(api_key=GOOGLE_API_KEY)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        # Using gemma-3-27b-it as gemini models have 0 quota in this region/project
+        self.model = genai.GenerativeModel('gemma-3-27b-it')
+
+    async def generate_company_bio(self, website_url: str) -> str:
+        """
+        Scrapes a company website and uses Gemini to generate a professional 2-3 sentence bio.
+        """
+        try:
+            if not website_url.startswith(('http://', 'https://')):
+                website_url = 'https://' + website_url
+
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                response = await client.get(website_url)
+                response.raise_for_status()
+
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Remove script and style elements
+            for script in soup(["script", "style"]):
+                script.decompose()
+
+            # Get text and clean it up
+            text = soup.get_text()
+            lines = (line.strip() for line in text.splitlines())
+            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+            clean_text = '\n'.join(chunk for chunk in chunks if chunk)[:2000] # Limit to 2000 chars
+
+            prompt = f"""
+            Extract a professional, concise 2-3 sentence company description/bio for a recruitment platform.
+            The bio should capture the company's core mission, products/services, and value proposition.
+            
+            Source Website Text:
+            {clean_text}
+            
+            Return ONLY the bio text. No introduction or conversational filler.
+            """
+            
+            res = self.model.generate_content(prompt)
+            bio = res.text.strip()
+            
+            # Basic cleanup if AI returns markdown or quotes
+            bio = bio.replace('"', '').replace('**', '').strip()
+            
+            return bio
+        except Exception as e:
+            print(f"DEBUG: Bio generation failed: {str(e)}")
+            return ""
 
     async def get_or_create_profile(self, user_id: str):
         res = supabase.table("recruiter_profiles").select("*, companies(*)").eq("user_id", user_id).execute()
@@ -174,8 +222,8 @@ class RecruiterService:
             # Enrich candidate data with a consolidated Trust Score
             for c in candidates:
                 u_scores = scores_map.get(c["user_id"], {})
-                beh = u_scores.get("behavioral_score", 0)
-                psy = u_scores.get("psychometric_score", 0)
+                beh = u_scores.get("behavioral_score") or 0
+                psy = u_scores.get("psychometric_score") or 0
                 
                 # Trust Score calculation (Normalized 0-100)
                 # Weighted: 60% Psychometric, 40% Behavioral
@@ -204,10 +252,10 @@ class RecruiterService:
             
             if scores_res.data:
                 s = scores_res.data[0]
-                beh = s.get("behavioral_score", 0)
-                psy = s.get("psychometric_score", 0)
+                beh = s.get("behavioral_score") or 0
+                psy = s.get("psychometric_score") or 0
                 candidate["trust_score"] = int((psy * 0.6) + (beh * 0.4))
-                candidate["skills_alignment"] = s.get("skills_score", 0)
+                candidate["skills_alignment"] = s.get("skills_score") or 0
             else:
                 candidate["trust_score"] = 0
                 candidate["skills_alignment"] = 0
@@ -433,13 +481,19 @@ class RecruiterService:
         # Normalize to 0-100
         normalized_score = int((final_avg / 6) * 100)
 
-        # 2. Update company profile score
+        # 2. Update company profile score (Competitive Progress Model)
         try:
             profile_res = supabase.table("recruiter_profiles").select("company_id").eq("user_id", user_id).execute()
             if profile_res.data and len(profile_res.data) > 0:
                 company_id = profile_res.data[0]["company_id"]
                 if company_id:
-                    supabase.table("companies").update({"profile_score": normalized_score}).eq("id", company_id).execute()
+                    # Get existing score
+                    comp_res = supabase.table("companies").select("profile_score").eq("id", company_id).execute()
+                    current_score = comp_res.data[0].get("profile_score", 0) if comp_res.data else 0
+                    
+                    # Update ONLY if new score is higher
+                    if normalized_score > current_score:
+                        supabase.table("companies").update({"profile_score": normalized_score}).eq("id", company_id).execute()
         except Exception as e:
             print(f"DEBUG: Company score update error: {str(e)}")
 
@@ -646,8 +700,8 @@ class RecruiterService:
         """
         
         try:
-            # Fallback models in case one is not available
-            models_to_try = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro']
+            # Gemma models included as Gemini has 0 quota in this environment
+            models_to_try = ['gemma-3-27b-it', 'gemma-3-4b-it', 'gemini-2.0-flash', 'gemini-1.5-flash']
             response = None
             last_error = None
 

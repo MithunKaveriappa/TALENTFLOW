@@ -103,3 +103,14 @@ async def get_results(user: dict = Depends(get_current_user)):
         return res.data[0]
         
     return session
+
+@router.post("/retake")
+async def retake_assessment(user: dict = Depends(get_current_user)):
+    user_id = user["sub"]
+    # Check if blocked
+    blocked_res = supabase.table("blocked_users").select("*").eq("user_id", user_id).execute()
+    if blocked_res.data:
+        raise HTTPException(status_code=403, detail="Your account has been permanently blocked.")
+
+    result = await assessment_service.retake_assessment(user_id)
+    return result

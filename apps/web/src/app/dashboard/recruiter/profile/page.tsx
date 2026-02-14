@@ -1,9 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import {
+  Briefcase,
+  Settings,
+  Building2,
+  Globe,
+  MapPin,
+  Tag,
+  Target,
+  DollarSign,
+  User,
+  Linkedin,
+  FileText,
+  CheckCircle2,
+} from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
-import { useRouter } from "next/navigation";
+import RecruiterSidebar from "@/components/RecruiterSidebar";
 
 interface Company {
   id: string;
@@ -25,6 +41,8 @@ interface RecruiterProfile {
   bio: string;
   company_id: string;
   companies: Company;
+  is_verified?: boolean;
+  assessment_status?: string;
 }
 
 export default function RecruiterProfilePage() {
@@ -36,7 +54,7 @@ export default function RecruiterProfilePage() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push("/login");
+    router.replace("/login");
   };
 
   useEffect(() => {
@@ -46,7 +64,7 @@ export default function RecruiterProfilePage() {
           data: { session: authSession },
         } = await supabase.auth.getSession();
         if (!authSession) {
-          router.push("/login");
+          router.replace("/login");
           return;
         }
 
@@ -122,156 +140,79 @@ export default function RecruiterProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-          <p className="text-slate-500 font-bold text-xs uppercase tracking-widest">
-            Accessing Corporate Vault...
-          </p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50/50">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      {/* Sidebar - Reusing basic structure */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col fixed h-full z-30">
-        <div className="p-8 border-b border-slate-50">
-          <div
-            className="flex items-center gap-3"
-            onClick={() => router.push("/dashboard/recruiter")}
-            style={{ cursor: "pointer" }}
-          >
-            <div className="h-10 w-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-100">
-              <div className="h-5 w-5 rounded bg-white rotate-45" />
-            </div>
-            <span className="font-black text-slate-900 tracking-tighter uppercase text-lg">
-              TalentFlow
-            </span>
-          </div>
-        </div>
-        <nav className="flex-1 p-6 space-y-2 overflow-y-auto custom-scrollbar">
-          <button
-            onClick={() => router.push("/dashboard/recruiter")}
-            className="w-full flex items-center px-4 py-3 rounded-xl text-slate-400 hover:text-slate-900 hover:bg-slate-50 transition-all font-bold uppercase tracking-widest text-sm text-left"
-          >
-            Dashboard
-          </button>
-          <button
-            onClick={() => router.push("/dashboard/recruiter/jobs")}
-            className="w-full flex items-center px-4 py-3 rounded-xl text-slate-400 hover:text-slate-900 hover:bg-slate-50 transition-all font-bold uppercase tracking-widest text-sm text-left"
-          >
-            My Jobs
-          </button>
-          <button
-            onClick={() => router.push("/dashboard/recruiter/jobs/new")}
-            className="w-full flex items-center px-4 py-3 rounded-xl text-slate-400 hover:text-slate-900 hover:bg-slate-50 transition-all font-bold uppercase tracking-widest text-sm text-left"
-          >
-            Post a Role
-          </button>
-          <button
-            onClick={() => router.push("/dashboard/recruiter/pool")}
-            className="w-full flex items-center px-4 py-3 rounded-xl text-slate-400 hover:text-slate-900 hover:bg-slate-50 transition-all font-bold uppercase tracking-widest text-sm text-left"
-          >
-            Candidate Pool
-          </button>
-          <button className="w-full flex items-center px-4 py-3 rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-100 font-bold uppercase tracking-widest text-sm text-left">
-            Company Profile
-          </button>
-        </nav>
+    <div className="min-h-screen bg-slate-50 flex">
+      <RecruiterSidebar assessmentStatus={profile?.assessment_status} />
 
-        <div className="p-6 border-t border-slate-50">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all group"
-          >
-            <svg
-              className="h-5 w-5 transition-transform group-hover:scale-110"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+      {/* Main Content Area */}
+      <div className="flex-1 ml-64 flex flex-col">
+        {/* Top Header */}
+        <header className="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-8 sticky top-0 z-10 w-full">
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-200">
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  profile?.is_verified ? "bg-green-500" : "bg-amber-500"
+                } animate-pulse`}
               />
-            </svg>
-            <span className="text-sm font-bold uppercase tracking-widest">
+              <span className="text-sm font-medium text-slate-600">
+                Hub Status: {profile?.is_verified ? "Active" : "Pending Sync"}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center space-x-4">
+            <button className="p-2 text-blue-600 bg-blue-50 rounded-lg transition-colors">
+              <Settings className="w-5 h-5" />
+            </button>
+            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-bold border border-blue-200">
+              {profile?.full_name?.[0] || "R"}
+            </div>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-red-500 hover:bg-red-50 hover:border-red-100 transition-all shadow-sm active:scale-95 ml-2"
+            >
               Logout
-            </span>
-          </button>
-        </div>
-      </aside>
+            </button>
+          </div>
+        </header>
 
-      <main className="flex-1 ml-64 p-6 md:p-12 overflow-y-auto">
-        <div className="max-w-4xl mx-auto">
-          <header className="mb-12 flex justify-between items-end">
-            <div>
-              <h1 className="text-4xl font-black text-slate-900 tracking-tight leading-none uppercase italic">
-                CORPORATE IDENTITY
-              </h1>
-              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.3em] mt-3">
-                Manage your liaison signals and company profile
-              </p>
-            </div>
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => router.push("/dashboard/recruiter")}
-                className="px-6 py-2 border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all"
-              >
-                Back to Command
-              </button>
-              <button
-                onClick={handleLogout}
-                className="flex flex-col items-center gap-1 group"
-              >
-                <span className="text-[10px] font-bold text-slate-300 group-hover:text-red-400 uppercase tracking-widest transition-colors">
-                  Session
-                </span>
-                <div className="h-10 w-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 group-hover:text-red-500 group-hover:border-red-100 group-hover:bg-red-50 transition-all shadow-sm">
-                  <svg
-                    className="h-5 w-5 transition-transform group-hover:scale-110"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                    />
-                  </svg>
-                </div>
-              </button>
-            </div>
-          </header>
+        {/* Content Container */}
+        <main className="p-8 max-w-5xl mx-auto w-full">
+          <div className="mb-10">
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
+              Profile Settings
+            </h1>
+            <p className="text-slate-500 mt-1 font-medium">
+              Manage your professional identity and company details
+            </p>
+          </div>
 
           <form onSubmit={handleUpdateProfile} className="space-y-8 pb-20">
             {message.text && (
               <div
-                className={`p-4 rounded-2xl flex items-center gap-3 border ${
+                className={`p-4 rounded-xl flex items-center gap-3 border shadow-sm transition-all ${
                   message.type === "success"
-                    ? "bg-emerald-50 border-emerald-100 text-emerald-700"
-                    : "bg-red-50 border-red-100 text-red-700"
+                    ? "bg-green-50 border-green-200 text-green-800"
+                    : "bg-red-50 border-red-200 text-red-800"
                 }`}
               >
-                <div
-                  className={`h-2 w-2 rounded-full ${message.type === "success" ? "bg-emerald-500" : "bg-red-500"}`}
+                <CheckCircle2
+                  className={`w-5 h-5 ${message.type === "success" ? "text-green-600" : "text-red-600"}`}
                 />
-                <p className="text-xs font-bold uppercase tracking-widest">
-                  {message.text}
-                </p>
+                <p className="text-sm font-semibold">{message.text}</p>
               </div>
             )}
 
-            {/* Recruiter Liaison Details */}
-            <Section title="Recruiter Liaison Details">
+            {/* Recruiter Details */}
+            <Section title="Professional Liaison" icon={User}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Field label="Full Name">
+                <Field label="Full Name" icon={User}>
                   <input
                     type="text"
                     value={profile?.full_name || ""}
@@ -280,10 +221,10 @@ export default function RecruiterProfilePage() {
                         p ? { ...p, full_name: e.target.value } : null,
                       )
                     }
-                    className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
                   />
                 </Field>
-                <Field label="Job Title">
+                <Field label="Job Title" icon={Briefcase}>
                   <input
                     type="text"
                     value={profile?.job_title || ""}
@@ -292,10 +233,10 @@ export default function RecruiterProfilePage() {
                         p ? { ...p, job_title: e.target.value } : null,
                       )
                     }
-                    className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
                   />
                 </Field>
-                <Field label="LinkedIn ID/URL">
+                <Field label="LinkedIn Profile" icon={Linkedin}>
                   <input
                     type="text"
                     value={profile?.linkedin_url || ""}
@@ -305,10 +246,10 @@ export default function RecruiterProfilePage() {
                       )
                     }
                     placeholder="linkedin.com/in/username"
-                    className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
                   />
                 </Field>
-                <Field label="Liaison Bio" fullWidth>
+                <Field label="Professional Bio" icon={FileText} fullWidth>
                   <textarea
                     rows={3}
                     value={profile?.bio || ""}
@@ -318,16 +259,16 @@ export default function RecruiterProfilePage() {
                       )
                     }
                     placeholder="Brief professional intro..."
-                    className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none resize-none"
                   />
                 </Field>
               </div>
             </Section>
 
-            {/* Company Signals */}
-            <Section title="Company Signals">
+            {/* Company Details */}
+            <Section title="Company Intelligence" icon={Building2}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Field label="Company Name">
+                <Field label="Company Name" icon={Building2}>
                   <input
                     type="text"
                     value={profile?.companies?.name || ""}
@@ -344,10 +285,10 @@ export default function RecruiterProfilePage() {
                           : null,
                       )
                     }
-                    className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
                   />
                 </Field>
-                <Field label="Official Website">
+                <Field label="Official Website" icon={Globe}>
                   <input
                     type="url"
                     value={profile?.companies?.website || ""}
@@ -364,10 +305,10 @@ export default function RecruiterProfilePage() {
                           : null,
                       )
                     }
-                    className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
                   />
                 </Field>
-                <Field label="Headquarters">
+                <Field label="Headquarters" icon={MapPin}>
                   <input
                     type="text"
                     value={profile?.companies?.location || ""}
@@ -384,10 +325,10 @@ export default function RecruiterProfilePage() {
                           : null,
                       )
                     }
-                    className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
                   />
                 </Field>
-                <Field label="Domain / Industry">
+                <Field label="Industry / Domain" icon={Tag}>
                   <input
                     type="text"
                     value={profile?.companies?.industry_category || ""}
@@ -405,10 +346,10 @@ export default function RecruiterProfilePage() {
                       )
                     }
                     placeholder="e.g. Fintech, SaaS, HealthTech"
-                    className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
                   />
                 </Field>
-                <Field label="Sales Model">
+                <Field label="Sales Model" icon={Target}>
                   <select
                     value={profile?.companies?.sales_model || ""}
                     onChange={(e) =>
@@ -424,7 +365,7 @@ export default function RecruiterProfilePage() {
                           : null,
                       )
                     }
-                    className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none appearance-none"
                   >
                     <option value="">Select Model</option>
                     <option value="Inbound">Inbound</option>
@@ -432,7 +373,7 @@ export default function RecruiterProfilePage() {
                     <option value="Hybrid">Hybrid</option>
                   </select>
                 </Field>
-                <Field label="Avg. Deal Size">
+                <Field label="Avg. Deal Size" icon={DollarSign}>
                   <select
                     value={profile?.companies?.avg_deal_size_range || ""}
                     onChange={(e) =>
@@ -448,7 +389,7 @@ export default function RecruiterProfilePage() {
                           : null,
                       )
                     }
-                    className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none appearance-none"
                   >
                     <option value="">Select Range</option>
                     <option value="< $10k">Under $10k</option>
@@ -457,7 +398,7 @@ export default function RecruiterProfilePage() {
                     <option value="$150k+">$150k+</option>
                   </select>
                 </Field>
-                <Field label="Company Mission" fullWidth>
+                <Field label="Company Mission" icon={FileText} fullWidth>
                   <textarea
                     rows={4}
                     value={profile?.companies?.description || ""}
@@ -475,46 +416,49 @@ export default function RecruiterProfilePage() {
                       )
                     }
                     placeholder="What makes your company a great place for sales talent?"
-                    className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none resize-none"
                   />
                 </Field>
               </div>
             </Section>
 
-            <div className="flex justify-end gap-4 pt-4">
-              <button
-                type="button"
-                onClick={() => router.push("/dashboard/recruiter")}
-                className="px-8 py-4 rounded-2xl font-bold text-xs uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-all"
+            <div className="flex justify-end gap-3 pt-6">
+              <Link
+                href="/dashboard/recruiter"
+                className="px-6 py-2.5 rounded-lg font-bold text-sm text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all"
               >
                 Discard Changes
-              </button>
+              </Link>
               <button
                 type="submit"
                 disabled={saving}
-                className="px-12 py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-600 disabled:opacity-50 transition-all shadow-xl shadow-slate-200"
+                className="px-10 py-2.5 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 disabled:opacity-50 transition-all shadow-md shadow-blue-100 active:scale-95"
               >
-                {saving ? "SYNCING..." : "COMMIT CHANGES"}
+                {saving ? "SAVING..." : "SAVE PROFILE"}
               </button>
             </div>
           </form>
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }
 
 function Section({
   title,
+  icon: Icon,
   children,
 }: {
   title: string;
+  icon: React.ElementType;
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white rounded-3xl border border-slate-100 p-8 shadow-sm">
-      <h2 className="text-xl font-black text-slate-900 uppercase italic mb-8 flex items-center gap-3">
-        <div className="h-2 w-2 rounded-full bg-indigo-500" />
+    <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
+      <h2 className="text-xl font-bold text-slate-900 mb-8 flex items-center gap-3">
+        <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
+          <Icon className="w-5 h-5" />
+        </div>
         {title}
       </h2>
       {children}
@@ -524,19 +468,23 @@ function Section({
 
 function Field({
   label,
+  icon: Icon,
   children,
   fullWidth = false,
 }: {
   label: string;
+  icon: React.ElementType;
   children: React.ReactNode;
   fullWidth?: boolean;
 }) {
   return (
     <div className={fullWidth ? "md:col-span-2" : ""}>
-      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+      <label className="flex items-center text-xs font-bold text-slate-500 uppercase tracking-wider mb-2.5 ml-1">
+        <Icon className="w-3.5 h-3.5 mr-1.5 text-slate-400" />
         {label}
       </label>
       {children}
     </div>
   );
 }
+

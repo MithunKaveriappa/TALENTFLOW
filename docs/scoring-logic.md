@@ -41,33 +41,41 @@ The Candidate score is a weighted composite of different assessment components.
 - **Skill-Based**: Technical depth questions generated on-the-fly.
 - **Resume-Deep-Dive**: Verification of claims made in the uploaded CV.
 
-### Experience-Band Weighting:
+### Weighted Distribution (The Feb 2026 Model)
 
-Weights adjust based on the candidate's level:
+Questions are pulled dynamically based on the candidate's seniority level to ensure the evaluation is relevant. The total question count (Budget) scales with seniority.
 
-| Component   | Fresher | Mid-Level | Senior | Leadership |
-| :---------- | :------ | :-------- | :----- | :--------- |
-| Resume      | 20%     | 25%       | 30%    | 25%        |
-| Behavioral  | 40%     | 30%       | 20%    | 25%        |
-| Skill-Based | 30%     | 35%       | 30%    | 20%        |
-| Core Values | 10%     | 10%       | 20%    | 30%        |
+| Category                  | Fresher (8 Qs) | Mid (10 Qs) | Senior (13 Qs) | Leadership (16 Qs) |
+| :------------------------ | :------------- | :---------- | :------------- | :----------------- |
+| **Resume AI Deep Dive**   | 20%            | 20%         | 20%            | 25%                |
+| **Case Study (Skills)**   | 10%            | 20%         | 30%            | 35%                |
+| **Behavioral (Seeded)**   | 35%            | 30%         | 25%            | 20%                |
+| **Psychometric (Seeded)** | 35%            | 30%         | 25%            | 20%                |
+
+- **Resume AI**: Dynamically generated based on parsed CV data (Gaps, achievements, history).
+- **Case Study**: Technical scenario questions based on self-reported skills.
+- **Seeded**: High-validity psychometric and behavioral drivers from our curated bank.
 
 ## 4. The Verified Trust Matrix (Recruiter View)
 
 To protect candidate raw data while providing actionable trust signals, recruiters view a consolidated **Trust Score** instead of individual assessment metrics.
 
 ### Calculation:
+
 $$Trust Score = (Psychometric Score \times 0.6) + (Behavioral Score \times 0.4)$$
 
 - **Masking**: Raw `psychometric_score` and `behavioral_score` are deleted from the API payload before being sent to the recruiter frontend.
 - **Sorting**: The Candidate Pool is automatically sorted by this Trust Score to prioritize the most reliable talent.
 
-## 5. Normalization and Immutability
+## 5. Persistence & Improvement (The MAX Logic)
+
+To ensure users are never penalized for trying to improve, the system follows a strict "Keep the Best" policy:
+
+- **Candidate Retakes**: A candidate can retake an assessment via Profile Settings. The new score only replaces the existing one if it is higher: $final\_score = MAX(new\_score, existing\_score)$.
+- **Recruiter Improvements**: Multiple recruiters for the same company can attempt the assessment. The public **Company Profile Score (CPS)** only updates if a new attempt yields a better result than the current score.
+
+## 6. Normalization and Immutability
 
 - **Normalization**: All raw scores are mapped to the 0-100 range for display.
-- **Immutable**: Once a session is marked `completed`, the score is finalized.
+- **Finalization**: Once a session is marked `completed`, the session and individual responses are locked for auditing.
 - **Locking**: A score below 40 may trigger a "Low Trust" flag, limiting certain platform features.
-
-* Weightages depend on experience band
-* Resume score currently assumed full, later dynamic
-* Scores are immutable after assessment completion

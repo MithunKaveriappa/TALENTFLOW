@@ -1,6 +1,34 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
+import { apiClient } from "@/lib/apiClient";
 
 export default function Home() {
+  const router = useRouter();
+
+  useEffect(() => {
+    async function checkExistingSession() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session) {
+        try {
+          const handshake = await apiClient.get(
+            "/auth/post-login",
+            session.access_token,
+          );
+          router.replace(handshake.next_step);
+        } catch {
+          // Stay on landing if handshake fails
+        }
+      }
+    }
+    checkExistingSession();
+  }, [router]);
+
   return (
     <div className="min-h-screen bg-white text-slate-900 selection:bg-blue-100 selection:text-blue-900">
       {/* Navigation */}
@@ -169,9 +197,9 @@ export default function Home() {
                   <span className="text-blue-500">HIRE BETTER.</span>
                 </h2>
                 <p className="text-xl text-slate-400 font-medium mb-12">
-                  Stop scanning resumes. Start seeing potential. Our
-                  verified network reduces your hiring time by 70% by
-                  pre-verifying every candidate beforehand.
+                  Stop scanning resumes. Start seeing potential. Our verified
+                  network reduces your hiring time by 70% by pre-verifying every
+                  candidate beforehand.
                 </p>
                 <div className="flex flex-wrap gap-8 items-center pt-8 border-t border-slate-800">
                   <div>

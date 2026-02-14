@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
 import { useRouter } from "next/navigation";
+import CandidateSidebar from "@/components/CandidateSidebar";
+import { TermsModal } from "@/components/TermsModal";
 
 interface ComponentScores {
   skill?: number;
@@ -32,6 +34,7 @@ interface CandidateStats {
   completion_score: number;
   assessment_status: string;
   identity_verified: boolean;
+  terms_accepted: boolean;
   account_status: string;
 }
 
@@ -40,10 +43,11 @@ export default function CandidateDashboard() {
   const [results, setResults] = useState<AssessmentResults | null>(null);
   const [stats, setStats] = useState<CandidateStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showTerms, setShowTerms] = useState(false);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push("/login");
+    router.replace("/login");
   };
 
   useEffect(() => {
@@ -88,123 +92,69 @@ export default function CandidateDashboard() {
 
   const scores = results?.component_scores || {};
 
+  const isLocked =
+    stats?.assessment_status !== "completed" ||
+    !stats?.identity_verified ||
+    !stats?.terms_accepted;
+
   return (
     <div className="flex min-h-screen bg-slate-50">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col fixed h-full z-30">
-        <div className="p-8 border-b border-slate-50">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-100">
-              <div className="h-5 w-5 rounded bg-white rotate-45" />
-            </div>
-            <span className="font-black text-slate-900 tracking-tighter uppercase text-lg">
-              TalentFlow
-            </span>
-          </div>
-        </div>
-
-        <nav className="flex-1 p-6 space-y-2">
-          <SidebarLink
-            label="Dashboard"
-            active
-            onClick={() => router.push("/dashboard/candidate")}
-          />
-          <SidebarLink
-            label="My Profile"
-            onClick={() => router.push("/dashboard/candidate/profile")}
-          />
-          <SidebarLink
-            label="Community Signal"
-            onClick={() => router.push("/dashboard/candidate/community")}
-          />
-          <SidebarLink label="Assessments" />
-          <SidebarLink label="Trust Matrix" />
-          <SidebarLink
-            label="Opportunities"
-            onClick={() => router.push("/dashboard/candidate/jobs")}
-          />
-          <SidebarLink label="Shield Status" />
-          <SidebarLink label="Verification" />
-        </nav>
-
-        <div className="p-6 border-t border-slate-50 space-y-4">
-          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                Trust Active
-              </span>
-            </div>
-            <p className="text-[10px] text-slate-400 font-medium leading-tight">
-              Your signals are live for 12 enterprise partners.
-            </p>
-          </div>
-
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all group"
-          >
-            <svg
-              className="h-5 w-5 transition-transform group-hover:scale-110"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-              />
-            </svg>
-            <span className="text-sm font-bold uppercase tracking-widest">
-              Logout
-            </span>
-          </button>
-        </div>
-      </aside>
+      <CandidateSidebar assessmentStatus={stats?.assessment_status} />
 
       {/* Main Content */}
       <main className="flex-1 ml-64 p-6 md:p-12 overflow-y-auto">
-        {!results ? (
-          <div className="min-h-[70vh] flex items-center justify-center">
-            <div className="text-center p-12 bg-white rounded-4xl shadow-2xl shadow-slate-200/50 border border-slate-100 max-w-md w-full relative overflow-hidden group">
-              {/* Decorative element */}
-              <div className="absolute top-0 left-0 w-full h-1.5 bg-linear-to-r from-amber-400 to-orange-500" />
-
-              <div className="h-20 w-20 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-8 group-hover:scale-110 transition-transform duration-500">
-                <svg
-                  className="h-10 w-10 text-amber-500"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                  />
-                </svg>
-              </div>
-
-              <h1 className="text-3xl font-black text-slate-900 mb-3 tracking-tight">
-                EVALUATION REQUIRED
+        {isLocked ? (
+          <div className="max-w-4xl mx-auto py-12">
+            <header className="mb-12">
+              <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase italic mb-2">
+                Command Center Locked
               </h1>
-              <p className="text-slate-500 mb-10 text-sm font-medium leading-relaxed">
-                To unlock your{" "}
-                <span className="text-slate-900 font-bold">Command Center</span>{" "}
-                and begin matching with partners, you must first complete the
-                baseline assessment signals.
+              <p className="text-slate-500 font-medium uppercase tracking-[0.2em] text-[10px]">
+                Complete all synchronization signals to unlock transmission.
               </p>
+            </header>
 
-              <button
-                onClick={() => router.push("/assessment/candidate")}
-                className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold shadow-xl shadow-slate-200 hover:bg-indigo-600 transition-all duration-300 flex items-center justify-center gap-3 group"
-              >
-                <span>INITIALIZE ASSESSMENT</span>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Step 1: Assessment */}
+              <LockStepCard
+                title="Performance Assessment"
+                description="Verify your behavioral and technical signals via our AI evaluation."
+                status={
+                  stats?.assessment_status === "completed"
+                    ? "verified"
+                    : "incomplete"
+                }
+                actionLabel="Initialize Assessment"
+                onAction={() => router.push("/assessment/candidate")}
+              />
+
+              {/* Step 2: Identity */}
+              <LockStepCard
+                title="Identity Verification"
+                description="Secure your profile by uploading a valid government-issued ID."
+                status={stats?.identity_verified ? "verified" : "incomplete"}
+                actionLabel="Verify Identity"
+                onAction={() => router.push("/onboarding/candidate?target=AWAITING_ID")}
+              />
+
+              {/* Step 3: Terms & Consent */}
+              <LockStepCard
+                title="Legal Synchronization"
+                description="Accept the platform terms and data privacy consent forms."
+                status={stats?.terms_accepted ? "verified" : "incomplete"}
+                actionLabel="Accept Terms"
+                onAction={() =>
+                  router.push("/onboarding/candidate?target=AWAITING_TC")
+                }
+                secondaryActionLabel="Read Policy"
+                onSecondaryAction={() => setShowTerms(true)}
+              />
+            </div>
+
+            <div className="mt-12 bg-indigo-50 border border-indigo-100 p-8 rounded-4xl flex items-center gap-6">
+              <div className="h-12 w-12 bg-indigo-600 rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-indigo-200">
                 <svg
-                  className="h-5 w-5 group-hover:translate-x-1 transition-transform"
+                  className="h-6 w-6 text-white"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -213,18 +163,28 @@ export default function CandidateDashboard() {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M13 7l5 5m0 0l-5 5m5-5H6"
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                   />
                 </svg>
-              </button>
+              </div>
+              <div>
+                <h4 className="font-black text-indigo-900 uppercase tracking-tight text-sm mb-1">
+                  Why is my dashboard locked?
+                </h4>
+                <p className="text-indigo-700/70 text-xs font-medium leading-relaxed">
+                  To maintain a high-trust hiring ecosystem, we require all
+                  candidates to verify their identity and complete a baseline
+                  performance evaluation before matching with recruiters.
+                </p>
+              </div>
             </div>
           </div>
         ) : (
-          <div className="max-w-4xl mx-auto space-y-8">
+          <div className="max-w-5xl mx-auto space-y-8">
             <header className="flex justify-between items-end mb-12">
               <div>
                 <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none uppercase italic">
-                  CANDIDATE COMMAND CENTER
+                  Dashboard
                 </h1>
                 <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.3em] mt-2">
                   Real-time Performance Monitoring
@@ -288,26 +248,9 @@ export default function CandidateDashboard() {
                 </div>
                 <button
                   onClick={handleLogout}
-                  className="flex flex-col items-center gap-1 group"
+                  className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-red-500 hover:bg-red-50 hover:border-red-100 transition-all shadow-sm active:scale-95"
                 >
-                  <span className="text-[10px] font-bold text-slate-300 group-hover:text-red-400 uppercase tracking-widest transition-colors">
-                    Session
-                  </span>
-                  <div className="h-10 w-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 group-hover:text-red-500 group-hover:border-red-100 group-hover:bg-red-50 transition-all shadow-sm">
-                    <svg
-                      className="h-5 w-5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                      />
-                    </svg>
-                  </div>
+                  Logout
                 </button>
               </div>
             </header>
@@ -321,7 +264,7 @@ export default function CandidateDashboard() {
                   </span>
                   <div className="space-y-1">
                     <h2 className="text-7xl md:text-9xl font-black tracking-tighter">
-                      {results.overall_score || 0}
+                      {results?.overall_score || 0}
                     </h2>
                     <p className="text-slate-400 font-bold uppercase tracking-widest text-sm">
                       Percentile Score / 100
@@ -330,9 +273,9 @@ export default function CandidateDashboard() {
                   <p className="text-slate-300 max-w-sm text-sm leading-relaxed font-medium">
                     Your profile indicates{" "}
                     <span className="text-indigo-400 font-bold">
-                      {results.overall_score >= 70
+                      {(results?.overall_score ?? 0) >= 70
                         ? "High-Fit"
-                        : results.overall_score >= 40
+                        : (results?.overall_score ?? 0) >= 40
                           ? "Moderate-Fit"
                           : "Emerging-Fit"}
                     </span>{" "}
@@ -376,7 +319,7 @@ export default function CandidateDashboard() {
                       strokeWidth="4"
                       strokeDasharray="264"
                       strokeDashoffset={
-                        264 - (264 * (results.overall_score || 0)) / 100
+                        264 - (264 * (results?.overall_score || 0)) / 100
                       }
                       strokeLinecap="round"
                       className="text-indigo-500 transition-all duration-2000 ease-out"
@@ -500,28 +443,7 @@ export default function CandidateDashboard() {
           </div>
         )}
       </main>
-    </div>
-  );
-}
-
-function SidebarLink({
-  label,
-  active = false,
-  onClick,
-}: {
-  label: string;
-  active?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <div
-      onClick={onClick}
-      className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-3 transition-all cursor-pointer ${active ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100" : "text-slate-400 hover:text-indigo-600 hover:bg-slate-50"}`}
-    >
-      <div
-        className={`h-1.5 w-1.5 rounded-full ${active ? "bg-white" : "bg-slate-200 group-hover:bg-indigo-400"}`}
-      />
-      {label}
+      <TermsModal isOpen={showTerms} onClose={() => setShowTerms(false)} />
     </div>
   );
 }
@@ -611,6 +533,107 @@ function StatCard({
       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
         {label}
       </span>
+    </div>
+  );
+}
+
+function LockStepCard({
+  title,
+  description,
+  status,
+  actionLabel,
+  onAction,
+  secondaryActionLabel,
+  onSecondaryAction,
+}: {
+  title: string;
+  description: string;
+  status: "verified" | "incomplete";
+  actionLabel: string;
+  onAction: () => void;
+  secondaryActionLabel?: string;
+  onSecondaryAction?: () => void;
+}) {
+  const isVerified = status === "verified";
+
+  return (
+    <div
+      className={`p-8 rounded-[2.5rem] border flex flex-col items-center text-center space-y-6 transition-all ${
+        isVerified
+          ? "bg-white border-slate-100 opacity-60"
+          : "bg-white border-slate-200 shadow-xl shadow-slate-200/50 scale-105 z-10"
+      }`}
+    >
+      <div
+        className={`h-16 w-16 rounded-2xl flex items-center justify-center ${
+          isVerified
+            ? "bg-emerald-50 text-emerald-500"
+            : "bg-amber-50 text-amber-500"
+        }`}
+      >
+        {isVerified ? (
+          <svg
+            className="h-8 w-8"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M5 13l4 4L19 7"
+            />
+          </svg>
+        ) : (
+          <svg
+            className="h-8 w-8"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 15v2m0 0v2m0-2h2m-2 0H10m4-6a4 4 0 11-8 0 4 4 0 018 0z"
+            />
+          </svg>
+        )}
+      </div>
+
+      <div>
+        <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight mb-2">
+          {title}
+        </h3>
+        <p className="text-slate-500 text-xs font-medium leading-relaxed">
+          {description}
+        </p>
+      </div>
+
+      {isVerified ? (
+        <div className="flex items-center gap-2 text-emerald-600 font-bold text-[10px] uppercase tracking-widest bg-emerald-50 px-4 py-2 rounded-full">
+          <div className="h-1 w-1 bg-emerald-500 rounded-full" />
+          Verified
+        </div>
+      ) : (
+        <div className="w-full space-y-3">
+          <button
+            onClick={onAction}
+            className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold uppercase tracking-widest text-[10px] hover:bg-indigo-600 transition-all active:scale-95 shadow-lg shadow-slate-200"
+          >
+            {actionLabel}
+          </button>
+          {secondaryActionLabel && onSecondaryAction && (
+            <button
+              onClick={onSecondaryAction}
+              className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors"
+            >
+              {secondaryActionLabel}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
