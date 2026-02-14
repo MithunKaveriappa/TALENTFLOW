@@ -63,7 +63,9 @@ export default function RecruiterOnboarding() {
     location: "",
     description: "",
   });
-  const [dynamicQuestions, setDynamicQuestions] = useState<AssessmentQuestion[]>([]);
+  const [dynamicQuestions, setDynamicQuestions] = useState<
+    AssessmentQuestion[]
+  >([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState(60);
   const [isAssessmentActive, setIsAssessmentActive] = useState(false);
@@ -146,22 +148,21 @@ export default function RecruiterOnboarding() {
     };
   }, [isAssessmentActive, timeLeft, handleSend]);
 
-  const addMessage = useCallback((
-    text: string,
-    sender: "bot" | "user",
-    options?: string[],
-  ) => {
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: Math.random().toString(36).substr(2, 9),
-        text,
-        sender,
-        timestamp: new Date(),
-        options,
-      },
-    ]);
-  }, []);
+  const addMessage = useCallback(
+    (text: string, sender: "bot" | "user", options?: string[]) => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Math.random().toString(36).substr(2, 9),
+          text,
+          sender,
+          timestamp: new Date(),
+          options,
+        },
+      ]);
+    },
+    [],
+  );
 
   useEffect(() => {
     async function init() {
@@ -226,17 +227,23 @@ export default function RecruiterOnboarding() {
     init();
   }, [addMessage, promptNextDetail, router, showAssessmentPrompt]);
 
-  const promptNextDetail = useCallback((details: Record<string, string | null>) => {
-    if (!details.name || details.name === "Pending Verification") {
-      addMessage("What is the full legal name of your company?", "bot");
-    } else if (!details.website) {
-      addMessage("What is your company's website URL?", "bot");
-    } else if (!details.location) {
-      addMessage("Where is your company headquartered?", "bot");
-    } else if (!details.description) {
-      addMessage("Please provide a short description of your company.", "bot");
-    }
-  }, [addMessage]);
+  const promptNextDetail = useCallback(
+    (details: Record<string, string | null>) => {
+      if (!details.name || details.name === "Pending Verification") {
+        addMessage("What is the full legal name of your company?", "bot");
+      } else if (!details.website) {
+        addMessage("What is your company's website URL?", "bot");
+      } else if (!details.location) {
+        addMessage("Where is your company headquartered?", "bot");
+      } else if (!details.description) {
+        addMessage(
+          "Please provide a short description of your company.",
+          "bot",
+        );
+      }
+    },
+    [addMessage],
+  );
 
   const showAssessmentPrompt = useCallback(() => {
     addMessage(
@@ -295,152 +302,158 @@ export default function RecruiterOnboarding() {
     }
   }, [addMessage]);
 
-  const handleSend = useCallback(async (textOverride?: string) => {
-    const val = textOverride || input.trim();
-    if (!val && !isLoading) return;
-    if (isLoading) return;
+  const handleSend = useCallback(
+    async (textOverride?: string) => {
+      const val = textOverride || input.trim();
+      if (!val && !isLoading) return;
+      if (isLoading) return;
 
-    if (val.toLowerCase() === "logout" || val.toLowerCase() === "exit") {
-      addMessage("Logging out...", "bot");
-      setTimeout(handleLogout, 1000);
-      return;
-    }
+      if (val.toLowerCase() === "logout" || val.toLowerCase() === "exit") {
+        addMessage("Logging out...", "bot");
+        setTimeout(handleLogout, 1000);
+        return;
+      }
 
-    addMessage(val, "user");
-    setInput("");
-    setIsLoading(true);
+      addMessage(val, "user");
+      setInput("");
+      setIsLoading(true);
 
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const token = session?.access_token;
 
-      if (state === "REGISTRATION") {
-        // Regex for GSTIN or CIN
-        const gstinRegex =
-          /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-        const cinRegex =
-          /^([LUu]{1})([0-9]{5})([A-Za-z]{2})([0-9]{4})([A-Za-z]{3})([0-9]{6})$/;
+        if (state === "REGISTRATION") {
+          // Regex for GSTIN or CIN
+          const gstinRegex =
+            /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+          const cinRegex =
+            /^([LUu]{1})([0-9]{5})([A-Za-z]{2})([0-9]{4})([A-Za-z]{3})([0-9]{6})$/;
 
-        if (!gstinRegex.test(val) && !cinRegex.test(val)) {
-          addMessage(
-            "Invalid format. Please enter a valid CIN or GSTIN.",
-            "bot",
-          );
-        } else {
-          const res = await apiClient.post(
-            "/recruiter/registration",
-            { registration_number: val },
-            token,
-          );
-          setCompanyId(res.company_id);
-
-          if (res.onboarding_step === "COMPLETED") {
+          if (!gstinRegex.test(val) && !cinRegex.test(val)) {
             addMessage(
-              "Your company is already vetted! Fast-tracking you to the Command Center...",
+              "Invalid format. Please enter a valid CIN or GSTIN.",
+              "bot",
+            );
+          } else {
+            const res = await apiClient.post(
+              "/recruiter/registration",
+              { registration_number: val },
+              token,
+            );
+            setCompanyId(res.company_id);
+
+            if (res.onboarding_step === "COMPLETED") {
+              addMessage(
+                "Your company is already vetted! Fast-tracking you to the Command Center...",
+                "bot",
+              );
+              setTimeout(() => router.push("/dashboard/recruiter"), 2000);
+            } else {
+              setState("DETAILS");
+              addMessage("Registration confirmed.", "bot");
+              addMessage("What is the full legal name of your company?", "bot");
+            }
+          }
+        } else if (state === "DETAILS") {
+          const nextDetails = { ...companyDetails };
+          if (
+            !nextDetails.name ||
+            nextDetails.name === "Pending Verification"
+          ) {
+            nextDetails.name = val;
+          } else if (!nextDetails.website) {
+            nextDetails.website = val;
+          } else if (!nextDetails.location) {
+            nextDetails.location = val;
+          } else if (!nextDetails.description) {
+            nextDetails.description = val;
+          }
+
+          setCompanyDetails(nextDetails);
+
+          if (
+            nextDetails.name &&
+            nextDetails.website &&
+            nextDetails.location &&
+            nextDetails.description
+          ) {
+            await apiClient.post(
+              "/recruiter/details",
+              { company_id: companyId, ...nextDetails },
+              token,
+            );
+            setState("ASSESSMENT_PROMPT");
+            showAssessmentPrompt();
+          } else {
+            promptNextDetail(nextDetails);
+          }
+        } else if (state === "ASSESSMENT_PROMPT") {
+          if (val === "Start Assessment") {
+            startAssessment();
+          } else if (val === "Do It Later") {
+            await apiClient.post("/recruiter/skip-assessment", {}, token);
+            addMessage(
+              "No problem! You can complete it later. Note that your dashboard features will remain locked until then.",
               "bot",
             );
             setTimeout(() => router.push("/dashboard/recruiter"), 2000);
-          } else {
-            setState("DETAILS");
-            addMessage("Registration confirmed.", "bot");
-            addMessage("What is the full legal name of your company?", "bot");
           }
-        }
-      } else if (state === "DETAILS") {
-        const nextDetails = { ...companyDetails };
-        if (!nextDetails.name || nextDetails.name === "Pending Verification") {
-          nextDetails.name = val;
-        } else if (!nextDetails.website) {
-          nextDetails.website = val;
-        } else if (!nextDetails.location) {
-          nextDetails.location = val;
-        } else if (!nextDetails.description) {
-          nextDetails.description = val;
-        }
-
-        setCompanyDetails(nextDetails);
-
-        if (
-          nextDetails.name &&
-          nextDetails.website &&
-          nextDetails.location &&
-          nextDetails.description
-        ) {
+        } else if (state === "ASSESSMENT_CHAT") {
+          const currentQ = dynamicQuestions[currentQuestionIndex];
           await apiClient.post(
-            "/recruiter/details",
-            { company_id: companyId, ...nextDetails },
+            "/recruiter/submit-answer",
+            {
+              question_text: currentQ.question_text || currentQ.text,
+              answer: val,
+              category: currentQ.category,
+            },
             token,
           );
-          setState("ASSESSMENT_PROMPT");
-          showAssessmentPrompt();
-        } else {
-          promptNextDetail(nextDetails);
-        }
-      } else if (state === "ASSESSMENT_PROMPT") {
-        if (val === "Start Assessment") {
-          startAssessment();
-        } else if (val === "Do It Later") {
-          await apiClient.post("/recruiter/skip-assessment", {}, token);
-          addMessage(
-            "No problem! You can complete it later. Note that your dashboard features will remain locked until then.",
-            "bot",
-          );
-          setTimeout(() => router.push("/dashboard/recruiter"), 2000);
-        }
-      } else if (state === "ASSESSMENT_CHAT") {
-        const currentQ = dynamicQuestions[currentQuestionIndex];
-        await apiClient.post(
-          "/recruiter/submit-answer",
-          {
-            question_text: currentQ.question_text || currentQ.text,
-            answer: val,
-            category: currentQ.category,
-          },
-          token,
-        );
 
-        const nextIndex = currentQuestionIndex + 1;
-        if (nextIndex < dynamicQuestions.length) {
-          setCurrentQuestionIndex(nextIndex);
-          setTimeLeft(60);
-          addMessage(
-            dynamicQuestions[nextIndex].question_text ||
-              dynamicQuestions[nextIndex].text,
-            "bot",
-          );
-        } else {
-          setIsAssessmentActive(false);
-          await apiClient.post("/recruiter/complete-assessment", {}, token);
-          addMessage(
-            "Assessment complete! Onboarding is finished. Unlocking your dashboard...",
-            "bot",
-          );
-          setTimeout(() => router.push("/dashboard/recruiter"), 2000);
+          const nextIndex = currentQuestionIndex + 1;
+          if (nextIndex < dynamicQuestions.length) {
+            setCurrentQuestionIndex(nextIndex);
+            setTimeLeft(60);
+            addMessage(
+              dynamicQuestions[nextIndex].question_text ||
+                dynamicQuestions[nextIndex].text,
+              "bot",
+            );
+          } else {
+            setIsAssessmentActive(false);
+            await apiClient.post("/recruiter/complete-assessment", {}, token);
+            addMessage(
+              "Assessment complete! Onboarding is finished. Unlocking your dashboard...",
+              "bot",
+            );
+            setTimeout(() => router.push("/dashboard/recruiter"), 2000);
+          }
         }
+      } catch (err) {
+        console.error(err);
+        addMessage("Something went wrong. Please try again.", "bot");
+      } finally {
+        setIsLoading(false);
       }
-    } catch (err) {
-      console.error(err);
-      addMessage("Something went wrong. Please try again.", "bot");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [
-    input,
-    isLoading,
-    addMessage,
-    handleLogout,
-    state,
-    router,
-    companyId,
-    companyDetails,
-    showAssessmentPrompt,
-    promptNextDetail,
-    startAssessment,
-    dynamicQuestions,
-    currentQuestionIndex,
-  ]);
+    },
+    [
+      input,
+      isLoading,
+      addMessage,
+      handleLogout,
+      state,
+      router,
+      companyId,
+      companyDetails,
+      showAssessmentPrompt,
+      promptNextDetail,
+      startAssessment,
+      dynamicQuestions,
+      currentQuestionIndex,
+    ],
+  );
 
   return (
     <div className="flex flex-col h-screen bg-black text-white p-4 max-w-2xl mx-auto border-x border-zinc-800">

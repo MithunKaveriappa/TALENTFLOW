@@ -105,10 +105,11 @@ function LoginForm() {
         addMessage(`Got it, ${name}. Now, please enter your password.`, "bot");
         setState("AWAITING_PASSWORD");
       } else if (state === "AWAITING_PASSWORD") {
-        const { data: authData, error } = await supabase.auth.signInWithPassword({
-          email,
-          password: workingInput,
-        });
+        const { data: authData, error } =
+          await supabase.auth.signInWithPassword({
+            email,
+            password: workingInput,
+          });
 
         if (error) {
           addMessage(
@@ -125,7 +126,8 @@ function LoginForm() {
 
           try {
             const token = authData.session?.access_token;
-            if (!token) throw new Error("Authentication failed: No token received.");
+            if (!token)
+              throw new Error("Authentication failed: No token received.");
 
             const handshake = await apiClient.get("/auth/post-login", token);
 
@@ -139,7 +141,8 @@ function LoginForm() {
               router.replace(handshake.next_step);
             }, 2000);
           } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : "Unknown error";
+            const errorMessage =
+              err instanceof Error ? err.message : "Unknown error";
             addMessage(
               `Security handshake failed: ${errorMessage}. Please contact support.`,
               "bot",

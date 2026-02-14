@@ -37,12 +37,14 @@ declare global {
 export const useVoice = () => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
+  const [hasSupport] = useState(() => 
+    typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition)
+  );
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
   useEffect(() => {
     const SpeechRecognition =
-      window.SpeechRecognition ||
-      window.webkitSpeechRecognition;
+      window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       const rec = new SpeechRecognition() as SpeechRecognitionInstance;
       rec.continuous = false;
@@ -117,6 +119,6 @@ export const useVoice = () => {
     transcript,
     startListening,
     stopListening,
-    hasSupport: !!recognition,
+    hasSupport,
   };
 };

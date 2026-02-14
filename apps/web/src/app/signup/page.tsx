@@ -161,7 +161,8 @@ function SignupForm() {
                 setState("AWAITING_OTP");
               }
             } catch (err) {
-              const errorMessage = err instanceof Error ? err.message : "Email validation failed.";
+              const errorMessage =
+                err instanceof Error ? err.message : "Email validation failed.";
               console.error("Validation Error:", err);
               addMessage(errorMessage, "bot");
             }
@@ -245,7 +246,8 @@ function SignupForm() {
                 router.replace("/login");
               }, 3000);
             } catch (err) {
-              const errorMessage = err instanceof Error ? err.message : "Unknown error";
+              const errorMessage =
+                err instanceof Error ? err.message : "Unknown error";
               addMessage(
                 `We created your account, but couldn't initialize your profile: ${errorMessage}. Please contact support.`,
                 "bot",
