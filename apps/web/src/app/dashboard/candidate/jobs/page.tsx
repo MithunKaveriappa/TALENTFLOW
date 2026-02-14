@@ -24,9 +24,10 @@ export default function CandidateJobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState<string | null>(null);
+  const [assessmentStatus, setAssessmentStatus] = useState<string>("not_started");
 
   useEffect(() => {
-    const loadJobs = async () => {
+    const loadData = async () => {
       try {
         const {
           data: { session },
@@ -36,18 +37,20 @@ export default function CandidateJobsPage() {
           return;
         }
 
-        const jobsData = await apiClient.get(
-          "/candidate/jobs",
-          session.access_token,
-        );
+        const [jobsData, statsData] = await Promise.all([
+          apiClient.get("/candidate/jobs", session.access_token),
+          apiClient.get("/candidate/stats", session.access_token),
+        ]);
+        
         setJobs(jobsData);
+        setAssessmentStatus(statsData.assessment_status);
       } catch (err) {
         console.error("Failed to load jobs:", err);
       } finally {
         setLoading(false);
       }
     };
-    loadJobs();
+    loadData();
   }, [router]);
 
   const handleApply = async (jobId: string) => {
@@ -164,21 +167,36 @@ export default function CandidateJobsPage() {
                       </p>
                     </div>
 
-                    <button
-                      disabled={job.has_applied || applying === job.id}
-                      onClick={() => handleApply(job.id)}
-                      className={`px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-lg active:scale-95 ${
-                        job.has_applied
-                          ? "bg-slate-100 text-slate-400 cursor-default"
-                          : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100"
-                      }`}
-                    >
-                      {applying === job.id
-                        ? "Syncing..."
-                        : job.has_applied
-                          ? "Applied"
-                          : "Apply Now"}
-                    </button>
+                    <div className="flex flex-col items-center gap-2">
+                      <button
+                        disabled={
+                          job.has_applied ||
+                          applying === job.id ||
+                          assessmentStatus !== "completed"
+                        }
+                        onClick={() => handleApply(job.id)}
+                        className={`px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-lg active:scale-95 ${
+                          job.has_applied
+                            ? "bg-slate-100 text-slate-400 cursor-default"
+                            : assessmentStatus !== "completed"
+                              ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                              : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100"
+                        }`}
+                      >
+                        {applying === job.id
+                          ? "Syncing..."
+                          : job.has_applied
+                            ? "Applied"
+                            : assessmentStatus !== "completed"
+                              ? "LOCKED"
+                              : "Apply Now"}
+                      </button>
+                      {assessmentStatus !== "completed" && (
+                        <span className="text-[8px] font-bold text-amber-600 uppercase tracking-widest text-center max-w-30">
+                          Complete assessment to unlock applications
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))

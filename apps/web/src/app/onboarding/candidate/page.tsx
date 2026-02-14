@@ -434,21 +434,34 @@ export default function CandidateOnboarding() {
             addMessage(
               "The assessment requires 10-15 minutes of focus. You will have exactly 60 seconds to answer each question. Please ensure you do not switch tabs or minimize the window, as this is a monitored environment. This stage is critical; your performance will directly determine your profile trust score and impact your career matching. Are you ready to start?",
               "bot",
-              ["Start Assessment"],
+              ["Start Assessment", "Take Later"],
             );
           }, 2500);
         }
       } else if (state === "CONSENT") {
-        const nextState = "COMPLETED";
-        await saveStep(nextState);
-        addMessage(
-          "Good luck! Redirecting you to the assessment suite...",
-          "bot",
-        );
-        setState(nextState);
-        setTimeout(() => {
-          router.push("/assessment/candidate");
-        }, 2000);
+        if (workingInput === "Take Later") {
+          addMessage(
+            "No problem. You can access the dashboard to browse, but remember to complete the assessment later to unlock all features. Redirecting to your command center...",
+            "bot",
+          );
+          const nextState = "COMPLETED";
+          await saveStep(nextState);
+          setState(nextState);
+          setTimeout(() => {
+            router.push("/dashboard/candidate");
+          }, 2500);
+        } else {
+          const nextState = "COMPLETED";
+          await saveStep(nextState);
+          addMessage(
+            "Good luck! Redirecting you to the assessment suite...",
+            "bot",
+          );
+          setState(nextState);
+          setTimeout(() => {
+            router.push("/assessment/candidate");
+          }, 2000);
+        }
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Unknown error";

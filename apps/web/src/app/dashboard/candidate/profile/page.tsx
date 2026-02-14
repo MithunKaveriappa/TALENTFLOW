@@ -164,6 +164,26 @@ export default function CandidateProfilePage() {
     }
   };
 
+  const handleRetakeAssessment = async () => {
+    if (
+      !confirm(
+        "Are you sure you want to retake the assessment? Your current scores will be permanently deleted and you will start fresh.",
+      )
+    )
+      return;
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      await apiClient.post("/assessment/retake", {}, session?.access_token);
+      router.push("/assessment/candidate");
+    } catch (err) {
+      console.error("Retake error:", err);
+      alert("Failed to reset assessment. Please try again.");
+    }
+  };
+
   if (loading)
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -532,6 +552,32 @@ export default function CandidateProfilePage() {
             </button>
           </div>
         </form>
+
+        {/* Danger Zone: Retake Assessment */}
+        <div className="bg-white rounded-4xl p-8 md:p-12 shadow-sm border border-red-50 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-red-50/50 rounded-full blur-3xl -mr-16 -mt-16" />
+
+          <h3 className="text-xl font-black text-slate-900 mb-4 flex items-center gap-3 italic uppercase">
+            <span className="h-1 w-8 bg-red-500 rounded-full" />
+            Performance Reset
+          </h3>
+
+          <p className="text-slate-500 text-sm font-medium leading-relaxed mb-8 max-w-xl">
+            Unsatisfied with your current signals? You can reset your evaluation
+            history to retake the assessment. This will{" "}
+            <span className="text-red-600 font-bold uppercase underline">
+              permanently delete
+            </span>{" "}
+            all previous scores and insights.
+          </p>
+
+          <button
+            onClick={handleRetakeAssessment}
+            className="px-8 py-4 bg-white border-2 border-red-100 text-red-500 rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-300 shadow-sm"
+          >
+            RE-INITIALIZE EVALUATION ENGINE
+          </button>
+        </div>
       </div>
     </div>
   );

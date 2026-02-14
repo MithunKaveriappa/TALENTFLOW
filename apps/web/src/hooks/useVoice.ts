@@ -37,15 +37,16 @@ declare global {
 export const useVoice = () => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
-  const [hasSupport] = useState(() => 
-    typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition)
-  );
+  const [hasSupport, setHasSupport] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
   useEffect(() => {
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
+      // Use microtask to avoid "setState synchronously within an effect" lint error
+      // and ensure hydration matches (starts false on both, then updates on client)
+      Promise.resolve().then(() => setHasSupport(true));
       const rec = new SpeechRecognition() as SpeechRecognitionInstance;
       rec.continuous = false;
       rec.interimResults = false;

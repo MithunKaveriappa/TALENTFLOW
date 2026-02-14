@@ -78,76 +78,6 @@ export default function RecruiterOnboarding() {
 
   const { isListening, transcript, startListening, stopListening } = useVoice();
 
-  const handleLogout = useCallback(async () => {
-    localStorage.removeItem("tf_recruiter_onboarding");
-    await supabase.auth.signOut();
-    router.push("/login");
-  }, [router]);
-
-  // Scroll to bottom
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
-
-  // Sync voice transcript
-  useEffect(() => {
-    if (transcript) {
-      setInput(transcript);
-    }
-  }, [transcript]);
-
-  // Security: Tab switch monitoring
-  useEffect(() => {
-    if (!isAssessmentActive) return;
-
-    const handleVisibilityChange = async () => {
-      if (document.visibilityState === "hidden") {
-        try {
-          const {
-            data: { session },
-          } = await supabase.auth.getSession();
-          if (!session) return;
-
-          const res = await apiClient.post(
-            "/recruiter/tab-switch",
-            {},
-            session.access_token,
-          );
-
-          if (res.status === "blocked") {
-            window.location.href = "/login?error=blocked";
-          } else {
-            addMessage(res.message, "bot");
-          }
-        } catch (err) {
-          console.error("Failed to report tab switch:", err);
-        }
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () =>
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [isAssessmentActive, addMessage]);
-
-  // Timer logic for assessment
-  useEffect(() => {
-    if (isAssessmentActive && timeLeft > 0) {
-      timerRef.current = setInterval(() => {
-        setTimeLeft((prev) => prev - 1);
-      }, 1000);
-    } else if (timeLeft === 0 && isAssessmentActive) {
-      // Auto-timeout handling
-      handleSend("No response provided (timeout)");
-    }
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [isAssessmentActive, timeLeft, handleSend]);
-
   const addMessage = useCallback(
     (text: string, sender: "bot" | "user", options?: string[]) => {
       setMessages((prev) => [
@@ -164,68 +94,27 @@ export default function RecruiterOnboarding() {
     [],
   );
 
-  useEffect(() => {
-    async function init() {
-      if (initialized.current) return;
-      initialized.current = true;
+  const handleLogout = useCallback(async () => {
+    localStorage.removeItem("tf_recruiter_onboarding");
+    await supabase.auth.signOut();
+    router.push("/login");
+  }, [router]);
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        router.replace("/login");
-        return;
-      }
-
-      const name = extractNameFromEmail(user.email || "");
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const profile = await apiClient.get(
-        "/recruiter/profile",
-        session?.access_token,
-      );
-
-      if (profile) {
-        setCompanyId(profile.company_id);
-        if (profile.companies) {
-          setCompanyDetails({
-            name: profile.companies.name || "",
-            website: profile.companies.website || "",
-            location: profile.companies.location || "",
-            description: profile.companies.description || "",
-          });
-        }
-
-        const currentStep = profile.onboarding_step as OnboardingState;
-        setState(currentStep);
-
-        if (currentStep === "REGISTRATION" || currentStep === "INITIAL") {
-          addMessage(
-            `Welcome, ${name}! Let's set up your company profile.`,
-            "bot",
-          );
-          addMessage(
-            "First, please enter your Company Registration Number (CIN or GSTIN).",
-            "bot",
-          );
-          setState("REGISTRATION");
-        } else if (currentStep === "DETAILS") {
-          addMessage(
-            "Let's complete the basic details for your company.",
-            "bot",
-          );
-          promptNextDetail(profile.companies || {});
-        } else if (currentStep === "ASSESSMENT_PROMPT") {
-          showAssessmentPrompt();
-        } else if (currentStep === "COMPLETED") {
-          router.push("/dashboard/recruiter");
-        }
-      }
-    }
-    init();
-  }, [addMessage, promptNextDetail, router, showAssessmentPrompt]);
+  const showAssessmentPrompt = useCallback(() => {
+    addMessage(
+      "Your company profile is set! Now, as part of onboarding, we require a short Recruiter Assessment.",
+      "bot",
+    );
+    addMessage(
+      "This helps us generate your Company Profile Score, which impacts candidate matching and trust signals.",
+      "bot",
+    );
+    addMessage(
+      "Rules: 5 questions, 60s per question, no retakes, one continuous attempt. Copy-paste and tab-switching are strictly monitored.",
+      "bot",
+      ["Start Assessment", "Do It Later"],
+    );
+  }, [addMessage]);
 
   const promptNextDetail = useCallback(
     (details: Record<string, string | null>) => {
@@ -244,22 +133,6 @@ export default function RecruiterOnboarding() {
     },
     [addMessage],
   );
-
-  const showAssessmentPrompt = useCallback(() => {
-    addMessage(
-      "Your company profile is set! Now, as part of onboarding, we require a short Recruiter Assessment.",
-      "bot",
-    );
-    addMessage(
-      "This helps us generate your Company Profile Score, which impacts candidate matching and trust signals.",
-      "bot",
-    );
-    addMessage(
-      "Rules: 5 questions, 60s per question, no retakes, one continuous attempt. Copy-paste and tab-switching are strictly monitored.",
-      "bot",
-      ["Start Assessment", "Do It Later"],
-    );
-  }, [addMessage]);
 
   const startAssessment = useCallback(async () => {
     setIsLoading(true);
@@ -454,6 +327,136 @@ export default function RecruiterOnboarding() {
       currentQuestionIndex,
     ],
   );
+
+  const { isListening, transcript, startListening, stopListening } = useVoice();
+
+  // Scroll to bottom
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  // Sync voice transcript
+  useEffect(() => {
+    if (transcript) {
+      setInput(transcript);
+    }
+  }, [transcript]);
+
+  // Security: Tab switch monitoring
+  useEffect(() => {
+    if (!isAssessmentActive) return;
+
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === "hidden") {
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (!session) return;
+
+          const res = await apiClient.post(
+            "/recruiter/tab-switch",
+            {},
+            session.access_token,
+          );
+
+          if (res.status === "blocked") {
+            window.location.href = "/login?error=blocked";
+          } else {
+            addMessage(res.message, "bot");
+          }
+        } catch (err) {
+          console.error("Failed to report tab switch:", err);
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [isAssessmentActive, addMessage]);
+
+  // Timer logic for assessment
+  useEffect(() => {
+    if (isAssessmentActive && timeLeft > 0) {
+      timerRef.current = setInterval(() => {
+        setTimeLeft((prev) => prev - 1);
+      }, 1000);
+    } else if (timeLeft === 0 && isAssessmentActive) {
+      // Auto-timeout handling
+      handleSend("No response provided (timeout)");
+    }
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [isAssessmentActive, timeLeft, handleSend]);
+
+  useEffect(() => {
+    async function init() {
+      if (initialized.current) return;
+      initialized.current = true;
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        router.replace("/login");
+        return;
+      }
+
+      const name = extractNameFromEmail(user.email || "");
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const profile = await apiClient.get(
+        "/recruiter/profile",
+        session?.access_token,
+      );
+
+      if (profile) {
+        setCompanyId(profile.company_id);
+        if (profile.companies) {
+          setCompanyDetails({
+            name: profile.companies.name || "",
+            website: profile.companies.website || "",
+            location: profile.companies.location || "",
+            description: profile.companies.description || "",
+          });
+        }
+
+        const currentStep = profile.onboarding_step as OnboardingState;
+        setState(currentStep);
+
+        if (currentStep === "REGISTRATION" || currentStep === "INITIAL") {
+          addMessage(
+            `Welcome, ${name}! Let's set up your company profile.`,
+            "bot",
+          );
+          addMessage(
+            "First, please enter your Company Registration Number (CIN or GSTIN).",
+            "bot",
+          );
+          setState("REGISTRATION");
+        } else if (currentStep === "DETAILS") {
+          addMessage(
+            "Let's complete the basic details for your company.",
+            "bot",
+          );
+          promptNextDetail(profile.companies || {});
+        } else if (currentStep === "ASSESSMENT_PROMPT") {
+          showAssessmentPrompt();
+        } else if (currentStep === "COMPLETED") {
+          router.push("/dashboard/recruiter");
+        }
+      }
+    }
+    init();
+  }, [addMessage, promptNextDetail, router, showAssessmentPrompt]);
+
 
   return (
     <div className="flex flex-col h-screen bg-black text-white p-4 max-w-2xl mx-auto border-x border-zinc-800">
