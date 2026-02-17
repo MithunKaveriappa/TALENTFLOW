@@ -83,7 +83,7 @@ export default function SettingsPage() {
     <div className="flex min-h-screen bg-slate-50">
       <CandidateSidebar assessmentStatus={profile?.assessment_status} />
 
-      <main className="flex-1 ml-64 p-8 md:p-12">
+      <main className="flex-1 ml-64 p-8 md:p-12 overflow-y-auto">
         <div className="max-w-4xl mx-auto">
           <header className="mb-10">
             <h1 className="text-3xl font-black text-slate-900 tracking-tight uppercase italic mb-2">

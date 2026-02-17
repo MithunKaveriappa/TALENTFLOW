@@ -133,6 +133,8 @@ Updated: February 14, 2026 (Verified against Supabase live database)
 - `job_title` (text)
 - `linkedin_url` (text)
 - `bio` (text)
+- `team_role` (text)
+- `is_admin` (boolean)
 - `onboarding_step` (text)
 - `warning_count` (integer)
 - `completion_score` (integer)
@@ -161,6 +163,9 @@ Updated: February 14, 2026 (Verified against Supabase live database)
 - `successful_hires_count` (integer)
 - `visibility_tier` (text)
 - `verification_status` (text)
+- `logo_url` (text)
+- `brand_colors` (jsonb)
+- `life_at_photo_urls` (text[])
 - `created_at` (timestamp with time zone)
 - `updated_at` (timestamp with time zone)
 
@@ -270,6 +275,7 @@ Updated: February 14, 2026 (Verified against Supabase live database)
 - `candidate_id` (uuid, Foreign Key -> candidate_profiles.user_id)
 - `status` (application_status)
 - `feedback` (text)
+- `invitation_message` (text)
 - `created_at` (timestamp with time zone)
 - `updated_at` (timestamp with time zone)
 
@@ -309,14 +315,101 @@ Updated: February 14, 2026 (Verified against Supabase live database)
 - `reason` (text)
 - `blocked_at` (timestamp with time zone)
 
+### `job_application_status_history`
+- `id` (uuid, Primary Key)
+- `application_id` (uuid, Foreign Key -> job_applications.id)
+- `old_status` (text)
+- `new_status` (text)
+- `changed_by` (uuid, Foreign Key -> users.id)
+- `reason` (text)
+- `created_at` (timestamp with time zone)
+
+### `interviews`
+- `id` (uuid, Primary Key)
+- `job_id` (uuid, Foreign Key -> jobs.id)
+- `candidate_id` (uuid, Foreign Key -> candidate_profiles.user_id)
+- `recruiter_id` (uuid, Foreign Key -> recruiter_profiles.user_id)
+- `application_id` (uuid, Foreign Key -> job_applications.id)
+- `status` (text)
+- `round_name` (text)
+- `round_number` (integer)
+- `format` (text)
+- `meeting_link` (text)
+- `location` (text)
+- `interviewer_names` (text[])
+- `feedback` (text)
+- `cancellation_reason` (text)
+- `created_at` (timestamp with time zone)
+- `updated_at` (timestamp with time zone)
+
+### `interview_slots`
+- `id` (uuid, Primary Key)
+- `interview_id` (uuid, Foreign Key -> interviews.id)
+- `start_time` (timestamp with time zone)
+- `end_time` (timestamp with time zone)
+- `is_selected` (boolean)
+- `created_at` (timestamp with time zone)
+
+### `chat_threads`
+- `id` (uuid, Primary Key)
+- `candidate_id` (uuid, Foreign Key -> users.id)
+- `recruiter_id` (uuid, Foreign Key -> users.id)
+- `is_active` (boolean)
+- `last_message_at` (timestamp with time zone)
+- `created_at` (timestamp with time zone)
+
+### `chat_messages`
+- `id` (uuid, Primary Key)
+- `thread_id` (uuid, Foreign Key -> chat_threads.id)
+- `sender_id` (uuid, Foreign Key -> users.id)
+- `text` (text)
+- `is_read` (boolean)
+- `created_at` (timestamp with time zone)
+
+### `chat_reports`
+- `id` (uuid, Primary Key)
+- `message_id` (uuid, Foreign Key -> chat_messages.id)
+- `reporter_id` (uuid, Foreign Key -> users.id)
+- `thread_id` (uuid, Foreign Key -> chat_threads.id)
+- `reason` (text)
+- `status` (text)
+- `admin_notes` (text)
+- `created_at` (timestamp with time zone)
+
+### `job_views`
+- `id` (uuid, Primary Key)
+- `job_id` (uuid, Foreign Key -> jobs.id)
+- `candidate_id` (uuid, Foreign Key -> candidate_profiles.user_id)
+- `viewer_ip` (text)
+- `user_agent` (text)
+- `created_at` (timestamp with time zone)
+
+### `team_invitations`
+- `id` (uuid, Primary Key)
+- `company_id` (uuid, Foreign Key -> companies.id)
+- `inviter_id` (uuid, Foreign Key -> users.id)
+- `email` (text)
+- `status` (text)
+- `created_at` (timestamp with time zone)
+- `expires_at` (timestamp with time zone)
+
 ## Storage Buckets
 
 ### `resumes`
 - **Purpose**: Stores candidate PDF resumes.
 - **RLS**: Restricted to own folder.
 
-### `profile_photos`
-- **Purpose**: User avatars.
+### `documents`
+- **Purpose**: Identity documents, Aadhaar, etc.
+
+### `avatars`
+- **Purpose**: User profile photos.
+
+### `company-logos`
+- **Purpose**: Company brand logos.
+
+### `company-assets`
+- **Purpose**: Company photos, videos and office assets.
 
 ## Row Level Security (RLS) Policies
 

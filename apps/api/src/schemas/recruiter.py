@@ -20,6 +20,15 @@ class CompanyProfileUpdate(BaseModel):
     target_market: Optional[str] = None
     hiring_focus_areas: Optional[List[str]] = None
     avg_deal_size_range: Optional[str] = None
+    logo_url: Optional[str] = None
+    brand_colors: Optional[Dict[str, str]] = None
+    life_at_photo_urls: Optional[List[str]] = None
+
+class TeamInviteRequest(BaseModel):
+    email: EmailStr
+
+class TeamMemberUpdate(BaseModel):
+    is_admin: bool
 
 class RecruiterStats(BaseModel):
     active_jobs_count: int
@@ -91,5 +100,14 @@ class JobAIPrompt(BaseModel):
 
 class ApplicationStatusUpdate(BaseModel):
     application_id: str
+    status: str
+    feedback: Optional[str] = None
+
+class JobInviteRequest(BaseModel):
+    job_id: str
+    message: Optional[str] = None
+
+class BulkApplicationStatusUpdate(BaseModel):
+    application_ids: List[str]
     status: str
     feedback: Optional[str] = None

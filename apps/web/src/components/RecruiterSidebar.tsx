@@ -3,125 +3,217 @@
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { 
+  LayoutDashboard, 
+  Briefcase, 
+  Users, 
+  Search, 
+  MessageSquare, 
+  Settings, 
+  UsersRound, 
+  Compass, 
+  Zap, 
+  Globe, 
+  LogOut,
+  ShieldCheck,
+  Building2,
+  FileText
+} from "lucide-react";
 
 interface RecruiterSidebarProps {
   assessmentStatus?: string;
+  teamRole?: string;
+  profileScore?: number;
+}
+
+interface SidebarItem {
+  label: string;
+  href: string;
+  icon: React.ReactNode;
+  locked?: boolean;
+  description?: string;
+}
+
+interface SidebarGroup {
+  label: string;
+  icon: React.ReactNode;
+  items: SidebarItem[];
 }
 
 export default function RecruiterSidebar({
   assessmentStatus,
+  teamRole,
+  profileScore = 0,
 }: RecruiterSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
+
+  const isLocked = profileScore === 0;
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.replace("/login");
   };
 
+  const groups: SidebarGroup[] = [
+    {
+      label: "Overview",
+      icon: <LayoutDashboard className="h-4 w-4" />,
+      items: [
+        { label: "Dashboard", href: "/dashboard/recruiter", icon: <LayoutDashboard className="h-4 w-4" /> },
+        { label: "Messages", href: "/dashboard/recruiter/messages", icon: <MessageSquare className="h-4 w-4" />, locked: isLocked },
+      ]
+    },
+    {
+      label: "Hiring Hub",
+      icon: <Briefcase className="h-4 w-4" />,
+      items: [
+        { 
+          label: "Post a Job", 
+          href: "/dashboard/recruiter/hiring/jobs/new", 
+          icon: <Zap className="h-4 w-4" />, 
+          locked: isLocked,
+          description: "Strategic role creation with AI alignment"
+        },
+        { 
+          label: "Jobs Posted", 
+          href: "/dashboard/recruiter/hiring/jobs", 
+          icon: <Briefcase className="h-4 w-4" />,
+          description: "Management interface for active, paused, and archived roles"
+        },
+        { 
+          label: "Applied", 
+          href: "/dashboard/recruiter/hiring/applications", 
+          icon: <FileText className="h-4 w-4" />,
+          description: "An end-to-end tracking system for candidates"
+        },
+      ]
+    },
+    {
+      label: "Talent Hub",
+      icon: <Users className="h-4 w-4" />,
+      items: [
+        { 
+          label: "Candidate Pool", 
+          href: "/dashboard/recruiter/hiring/pool", 
+          icon: <UsersRound className="h-4 w-4" />, 
+          locked: isLocked,
+          description: "Access to the global database of verified talent"
+        },
+        { label: "Recommended", href: "/dashboard/recruiter/intelligence/recommendations", icon: <Zap className="h-4 w-4" />, locked: isLocked },
+        { label: "Search", href: "/dashboard/recruiter/intelligence/search", icon: <Search className="h-4 w-4" />, locked: isLocked },
+        { label: "Career GPS", href: "/dashboard/recruiter/intelligence/gps", icon: <Compass className="h-4 w-4" />, locked: isLocked },
+      ]
+    },
+    {
+      label: "Organization",
+      icon: <Building2 className="h-4 w-4" />,
+      items: [
+        { label: "Employer Branding", href: "/dashboard/recruiter/organization/branding", icon: <Globe className="h-4 w-4" /> },
+        { label: "Feed", href: "/dashboard/recruiter/organization/community", icon: <Users className="h-4 w-4" /> },
+        teamRole === "admin" ? { label: "Team", href: "/dashboard/recruiter/organization/team", icon: <UsersRound className="h-4 w-4" /> } : null,
+      ].filter(Boolean) as { label: string; href: string; icon: React.ReactNode; locked?: boolean }[]
+    },
+    {
+      label: "Account",
+      icon: <Settings className="h-4 w-4" />,
+      items: [
+        { label: "Profile", href: "/dashboard/recruiter/account/profile", icon: <Users className="h-4 w-4" /> },
+        { label: "Settings", href: "/dashboard/recruiter/account/settings", icon: <Settings className="h-4 w-4" /> },
+      ]
+    }
+  ];
+
   return (
-    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col fixed h-full z-30">
-      <div className="p-8 border-b border-slate-50">
+    <aside className="w-64 bg-[#0f172a] border-r border-slate-800 flex flex-col fixed h-full z-30 transition-all duration-300">
+      <div className="p-8">
         <div
-          className="flex items-center gap-3 cursor-pointer"
+          className="flex items-center gap-3 cursor-pointer group"
           onClick={() => router.push("/dashboard/recruiter")}
         >
-          <div className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-100">
-            <div className="h-5 w-5 rounded bg-white rotate-45" />
+          <div className="h-9 w-9 rounded-lg bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-transform duration-300">
+            <div className="h-4 w-4 rounded-sm bg-white rotate-45 group-hover:rotate-0 transition-transform duration-500" />
           </div>
-          <span className="font-black text-slate-900 tracking-tighter uppercase text-lg">
-            TalentFlow
+          <span className="font-bold text-white tracking-tight text-xl">
+            Talent<span className="text-indigo-400">Flow</span>
           </span>
         </div>
       </div>
 
-      <nav className="flex-1 p-6 space-y-1 overflow-y-auto custom-scrollbar">
-        <SidebarLink
-          label="Dashboard"
-          href="/dashboard/recruiter"
-          active={pathname === "/dashboard/recruiter"}
-        />
-        <SidebarLink
-          label="Post a Job"
-          href="/dashboard/recruiter/jobs/new"
-          active={pathname === "/dashboard/recruiter/jobs/new"}
-        />
-        <SidebarLink
-          label="My Jobs"
-          href="/dashboard/recruiter/jobs"
-          active={pathname === "/dashboard/recruiter/jobs"}
-        />
-        <SidebarLink
-          label="Candidate Pool"
-          href="/dashboard/recruiter/pool"
-          active={pathname === "/dashboard/recruiter/pool"}
-        />
-        <SidebarLink label="Candidate Search" href="#" />
-        <SidebarLink
-          label="Feed"
-          href="/dashboard/recruiter/community"
-          active={pathname === "/dashboard/recruiter/community"}
-        />
-        <SidebarLink
-          label="Profile"
-          href="/dashboard/recruiter/profile"
-          active={pathname === "/dashboard/recruiter/profile"}
-        />
-        <SidebarLink
-          label="Messages"
-          href="/dashboard/recruiter/messages"
-          active={pathname === "/dashboard/recruiter/messages"}
-        />
-        <SidebarLink label="Settings" href="#" />
+      <nav className="flex-1 px-4 space-y-6 overflow-y-auto scrollbar-hide hover:scrollbar-default transition-all duration-300">
+        <style jsx global>{`
+          .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+          }
+          .scrollbar-hide {
+            -ms-overflow-style: none; /* IE and Edge */
+            scrollbar-width: none; /* Firefox */
+          }
+          .hover\:scrollbar-default:hover::-webkit-scrollbar {
+            display: block;
+            width: 4px;
+          }
+          .hover\:scrollbar-default:hover::-webkit-scrollbar-track {
+            background: transparent;
+          }
+          .hover\:scrollbar-default:hover::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 10px;
+          }
+        `}</style>
+        {groups.map((group, idx) => (
+          <div key={idx} className="space-y-2">
+            <h3 className="px-4 text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">
+              {group.label}
+            </h3>
+            <div className="space-y-1">
+              {group.items.map((item, itemIdx) => (
+                <SidebarLink
+                  key={itemIdx}
+                  label={item.label}
+                  href={item.href}
+                  icon={item.icon}
+                  active={pathname === item.href}
+                  locked={item.locked}
+                  description={item.description}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
       </nav>
 
-      <div className="p-4 border-t border-slate-50 space-y-3">
+      <div className="p-4 mt-auto border-t border-slate-800/50 space-y-3">
         {assessmentStatus && (
-          <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
-            <div className="flex items-center gap-2 mb-1.5">
-              <div
-                className={`h-1.5 w-1.5 rounded-full ${assessmentStatus === "completed" ? "bg-emerald-500" : "bg-amber-500 animate-pulse"}`}
-              />
-              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">
+          <div className="bg-slate-900/50 rounded-2xl p-4 border border-slate-800/50 backdrop-blur-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <ShieldCheck className={`h-4 w-4 ${assessmentStatus === "completed" ? "text-emerald-400" : "text-amber-400"}`} />
+              <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">
                 Verification Hub
               </span>
             </div>
-            <p className="text-[9px] text-slate-400 font-medium leading-tight">
-              Status:{" "}
-              {assessmentStatus.charAt(0).toUpperCase() +
-                assessmentStatus.slice(1)}
-            </p>
-            {assessmentStatus !== "completed" && (
-              <button
-                onClick={() => router.push("/onboarding/recruiter")}
-                className="mt-2 w-full py-1.5 bg-amber-600 text-white text-[9px] font-bold uppercase tracking-widest rounded-lg hover:bg-amber-700 transition-colors"
-              >
-                Complete Now
-              </button>
-            )}
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-slate-500 font-medium">
+                {assessmentStatus.charAt(0).toUpperCase() + assessmentStatus.slice(1)}
+              </span>
+              {assessmentStatus !== "completed" && (
+                <button
+                  onClick={() => router.push("/onboarding/recruiter")}
+                  className="px-2 py-1 bg-amber-500/10 text-amber-500 text-[10px] font-bold rounded-md hover:bg-amber-500/20 transition-colors"
+                >
+                  Verify
+                </button>
+              )}
+            </div>
           </div>
         )}
 
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-4 py-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all group border border-transparent hover:border-red-100"
+          className="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-rose-400 hover:bg-rose-500/5 rounded-xl transition-all group font-medium"
         >
-          <svg
-            className="h-4 w-4 transition-transform group-hover:scale-110"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-            />
-          </svg>
-          <span className="text-xs font-black uppercase tracking-widest">
-            Logout
-          </span>
+          <LogOut className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+          <span className="text-sm">Logout</span>
         </button>
       </div>
     </aside>
@@ -131,28 +223,69 @@ export default function RecruiterSidebar({
 function SidebarLink({
   label,
   href,
+  icon,
   active = false,
+  locked = false,
+  description,
 }: {
   label: string;
   href: string;
+  icon: React.ReactNode;
   active?: boolean;
+  locked?: boolean;
+  description?: string;
 }) {
+  if (locked) {
+    return (
+      <div
+        className="flex items-center justify-between px-4 py-3 rounded-xl opacity-40 cursor-not-allowed group"
+        title="Complete company assessment to unlock"
+      >
+        <div className="flex items-center gap-3">
+          <div className="text-slate-500">{icon}</div>
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-slate-500">
+              {label}
+            </span>
+            {description && (
+              <span className="text-[10px] text-slate-600 line-clamp-1">
+                {description}
+              </span>
+            )}
+          </div>
+        </div>
+        <ShieldCheck className="h-3 w-3 text-slate-600" />
+      </div>
+    );
+  }
+
   return (
     <Link href={href}>
       <div
         className={`
-        flex items-center gap-3 px-4 py-3 rounded-xl transition-all
-        ${active ? "bg-blue-50 text-blue-600 font-bold" : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"}
+        flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group
+        ${active 
+          ? "bg-indigo-600/10 text-indigo-400 shadow-sm" 
+          : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"}
       `}
       >
-        <div
-          className={`h-1.5 w-1.5 rounded-full ${active ? "bg-blue-600" : "bg-transparent"}`}
-        />
-        <span className="text-xs font-bold uppercase tracking-widest">
-          {label}
-        </span>
+        <div className={`transition-colors duration-200 ${active ? "text-indigo-400" : "text-slate-500 group-hover:text-slate-300"}`}>
+          {icon}
+        </div>
+        <div className="flex flex-col">
+          <span className={`text-sm font-medium transition-colors duration-200`}>
+            {label}
+          </span>
+          {description && (
+            <span className={`text-[10px] leading-tight transition-colors duration-200 ${active ? "text-indigo-400/70" : "text-slate-500 group-hover:text-slate-400"}`}>
+              {description}
+            </span>
+          )}
+        </div>
+        {active && (
+          <div className="ml-auto w-1 h-4 bg-indigo-400 rounded-full shadow-[0_0_8px_rgba(129,140,248,0.5)]" />
+        )}
       </div>
     </Link>
   );
 }
-

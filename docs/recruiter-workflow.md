@@ -46,31 +46,22 @@ Exactly **5 questions** assessing the following dimensions:
 - This score determines the company's reputation and visibility to top-tier candidates.
 - **Persistence**: Results are stored in `recruiter_assessment_responses` for auditing and scoring.
 
-5. Dashboard Unlock
+5. Dashboard Unlock & "Do It Later" Logic
 
-- Dashboard is **locked** (blurred/overlay) until the 5-question assessment is completed.
-- The premium dashboard features a "Company Profile Score" ring displaying the AI-calculated trust level.
+- **Traditional Path**: Complete the 5-question assessment to unlock all features immediately.
+- **"Do It Later" Path**: Recruiters can skip the assessment during onboarding to browse limited dashboard features.
+- **Hard Locks**: High-impact sections like **Job Management**, **Career GPS**, and **Candidate Intelligence** are functionally locked until a `profile_score > 0` is achieved.
+- **Trust Visualization**: The premium dashboard features a "Profile Signal Strength" tracker and a "Company Visibility" tier based on the score.
 
-One continuous session
+6. Hiring Funnel & Analytics
 
-Questions assess:
+The recruiter dashboard now features a **Cumulative Hiring Funnel**:
 
-hiring intent
-ethics
-clarity of roles
-candidate value proposition
-fit definition
-Signal-based scoring
-No raw answers stored
+- **Real-time Tracking**: Monitors total volume across `Applied` → `Shortlisted` → `Interviewed` → `Hired`.
+- **Conversion Insights**: Provides pass-through percentages to help recruiters identify bottlenecks in their process.
+- **Health Indicators**: Automatically flags funnel performance as "Optimal" or "Requires Attention."
 
-5. Company Profile Score Generation
-
-Recruiter assessment completes
-Company score calculated
-Stored at company level
-Shared across all recruiters of that company
-
-6. Talent Discovery (Candidate Pool)
+7. Talent Discovery (Candidate Pool)
 
 Once the dashboard is unlocked, recruiters gain access to the **TalentFlow Candidate Pool**:
 
@@ -84,13 +75,29 @@ Once the dashboard is unlocked, recruiters gain access to the **TalentFlow Candi
 The recruiter workspace utilizes the Shared Sidebar (`RecruiterSidebar.tsx`) with professional blue accents, ensuring navigation consistency with the candidate experience.
 
 **Core Navigation Hub:**
+
 - **Dashboard**: High-level overview of active jobs, applicant volume, and company trust score.
+- **Applied Pipeline**: Grouped view of reactive applicants for active jobs with "Skill Match" badges.
+- **Recommended Talent**: Proactive AI-driven cultural matching (70% Psy / 30% Beh).
+- **Candidate Pool**: Global search and sourcing hub for all verified platform users.
 - **Post a Job**: Direct entry into the job creation flow with AI assistance.
-- **Jobs**: Management interface for active, closed, and drafted job listings.
-- **Feed**: Talent engagement platform for company branding and ecosystem updates.
-- **Candidates**: Access to the AI-curated talent pool and applicant management.
+- **My Jobs**: Management interface for active, closed, and drafted job listings.
 - **Settings**: Configuration for company profile and recruiter preferences.
-- **Log Out**: Secure session termination.
+
+8. Structured Hiring Lifecycle & Guardrails
+
+To maintain platform high-trust standards, all hiring follows a forced-path lifecycle:
+
+1.  **Stage 1: Applied / Recommended**: Candidate enters the pool.
+2.  **Stage 2: Shortlisted**: Recruiter flags interest. Chat opens automatically.
+3.  **Stage 3: Interview Scheduled**: Secure Jitsi room is generated. Standardized UTC scheduling.
+4.  **Stage 4: Offer / Reject**: Final decision. **Guardrail**: "Offer" is disabled unless Stage 3 (Interview) was logged.
+
+**Infrastructure Support:**
+
+- **Audit Logging**: Every status movement is recorded in the `job_application_status_history` table for transparency.
+- **Bulk Workflow**: Efficient bulk shortlisting/rejection in the Applied Pipeline to handle high applicant volumes.
+- **Personalized Invites**: Direct-from-pool invitations including specific job context and personalized messages for Category B talent.
 
 **Verification Hub (Sidebar Widget):**
 A real-time status tracker in the sidebar that ensures the recruiter maintains a high-quality profile and completes required identity or company verification steps.

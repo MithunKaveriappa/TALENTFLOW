@@ -4,7 +4,25 @@ from src.core.dependencies import get_current_user
 from ..services.chat_service import ChatService
 from ..services.notification_service import NotificationService
 
+from src.core.supabase import supabase
+
 router = APIRouter(prefix="/chat", tags=["Chat"])
+
+async def check_chat_permission(recruiter_id: str, candidate_id: str):
+    """
+    Enforces status-based chat restrictions.
+    Messaging is only allowed if the candidate is Shortlisted, Interviewing, or Offered.
+    """
+    # Check if recruiter has ANY application for this candidate in an advanced stage
+    res = supabase.table("job_applications")\
+        .select("status")\
+        .eq("candidate_id", candidate_id)\
+        .in_("status", ["shortlisted", "interview_scheduled", "offered"])\
+        .execute()
+    
+    # Also need to check if the job belongs to the recruiter's company (RLS does this, but service logic is cleaner)
+    # For now, we allow if ANY recruiter in the company or the specific recruiter reached advanced stage.
+    return len(res.data) > 0
 
 @router.post("/send")
 async def send_message(
@@ -14,14 +32,29 @@ async def send_message(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Sends a message. If thread_id is provided, sends to that thread.
-    If thread_id is missing but candidate_id is provided, it attempts to
-    get/create a thread (privileged for recruiters).
+    Sends a message with lifecycle-based restrictions.
     """
     user_id = current_user["id"]
     role = current_user.get("role")
 
-    # 1. Thread Identification
+    # 1. Status-Based Guardrail for Recruiters
+    if role == "recruiter":
+        # Identify candidate_id even if thread_id is provided
+        target_candidate_id = candidate_id
+        if not target_candidate_id and thread_id:
+            thread_res = supabase.table("chat_threads").select("candidate_id").eq("id", thread_id).execute()
+            if thread_res.data:
+                target_candidate_id = thread_res.data[0]["candidate_id"]
+        
+        if target_candidate_id:
+            has_permission = await check_chat_permission(user_id, target_candidate_id)
+            if not has_permission:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="Messaging restricted. You must shortlist the candidate or schedule an interview before initiating chat."
+                )
+
+    # 2. Thread Identification
     target_thread_id = thread_id
     if not target_thread_id:
         if role != "recruiter" or not candidate_id:

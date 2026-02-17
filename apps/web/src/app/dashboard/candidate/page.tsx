@@ -4,8 +4,30 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import CandidateSidebar from "@/components/CandidateSidebar";
 import { TermsModal } from "@/components/TermsModal";
+import { 
+  CheckCircle2, 
+  Video, 
+  ArrowRight,
+  Target
+} from "lucide-react";
+
+interface LatestApplication {
+  id: string;
+  status: string;
+  jobs?: {
+    title: string;
+    companies?: {
+      name: string;
+      logo_url?: string;
+    }
+  };
+  interviews?: Array<{
+    meeting_link?: string;
+  }>;
+}
 
 interface ComponentScores {
   skill?: number;
@@ -42,6 +64,7 @@ export default function CandidateDashboard() {
   const router = useRouter();
   const [results, setResults] = useState<AssessmentResults | null>(null);
   const [stats, setStats] = useState<CandidateStats | null>(null);
+  const [latestApp, setLatestApp] = useState<LatestApplication | null>(null);
   const [loading, setLoading] = useState(true);
   const [showTerms, setShowTerms] = useState(false);
 
@@ -61,13 +84,15 @@ export default function CandidateDashboard() {
           return;
         }
 
-        const [resultsData, statsData] = await Promise.all([
+        const [resultsData, statsData, appData] = await Promise.all([
           apiClient.get("/assessment/results", authSession.access_token),
           apiClient.get("/candidate/stats", authSession.access_token),
+          apiClient.get("/candidate/latest-application", authSession.access_token),
         ]);
 
         setResults(resultsData);
         setStats(statsData);
+        setLatestApp(appData);
       } catch (err) {
         console.error("Failed to load dashboard data:", err);
       } finally {
@@ -101,10 +126,10 @@ export default function CandidateDashboard() {
     <div className="flex min-h-screen bg-slate-50">
       <CandidateSidebar assessmentStatus={stats?.assessment_status} />
 
-      {/* Main Content */}
       <main className="flex-1 ml-64 p-6 md:p-12 overflow-y-auto">
-        {isLocked ? (
-          <div className="max-w-4xl mx-auto py-12">
+        <div className="max-w-7xl mx-auto">
+          {isLocked ? (
+            <div className="max-w-4xl mx-auto py-12">
             <header className="mb-12">
               <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase italic mb-2">
                 Command Center Locked
@@ -180,14 +205,14 @@ export default function CandidateDashboard() {
             </div>
           </div>
         ) : (
-          <div className="max-w-5xl mx-auto space-y-8">
-            <header className="flex justify-between items-end mb-12">
+          <div className="max-w-5xl mx-auto space-y-12">
+            <header className="flex justify-between items-end">
               <div>
                 <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none uppercase italic">
-                  Dashboard
+                  Command Center
                 </h1>
                 <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.3em] mt-2">
-                  Real-time Performance Monitoring
+                  Session: Live Transmission
                 </p>
               </div>
               <div className="flex items-end gap-8">
@@ -210,42 +235,6 @@ export default function CandidateDashboard() {
                     {stats?.profile_strength?.toUpperCase() || "LOW"}
                   </div>
                 </div>
-                <div className="text-right hidden sm:block">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    Completion
-                  </span>
-                  <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
-                    <span className="text-indigo-600">
-                      {stats?.completion_score || 0}%
-                    </span>
-                  </div>
-                </div>
-                <div className="text-right hidden sm:block">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    Identity Status
-                  </span>
-                  <div
-                    className={`flex items-center gap-2 font-bold text-sm ${stats?.identity_verified ? "text-emerald-600" : "text-amber-600"}`}
-                  >
-                    <div
-                      className={`h-1.5 w-1.5 rounded-full ${stats?.identity_verified ? "bg-emerald-500" : "bg-amber-500"}`}
-                    />
-                    {stats?.identity_verified ? "VERIFIED" : "PENDING"}
-                  </div>
-                </div>
-                <div className="text-right hidden sm:block">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    Trust Status
-                  </span>
-                  <div
-                    className={`flex items-center gap-2 font-bold text-sm ${stats?.account_status === "Active" ? "text-indigo-600" : "text-red-600"}`}
-                  >
-                    <div
-                      className={`h-1.5 w-1.5 rounded-full ${stats?.account_status === "Active" ? "bg-indigo-500" : "bg-red-500"}`}
-                    />
-                    {stats?.account_status?.toUpperCase() || "ACTIVE"}
-                  </div>
-                </div>
                 <button
                   onClick={handleLogout}
                   className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-red-500 hover:bg-red-50 hover:border-red-100 transition-all shadow-sm active:scale-95"
@@ -254,6 +243,102 @@ export default function CandidateDashboard() {
                 </button>
               </div>
             </header>
+
+            {/* Application Roadmap (Status-Specific) */}
+            {latestApp ? (
+              <section className="bg-white rounded-5xl border border-slate-200 p-10 shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-8">
+                  <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                    latestApp.status === 'recommended' ? 'bg-blue-50 text-blue-600' :
+                    latestApp.status === 'shortlisted' ? 'bg-emerald-50 text-emerald-600' :
+                    'bg-slate-50 text-slate-500'
+                  }`}>
+                    {latestApp.status.replace('_', ' ')}
+                  </span>
+                </div>
+
+                <div className="flex flex-col md:flex-row gap-10 items-start">
+                  <div className="h-20 w-20 rounded-3xl bg-slate-50 border border-slate-100 flex items-center justify-center text-3xl shrink-0 overflow-hidden relative">
+                    {latestApp.jobs?.companies?.logo_url ? (
+                        <Image 
+                          src={latestApp.jobs.companies.logo_url} 
+                          alt={latestApp.jobs.companies.name || "Company Logo"}
+                          fill
+                          className="object-contain p-4" 
+                        />
+                    ) : (
+                        <span className="text-slate-300">🏢</span>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-2">
+                       {latestApp.status === 'interview_scheduled' ? 'Action Required: Interview Protocol' : 
+                        latestApp.status === 'shortlisted' ? 'Transmission Success: Shortlisted' :
+                        'Application Synchronized'}
+                    </h2>
+                    <p className="text-slate-500 font-medium mb-6">
+                        {latestApp.jobs?.title} at <span className="text-slate-900 font-bold">{latestApp.jobs?.companies?.name}</span>
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <StatusStep 
+                            label="Applied" 
+                            active={['applied', 'recommended', 'shortlisted', 'invited', 'interview_scheduled', 'offered'].includes(latestApp.status)} 
+                            done={['shortlisted', 'invited', 'interview_scheduled', 'offered'].includes(latestApp.status)}
+                        />
+                        <StatusStep 
+                            label="Shortlisted" 
+                            active={['shortlisted', 'invited', 'interview_scheduled', 'offered'].includes(latestApp.status)} 
+                            done={['interview_scheduled', 'offered'].includes(latestApp.status)}
+                        />
+                        <StatusStep 
+                            label="Interview" 
+                            active={['interview_scheduled', 'offered'].includes(latestApp.status)} 
+                            done={['offered'].includes(latestApp.status)}
+                        />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Conditional Call to Action */}
+                {latestApp.status === 'interview_scheduled' && (
+                  <div className="mt-10 p-6 bg-blue-600 rounded-3xl text-white flex flex-col md:flex-row items-center gap-6 shadow-xl shadow-blue-200 animate-in fade-in slide-in-from-bottom-4">
+                    <div className="h-12 w-12 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
+                      <Video className="h-6 w-6" />
+                    </div>
+                    <div className="flex-1 text-center md:text-left">
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-1">Upcoming Virtual Sync</p>
+                      <h4 className="text-lg font-bold">Jitsu Meeting Link is Active</h4>
+                    </div>
+                    {latestApp.interviews?.[0]?.meeting_link && (
+                        <a 
+                            href={latestApp.interviews[0].meeting_link} 
+                            target="_blank"
+                            className="bg-white text-blue-600 px-8 py-3 rounded-xl font-black uppercase tracking-widest text-sm hover:scale-105 transition-all shadow-lg flex items-center gap-2"
+                        >
+                            Enter Room
+                            <ArrowRight className="h-4 w-4" />
+                        </a>
+                    )}
+                  </div>
+                )}
+              </section>
+            ) : (
+              <section className="bg-slate-900 rounded-[2.5rem] p-12 text-white overflow-hidden relative shadow-2xl">
+                <div className="relative z-10">
+                    <h2 className="text-3xl font-black tracking-tight mb-4 uppercase italic">No Active Missions</h2>
+                    <p className="text-blue-300/80 max-w-md font-medium text-sm leading-relaxed">Your profile signals are live, but you haven&apos;t applied to any roles yet. Start exploring calibrated matches in the pool.</p>
+                    <button 
+                        onClick={() => router.push('/dashboard/candidate/community')}
+                        className="mt-8 bg-blue-600 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl shadow-blue-500/20 hover:bg-blue-500 transition-all active:scale-95 flex items-center gap-2"
+                    >
+                        Explore Elite Pool
+                        <Target className="h-4 w-4" />
+                    </button>
+                </div>
+                <div className="absolute top-0 right-0 -mr-20 -mt-20 h-80 w-80 bg-blue-600/20 blur-[100px] rounded-full" />
+              </section>
+            )}
 
             {/* Global Score Card */}
             <div className="bg-slate-900 rounded-[2.5rem] p-10 md:p-16 text-white shadow-2xl relative overflow-hidden">
@@ -341,6 +426,27 @@ export default function CandidateDashboard() {
                 </div>
               </div>
             </div>
+
+            {/* Signal Calibration Alerts */}
+            {(scores.behavioral === 0 || scores.psychometric === 0) && (
+              <div className="bg-amber-50 border border-amber-200 rounded-4xl p-8 flex items-center justify-between gap-6">
+                <div className="flex items-center gap-6">
+                  <div className="h-14 w-14 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-600 shrink-0">
+                    <Target className="h-7 w-7" />
+                  </div>
+                  <div>
+                    <h4 className="text-amber-900 font-black uppercase tracking-tight italic">DNA Calibration Required</h4>
+                    <p className="text-amber-700/80 text-sm font-medium">To unlock chat and increase marketplace visibility, complete your mandatory assessments.</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => router.push('/dashboard/candidate/assessment')}
+                  className="bg-amber-900 text-white px-8 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-black transition-all active:scale-95 shrink-0"
+                >
+                  Start Now
+                </button>
+              </div>
+            )}
 
             {/* Signal Breakdown */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -442,6 +548,7 @@ export default function CandidateDashboard() {
             </div>
           </div>
         )}
+        </div>
       </main>
       <TermsModal isOpen={showTerms} onClose={() => setShowTerms(false)} />
     </div>
@@ -634,6 +741,26 @@ function LockStepCard({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function StatusStep({ label, active, done }: { label: string; active: boolean; done: boolean }) {
+  return (
+    <div className={`p-4 rounded-2xl border transition-all ${
+      active 
+        ? 'bg-slate-900 border-slate-900 text-white' 
+        : 'bg-white border-slate-100 text-slate-400 opacity-60'
+    }`}>
+      <div className="flex items-center gap-3">
+        <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-black ${
+          done ? 'bg-emerald-500 text-white' : 
+          active ? 'bg-white text-slate-900' : 'bg-slate-100 text-slate-400'
+        }`}>
+          {done ? <CheckCircle2 className="h-4 w-4" /> : '•'}
+        </div>
+        <span className="text-[10px] font-black uppercase tracking-widest">{label}</span>
+      </div>
     </div>
   );
 }

@@ -13,13 +13,17 @@ def _get_user_with_retry(token: str):
 
 def verify_supabase_jwt(token: str) -> dict:
     try:
+        if not token:
+            raise ValueError("Token is empty or null")
+            
         # Debugging timeout issues
         print(f"DEBUG AUTH: Verifying token (length: {len(token)})")
         
         # Use retry logic for network-flaky SSL handshakes
         user_res = _get_user_with_retry(token)
         
-        if not user_res.user:
+        if not user_res or not user_res.user:
+            print(f"DEBUG AUTH: Verification failed for token starting with {token[:10]}...")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid authentication token",

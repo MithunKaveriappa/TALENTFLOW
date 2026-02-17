@@ -13,22 +13,23 @@ To ensure a seamless, high-performance experience, TalentFlow uses a unified lay
 
 ### 0.1 Shared Sidebar System
 
-- **Recruiter Sidebar**: Centralized navigation suite ([RecruiterSidebar.tsx](apps/web/src/components/RecruiterSidebar.tsx)) with blue-themed "Matrix" accents.
+- **Recruiter Sidebar**: Centralized navigation suite ([RecruiterSidebar.tsx](apps/web/src/components/RecruiterSidebar.tsx)) with blue-themed "Matrix" accents. Dynamically handles **Feature Locking** by checking `profileScore` to disable restricted routes for "Do It Later" recruiters.
 - **Candidate Sidebar**: Dedicated indigo-themed navigation ([CandidateSidebar.tsx](apps/web/src/components/CandidateSidebar.tsx)) for talent-facing tools.
 - **Verification Hub**: Integrated compact status center in the sidebar that displays the user's current `assessment_status` (In-progress, Not Started, or Completed) and provides direct "Complete Now" action shortcuts.
 
 ### 0.2 Standardized Navigation Suite
 
-| Functional Area    | Recruiter Labels | Candidate Labels |
-| :----------------- | :--------------- | :--------------- |
-| **Home**           | Dashboard        | Dashboard        |
-| **Primary Action** | Post a Job       | Job Board        |
-| **Management**     | My Jobs          | Applications     |
-| **Talent Pool**    | Candidate Pool   | -                |
-| **Discovery**      | Candidate Search | -                |
-| **Social**         | Feed             | Feed             |
-| **Identity**       | Profile          | Profile          |
-| **System**         | Settings         | Settings         |
+| Functional Area    | Recruiter Labels   | Candidate Labels |
+| :----------------- | :----------------- | :--------------- |
+| **Home**           | Dashboard          | Dashboard        |
+| **Pipeline (A)**   | Applied Pipeline   | Applications     |
+| **Matching**       | Recommended Talent | -                |
+| **Talent Search**  | Candidate Pool     | -                |
+| **Primary Action** | Post a Job         | Job Board        |
+| **Management**     | My Jobs            | -                |
+| **Social**         | Feed               | Feed             |
+| **Identity**       | Profile            | Profile          |
+| **System**         | Settings           | Settings         |
 
 ### 0.3 Navigation UX
 
@@ -147,7 +148,75 @@ To prevent "Easy Apply" spam and ensure candidates only apply to high-relevance 
 
 ---
 
-## 6. Candidate Career Workspace (The Applications State Machine)
+## 6. Recruiter Workspace & Pipeline Architecture
+
+The recruiter workspace is a high-stakes management interface designed to prioritize quality and process integrity.
+
+### 6.1 The Dual Pipeline Strategy
+
+1.  **Applied Pipeline (Category A)**:
+    - **Purpose**: Manage reactive applicants who proactive applied to a job.
+    - **Match Detection**: Automatically flags "Skill Matches" for candidates possessing ≥2 key skills or ≥40% JD alignment.
+    - **Bulk Actions**: Supports multi-selection for bulk shortlisting or rejection to optimize workflow.
+
+2.  **Recommended Talent (Category B)**:
+    - **Purpose**: Proactive sourcing of the "Elite 1%."
+    - **Matching Logic**: 70% Psychometric / 30% Behavioral weighting.
+    - **Filter Logic**: Focuses on cultural and character alignment over mere keyword matching.
+
+3.  **Global Candidate Pool**:
+    - **Purpose**: A discovery hub for all verified talent on the platform.
+    - **Search Criteria**: Filter by Role, Experience, and Skill keywords.
+    - **Invite System**: Recruiters can send "Elite Invites" with personalized messages and specific Job Description context.
+
+### 6.2 Interview Scheduling & Virtual Rooms
+
+- **Jitsi Integration**: Automated generation of secure Jitsi Meet URIs (`TalentFlow-<app_id>`) upon scheduling. Links are persistent and synchronized between candidate and recruiter dashboards.
+- **UTC Standardization**: All timestamps are handled in UTC and converted to local time via the frontend (`date-fns`) for global team coordination.
+- **Status Gating**: Interview UI is only accessible once the application moves to the `interview_scheduled` status.
+
+### 6.3 Recruiter Dashboard "Hard Locks"
+
+To maintain platform integrity and ensure high-trust matching, recruiters who skip the initial DNA assessment encounter functional gates:
+
+- **Prop Gating**: The [layout.tsx](apps/web/src/app/dashboard/recruiter/layout.tsx) fetches the company profile score and drills it down to the sidebar and page components.
+- **LockedView UI**: Features like **Career GPS** and **Candidate Intelligence** are wrapped in a `LockedView` component that provides a call-to-action to complete the assessment.
+- **Functional Disable**: Sidebar links for locked features are visually muted and pointer-events are disabled until `profile_score > 0`.
+
+### 6.4 The Cumulative Hiring Funnel
+
+The primary analytics hub for recruiters utilizes a cumulative logic model:
+
+- **Funnel Progression**: Calculates the total volume of talent passing through each stage (`applied` + `shortlisted` + `interviewed` + `hired`).
+- **Optimal Health Signal**: Based on conversion ratios between stages (e.g., Shortlist-to-Interview ratio).
+- **Visual Feedback**: A multi-stage progress component on the dashboard provides immediate visibility into pipeline efficiency.
+
+---
+
+## 7. High-Trust Lifecycle Guardrails
+
+To prevent process manipulation and ensure a high-quality experience for candidates, the platform enforces strict lifecycle rules.
+
+### 7.1 Trigger-Level Transition Enforcement
+
+A PostgreSQL trigger ([lifecycle_guardrails.sql](infra/scripts/lifecycle_guardrails.sql)) prevents recruiters from "skipping" critical stages.
+
+- **The Gold Path**: `applied` → `shortlisted` → `interview_scheduled` → `offered`.
+- **Validation**: Any attempt to move from `shortlisted` to `offered` without an intervening `interview_scheduled` status will result in a Database Level Error.
+
+### 7.2 The Audit Trail
+
+- **`job_application_status_history`**: A persistent log of every status change.
+- **Verification UI**: Recruiters and candidates can view the "Application History" modal, showing exact timestamps and actors (Who moved the status and when).
+
+### 7.3 Contextual Chat Locking
+
+- **Bandwidth Protection**: Chat threads are locked for "Applied" candidates.
+- **Auto-Unlock**: Messaging permissions are granted automatically when a candidate is **Shortlisted** or **Invited**, ensuring recruiters only spend time on high-potential talent.
+
+---
+
+## 8. Candidate Career Workspace (The Applications State Machine)
 
 The dashboard provides a real-time, high-transparency view of the candidate's journey.
 

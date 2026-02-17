@@ -89,6 +89,26 @@ CREATE TYPE application_status AS ENUM (
   'closed'
 );
 
+CREATE TYPE interview_status AS ENUM (
+  'scheduled',
+  'confirmed',
+  'cancelled',
+  'completed'
+);
+
+CREATE TYPE interview_format AS ENUM (
+  'video',
+  'phone',
+  'in_person'
+);
+
+CREATE TYPE report_status AS ENUM (
+  'pending',
+  'under_review',
+  'resolved',
+  'dismissed'
+);
+
 -- ---------- USERS ----------
 
 CREATE TABLE users (
@@ -119,6 +139,9 @@ CREATE TABLE companies (
   successful_hires_count INTEGER DEFAULT 0,
   visibility_tier TEXT DEFAULT 'Low',
   verification_status TEXT DEFAULT 'Under Review',
+  logo_url TEXT,
+  brand_colors JSONB,
+  life_at_photo_urls TEXT[] DEFAULT '{}',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
@@ -177,6 +200,8 @@ CREATE TABLE recruiter_profiles (
   job_title TEXT,
   linkedin_url TEXT,
   bio TEXT,
+  team_role TEXT,
+  is_admin BOOLEAN DEFAULT false,
   onboarding_step TEXT DEFAULT 'REGISTRATION',
   warning_count INTEGER DEFAULT 0,
   completion_score INTEGER DEFAULT 0,
@@ -328,6 +353,7 @@ CREATE TABLE job_applications (
   candidate_id UUID REFERENCES candidate_profiles(user_id) ON DELETE CASCADE,
   status application_status DEFAULT 'applied',
   feedback TEXT,
+  invitation_message TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
   UNIQUE(job_id, candidate_id)
@@ -376,6 +402,73 @@ CREATE TABLE follows (
   following_id UUID REFERENCES users(id) ON DELETE CASCADE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
   UNIQUE(follower_id, following_id)
+);
+
+-- ---------- JOB APPLICATION STATUS HISTORY ----------
+
+CREATE TABLE job_application_status_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  application_id UUID REFERENCES job_applications(id) ON DELETE CASCADE,
+  old_status TEXT,
+  new_status TEXT NOT NULL,
+  changed_by UUID REFERENCES users(id),
+  reason TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- ---------- INTERVIEWS ----------
+
+CREATE TABLE interviews (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_id UUID REFERENCES jobs(id) ON DELETE CASCADE,
+  candidate_id UUID REFERENCES candidate_profiles(user_id) ON DELETE CASCADE,
+  recruiter_id UUID REFERENCES recruiter_profiles(user_id) ON DELETE SET NULL,
+  application_id UUID REFERENCES job_applications(id) ON DELETE CASCADE,
+  status interview_status DEFAULT 'scheduled',
+  round_name TEXT,
+  round_number INTEGER DEFAULT 1,
+  format interview_format DEFAULT 'video',
+  meeting_link TEXT,
+  location TEXT,
+  interviewer_names TEXT[] DEFAULT '{}',
+  feedback TEXT,
+  cancellation_reason TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- ---------- INTERVIEW SLOTS ----------
+
+CREATE TABLE interview_slots (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  interview_id UUID REFERENCES interviews(id) ON DELETE CASCADE,
+  start_time TIMESTAMP WITH TIME ZONE NOT NULL,
+  end_time TIMESTAMP WITH TIME ZONE NOT NULL,
+  is_selected BOOLEAN DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- ---------- JOB VIEWS ----------
+
+CREATE TABLE job_views (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_id UUID REFERENCES jobs(id) ON DELETE CASCADE,
+  candidate_id UUID REFERENCES candidate_profiles(user_id) ON DELETE SET NULL,
+  viewer_ip TEXT,
+  user_agent TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- ---------- TEAM INVITATIONS ----------
+
+CREATE TABLE team_invitations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
+  inviter_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  status TEXT DEFAULT 'pending',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  expires_at TIMESTAMP WITH TIME ZONE
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_company_id ON jobs(company_id);
@@ -444,6 +537,11 @@ ALTER TABLE follows ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_threads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE job_application_status_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE interviews ENABLE ROW LEVEL SECURITY;
+ALTER TABLE interview_slots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE job_views ENABLE ROW LEVEL SECURITY;
+ALTER TABLE team_invitations ENABLE ROW LEVEL SECURITY;
 
 -- Helper Function
 CREATE OR REPLACE FUNCTION is_authenticated_user()
@@ -597,6 +695,60 @@ CREATE POLICY "Users can file reports"
 ON chat_reports FOR INSERT 
 WITH CHECK (auth.uid() = reporter_id);
 
+-- Job Application Status History
+CREATE POLICY "Users involved can view history" 
+ON job_application_status_history FOR SELECT 
+USING (
+  EXISTS (
+    SELECT 1 FROM job_applications 
+    WHERE job_applications.id = job_application_status_history.application_id 
+    AND (job_applications.candidate_id = auth.uid() OR 
+         EXISTS (SELECT 1 FROM jobs WHERE jobs.id = job_applications.job_id AND jobs.recruiter_id = auth.uid()))
+  )
+);
+
+-- Interviews
+CREATE POLICY "Users can view their interviews" 
+ON interviews FOR SELECT 
+USING (candidate_id = auth.uid() OR recruiter_id = auth.uid());
+
+CREATE POLICY "Recruiters can manage interviews" 
+ON interviews FOR ALL 
+USING (recruiter_id = auth.uid());
+
+-- Interview Slots
+CREATE POLICY "Users can view slots for their interviews" 
+ON interview_slots FOR SELECT 
+USING (
+  EXISTS (
+    SELECT 1 FROM interviews 
+    WHERE interviews.id = interview_slots.interview_id 
+    AND (interviews.candidate_id = auth.uid() OR interviews.recruiter_id = auth.uid())
+  )
+);
+
+-- Team Invitations
+CREATE POLICY "Recruiters can see invitations for their company" 
+ON team_invitations FOR SELECT 
+USING (
+  EXISTS (
+    SELECT 1 FROM recruiter_profiles 
+    WHERE recruiter_profiles.user_id = auth.uid() 
+    AND recruiter_profiles.company_id = team_invitations.company_id
+  )
+);
+
+-- Job Views (Usually limited or internal, but let's add basic select for recruiters)
+CREATE POLICY "Recruiters can see views for their jobs" 
+ON job_views FOR SELECT 
+USING (
+  EXISTS (
+    SELECT 1 FROM jobs 
+    WHERE jobs.id = job_views.job_id 
+    AND jobs.recruiter_id = auth.uid()
+  )
+);
+
 -- Resume Data & Scores
 CREATE POLICY "Users can view own resume data" ON resume_data FOR SELECT USING (user_id = auth.uid());
 CREATE POLICY "Users can view own scores" ON profile_scores FOR SELECT USING (user_id = auth.uid());
@@ -637,3 +789,9 @@ USING (user_id = auth.uid());
 -- Documents Bucket (Aadhaar etc)
 -- INSERT: (bucket_id = 'documents' AND auth.uid() IS NOT NULL)
 -- SELECT: (bucket_id = 'documents' AND (SELECT auth.uid()) = owner)
+
+-- Avatars Bucket
+-- Publicly viewable profile photos
+
+-- Company Logos & Assets
+-- Publicly viewable

@@ -19,7 +19,6 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
-import RecruiterSidebar from "@/components/RecruiterSidebar";
 
 interface Company {
   id: string;
@@ -43,6 +42,7 @@ interface RecruiterProfile {
   companies: Company;
   is_verified?: boolean;
   assessment_status?: string;
+  team_role?: string;
 }
 
 export default function RecruiterProfilePage() {
@@ -147,11 +147,8 @@ export default function RecruiterProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
-      <RecruiterSidebar assessmentStatus={profile?.assessment_status} />
-
-      {/* Main Content Area */}
-      <div className="flex-1 ml-64 flex flex-col">
+    <div className="min-h-screen">
+      <main className="flex flex-col overflow-y-auto">
         {/* Top Header */}
         <header className="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-8 sticky top-0 z-10 w-full">
           <div className="flex items-center space-x-4">
@@ -183,7 +180,7 @@ export default function RecruiterProfilePage() {
         </header>
 
         {/* Content Container */}
-        <main className="p-8 max-w-5xl mx-auto w-full">
+        <div className="p-8 max-w-5xl mx-auto w-full">
           <div className="mb-10">
             <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
               Profile Settings
@@ -438,8 +435,8 @@ export default function RecruiterProfilePage() {
               </button>
             </div>
           </form>
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }

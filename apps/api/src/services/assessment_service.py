@@ -1,8 +1,9 @@
 import json
 import random
+import asyncio
 from typing import List, Dict, Optional
 from datetime import datetime
-from src.core.supabase import supabase
+from src.core.supabase import async_supabase as supabase # Switch to Async
 from src.services.notification_service import NotificationService
 import google.generativeai as genai
 from src.core.config import GOOGLE_API_KEY
@@ -16,7 +17,7 @@ class AssessmentService:
     async def get_or_create_session(self, user_id: str):
         # 1. Fetch profile to get experience band
         try:
-            profile_res = supabase.table("candidate_profiles").select("experience").eq("user_id", user_id).execute()
+            profile_res = await supabase.table("candidate_profiles").select("experience").eq("user_id", user_id).execute()
             if not profile_res.data:
                 # If profile missing, check if we can create it or default to fresher
                 print(f"DEBUG: Profile missing for {user_id}")
@@ -30,7 +31,7 @@ class AssessmentService:
         
         # 2. Check if session exists
         try:
-            session_res = supabase.table("assessment_sessions").select("*").eq("candidate_id", user_id).execute()
+            session_res = await supabase.table("assessment_sessions").select("*").eq("candidate_id", user_id).execute()
             if session_res.data:
                 return session_res.data[0]
         except Exception as e:
@@ -63,7 +64,7 @@ class AssessmentService:
         }
         
         try:
-            res = supabase.table("assessment_sessions").insert(new_session).execute()
+            res = await supabase.table("assessment_sessions").insert(new_session).execute()
             return res.data[0] if res.data else None
         except Exception as e:
             print(f"DEBUG: Session creation error: {str(e)}")
@@ -84,7 +85,7 @@ class AssessmentService:
                 return await self.complete_assessment(user_id, session)
 
             # 2. Get current counts
-            responses_res = supabase.table("assessment_responses").select("category").eq("candidate_id", user_id).execute()
+            responses_res = await supabase.table("assessment_responses").select("category").eq("candidate_id", user_id).execute()
             counts = {
                 "resume": 0,
                 "skill": 0,
@@ -100,13 +101,13 @@ class AssessmentService:
             # 4. Data Availability Checks
             resume_data_exists = False
             try:
-                rd_res = supabase.table("resume_data").select("user_id").eq("user_id", user_id).execute()
+                rd_res = await supabase.table("resume_data").select("user_id").eq("user_id", user_id).execute()
                 resume_data_exists = len(rd_res.data) > 0
             except: pass
 
             skills_exist = False
             try:
-                sk_res = supabase.table("candidate_profiles").select("skills").eq("user_id", user_id).execute()
+                sk_res = await supabase.table("candidate_profiles").select("skills").eq("user_id", user_id).execute()
                 skills_exist = bool(sk_res.data and sk_res.data[0].get("skills"))
             except: pass
 
@@ -163,7 +164,7 @@ class AssessmentService:
 
     async def _try_generate_resume_question(self, user_id: str, current_count: int):
         try:
-            res = supabase.table("resume_data").select("*").eq("user_id", user_id).execute()
+            res = await supabase.table("resume_data").select("*").eq("user_id", user_id).execute()
             if not res.data or len(res.data) == 0:
                 return None
             
@@ -196,7 +197,7 @@ class AssessmentService:
 
     async def _try_generate_skill_question(self, user_id: str, band: str):
         try:
-            profile_res = supabase.table("candidate_profiles").select("skills").eq("user_id", user_id).execute()
+            profile_res = await supabase.table("candidate_profiles").select("skills").eq("user_id", user_id).execute()
             if not profile_res.data or len(profile_res.data) == 0:
                 return None
             
@@ -204,7 +205,7 @@ class AssessmentService:
             if not all_skills: return None
 
             # Get skills already tested in this session
-            used_res = supabase.table("assessment_responses").select("driver").eq("candidate_id", user_id).eq("category", "skill").execute()
+            used_res = await supabase.table("assessment_responses").select("driver").eq("candidate_id", user_id).eq("category", "skill").execute()
             used_skills = [r["driver"] for r in (used_res.data or [])]
             
             available_skills = [s for s in all_skills if s not in used_skills]
@@ -225,7 +226,7 @@ class AssessmentService:
         cat = category
 
         # Get question IDs already used by this user
-        used_res = supabase.table("assessment_responses").select("question_id").eq("candidate_id", user_id).execute()
+        used_res = await supabase.table("assessment_responses").select("question_id").eq("candidate_id", user_id).execute()
         used_ids = [r["question_id"] for r in (used_res.data or []) if r.get("question_id")]
 
         # Query seeded questions
@@ -237,11 +238,11 @@ class AssessmentService:
         if used_ids:
             query = query.not_.in_("id", used_ids)
             
-        res = query.limit(20).execute()
+        res = await query.limit(20).execute()
         
         if not res.data:
             # Fallback to any band if current band is exhausted
-            res = supabase.table("assessment_questions") \
+            res = await supabase.table("assessment_questions") \
                 .select("*") \
                 .eq("category", cat) \
                 .limit(1).execute()
@@ -259,18 +260,18 @@ class AssessmentService:
         }
         
         # Get questions already asked to avoid repetition
-        used_q_res = supabase.table("assessment_responses").select("question_id").eq("candidate_id", user_id).execute()
+        used_q_res = await supabase.table("assessment_responses").select("question_id").eq("candidate_id", user_id).execute()
         used_ids = [r["question_id"] for r in used_q_res.data if r.get("question_id")]
         
         # Select a question from DB
         query = supabase.table("assessment_questions").select("*").eq("category", cat).eq("experience_band", band)
         
-        res = query.execute()
+        res = await query.execute()
         available = [q for q in res.data if q["id"] not in used_ids]
             
         if not available:
             # Fallback if band specific is empty, try any band
-            fallback_res = supabase.table("assessment_questions").select("*").eq("category", cat).execute()
+            fallback_res = await supabase.table("assessment_questions").select("*").eq("category", cat).execute()
             available = [q for q in fallback_res.data if q["id"] not in used_ids]
 
         if not available:
@@ -287,9 +288,12 @@ class AssessmentService:
 
     async def _ai_generate(self, prompt: str) -> Optional[str]:
         try:
-            # Use async version of generate_content with a safety timeout
-            response = await self.model.generate_content_async(prompt)
+            # Add strict timeout to prevent "Failed to fetch" on frontend
+            response = await asyncio.wait_for(self.model.generate_content_async(prompt), timeout=15.0)
             return response.text.strip()
+        except asyncio.TimeoutError:
+            print("DEBUG: AI Generation timed out.")
+            return None
         except Exception as e:
             print(f"DEBUG: Gemini Generation Error: {str(e)}")
             return None 
@@ -331,16 +335,19 @@ class AssessmentService:
         Return ONLY a JSON object: {{"score": 4, "reasoning": "short explanation of the signal detected"}}
         """
         try:
-            res = await self.model.generate_content_async(prompt)
+            res = await asyncio.wait_for(self.model.generate_content_async(prompt), timeout=18.0)
             data = json.loads(res.text.replace('```json', '').replace('```', '').replace('json', '').strip())
             return data.get("score", 0), {"reasoning": data.get("reasoning", ""), "evaluator": "AI_GRADED_UNBIASED"}
+        except asyncio.TimeoutError:
+            print("DEBUG: AI Evaluation timed out.")
+            return 3, {"reasoning": "Fallback score due to AI timeout (18s exceeded)", "evaluator": "FALLBACK"}
         except Exception as e:
             print(f"DEBUG: AI Eval Error: {str(e)}")
-            return 3, {"reasoning": "Fallback score due to AI timeout", "evaluator": "FALLBACK"}
+            return 3, {"reasoning": "Fallback score due to unexpected error", "evaluator": "FALLBACK"}
 
     async def _store_response(self, user_id: str, q_id: Optional[str], category: str, answer: str, score: int, is_skipped: bool, metadata: dict):
         # 1. Fetch current session for updates (Safe fetch)
-        session_res = supabase.table("assessment_sessions").select("*").eq("candidate_id", user_id).execute()
+        session_res = await supabase.table("assessment_sessions").select("*").eq("candidate_id", user_id).execute()
         if not session_res.data:
             return {"status": "error", "message": "Session not found"}
         
@@ -355,7 +362,7 @@ class AssessmentService:
             confidence[driver] = curr_conf + 1
             
         # 3. Update session
-        supabase.table("assessment_sessions").update({
+        await supabase.table("assessment_sessions").update({
             "current_step": new_step,
             "driver_confidence": confidence
         }).eq("candidate_id", user_id).execute()
@@ -375,12 +382,12 @@ class AssessmentService:
             "tab_switches": metadata.get("tab_switches", 0)
         }
         
-        supabase.table("assessment_responses").insert(res_data).execute()
+        await supabase.table("assessment_responses").insert(res_data).execute()
         return {"status": "ok", "score": score}
 
     async def complete_assessment(self, user_id: str, session: dict):
         # 1. Fetch all responses
-        res = supabase.table("assessment_responses").select("*").eq("candidate_id", user_id).execute()
+        res = await supabase.table("assessment_responses").select("*").eq("candidate_id", user_id).execute()
         responses = res.data
         
         # 2. Group scores by category
@@ -430,7 +437,7 @@ class AssessmentService:
             final_score = round(sum(comp_scores.values()) / len(comp_scores)) if comp_scores else 0
 
         # 5. Update DB
-        existing_res = supabase.table("profile_scores").select("final_score").eq("user_id", user_id).execute()
+        existing_res = await supabase.table("profile_scores").select("final_score").eq("user_id", user_id).execute()
         existing_score = existing_res.data[0].get("final_score", 0) if existing_res.data else 0
 
         # Best Score Logic: Only update profile_scores if new score is higher or equal
@@ -438,7 +445,7 @@ class AssessmentService:
         
         display_score = final_score if should_update_profile else existing_score
 
-        supabase.table("assessment_sessions").update({
+        await supabase.table("assessment_sessions").update({
             "status": "completed",
             "overall_score": final_score,
             "component_scores": comp_scores,
@@ -450,11 +457,11 @@ class AssessmentService:
         if should_update_profile or not existing_res.data:
             profile_update["final_profile_score"] = final_score
 
-        supabase.table("candidate_profiles").update(profile_update).eq("user_id", user_id).execute()
+        await supabase.table("candidate_profiles").update(profile_update).eq("user_id", user_id).execute()
 
         if should_update_profile or not existing_res.data:
             # Sync to profile_scores table
-            supabase.table("profile_scores").upsert({
+            await supabase.table("profile_scores").upsert({
                 "user_id": user_id,
                 "resume_score": comp_scores.get("resume", 0),
                 "behavioral_score": comp_scores.get("behavioral", 0),
@@ -477,13 +484,13 @@ class AssessmentService:
         """Resets the assessment session but keeps the high score in profile_scores."""
         try:
             # 1. Delete the current session
-            supabase.table("assessment_sessions").delete().eq("candidate_id", user_id).execute()
+            await supabase.table("assessment_sessions").delete().eq("candidate_id", user_id).execute()
             
             # 2. Clear responses for a fresh start
-            supabase.table("assessment_responses").delete().eq("candidate_id", user_id).execute()
+            await supabase.table("assessment_responses").delete().eq("candidate_id", user_id).execute()
             
             # 3. Reset profile status to allow retaking
-            supabase.table("candidate_profiles").update({
+            await supabase.table("candidate_profiles").update({
                 "assessment_status": "started"
             }).eq("user_id", user_id).execute()
             

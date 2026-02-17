@@ -204,7 +204,8 @@ class CandidateService:
                 "status": a["status"],
                 "applied_at": a["created_at"],
                 "job_title": job.get("title", "Unknown Role"),
-                "company_name": company.get("name", "Unknown Company")
+                "company_name": company.get("name", "Unknown Company"),
+                "metadata": a.get("metadata", {})
             })
             
         return apps

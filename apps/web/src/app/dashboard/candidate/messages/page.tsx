@@ -23,7 +23,7 @@ export default function CandidateMessagesPage() {
         const { data: prof } = await supabase
           .from("candidate_profiles")
           .select("assessment_status")
-          .eq("id", user.id)
+          .eq("user_id", user.id)
           .single();
         setProfile(prof);
       }
@@ -37,21 +37,24 @@ export default function CandidateMessagesPage() {
   return (
     <div className="flex min-h-screen bg-slate-50">
       <CandidateSidebar assessmentStatus={profile?.assessment_status} />
-      <main className="flex-1 ml-64 p-8">
-        <header className="mb-8">
-          <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">
-            Messaging Center
-          </h1>
-          <p className="text-slate-500 font-medium">
-            Manage your high-stakes professional conversations.
-          </p>
-        </header>
 
-        {user?.id ? (
-          <ChatCenter userId={user.id} role="candidate" />
-        ) : (
-          !loading && <div className="p-8 text-slate-400">Please log in to view messages.</div>
-        )}
+      <main className="flex-1 ml-64 p-8 overflow-y-auto">
+        <div className="max-w-7xl mx-auto">
+          <header className="mb-8">
+            <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">
+              Messaging Center
+            </h1>
+            <p className="text-slate-500 font-medium">
+              Manage your high-stakes professional conversations.
+            </p>
+          </header>
+
+          {user?.id ? (
+            <ChatCenter userId={user.id} role="candidate" />
+          ) : (
+            !loading && <div className="p-8 text-slate-400">Please log in to view messages.</div>
+          )}
+        </div>
       </main>
     </div>
   );

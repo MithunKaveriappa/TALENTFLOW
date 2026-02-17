@@ -10,7 +10,11 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
+    let isInit = false;
     async function checkExistingSession() {
+      if (isInit) return;
+      isInit = true;
+
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -20,8 +24,11 @@ export default function Home() {
             "/auth/post-login",
             session.access_token,
           );
-          router.replace(handshake.next_step);
-        } catch {
+          if (handshake && handshake.next_step) {
+            router.replace(handshake.next_step);
+          }
+        } catch (err) {
+          console.error("Handshake failed:", err);
           // Stay on landing if handshake fails
         }
       }

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from src.core.dependencies import get_current_user
-from src.core.supabase import supabase
+from src.core.supabase import async_supabase as supabase
 from pydantic import BaseModel
 from src.services.resume_service import ResumeService
 from src.services.candidate_service import CandidateService
@@ -49,11 +49,11 @@ class GenerateResumeRequest(BaseModel):
     template: str = "professional"
 
 @router.get("/profile")
-def get_profile(user: dict = Depends(get_current_user)):
+async def get_profile(user: dict = Depends(get_current_user)):
     user_id = user["sub"]
     try:
         # Use execute() instead of single() to avoid 404/PGRST116 errors
-        res = supabase.table("candidate_profiles").select("*").eq("user_id", user_id).execute()
+        res = await supabase.table("candidate_profiles").select("*").eq("user_id", user_id).execute()
         if not res.data:
             return None
         return res.data[0]
@@ -61,14 +61,14 @@ def get_profile(user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.patch("/profile")
-def update_profile(
+async def update_profile(
     request: CandidateProfileUpdate,
     user: dict = Depends(get_current_user)
 ):
     user_id = user["sub"]
     try:
         # 0. Check Integrity Lock
-        profile_check = supabase.table("candidate_profiles").select("assessment_status").eq("user_id", user_id).execute()
+        profile_check = await supabase.table("candidate_profiles").select("assessment_status").eq("user_id", user_id).execute()
         is_completed = profile_check.data and profile_check.data[0].get("assessment_status") == "completed"
 
         # 1. Update Profile Fields
@@ -78,10 +78,10 @@ def update_profile(
         if is_completed and ("experience" in update_data or "years_of_experience" in update_data):
             raise HTTPException(status_code=403, detail="Seniority signals are locked post-assessment. Use Performance Reset to update.")
 
-        supabase.table("candidate_profiles").update(update_data).eq("user_id", user_id).execute()
+        await supabase.table("candidate_profiles").update(update_data).eq("user_id", user_id).execute()
         
         # 2. Recalculate Completion Score (Safe fetch)
-        profile_res = supabase.table("candidate_profiles").select("*").eq("user_id", user_id).execute()
+        profile_res = await supabase.table("candidate_profiles").select("*").eq("user_id", user_id).execute()
         if not profile_res.data:
              return {"status": "error", "detail": "Profile not found"}
              
@@ -89,12 +89,26 @@ def update_profile(
         completion_score = CandidateService.calculate_completion_score(full_profile)
         
         # 3. Save Score
-        supabase.table("candidate_profiles").update({
+        await supabase.table("candidate_profiles").update({
             "completion_score": completion_score,
             "updated_at": "now()"
         }).eq("user_id", user_id).execute()
         
         return {"status": "profile_updated", "completion_score": completion_score}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/latest-application")
+async def get_latest_application(user: dict = Depends(get_current_user)):
+    user_id = user["sub"]
+    try:
+        res = supabase.table("job_applications")\
+            .select("*, jobs(*, companies(*)), interviews(*, interview_slots(*))")\
+            .eq("candidate_id", user_id)\
+            .order("created_at", desc=True)\
+            .limit(1)\
+            .execute()
+        return res.data[0] if res.data else None
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -221,7 +235,7 @@ async def generate_resume(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/skills")
-def update_skills(
+async def update_skills(
     request: SkillsUpdate,
     user: dict = Depends(get_current_user)
 ):
@@ -229,7 +243,7 @@ def update_skills(
     
     try:
         # Update skills and progress step
-        supabase.table("candidate_profiles").update({
+        await supabase.table("candidate_profiles").update({
             "skills": request.skills,
             "onboarding_step": "AWAITING_ID"
         }).eq("user_id", user_id).execute()
@@ -240,13 +254,13 @@ def update_skills(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/verify-id")
-def verify_id(
+async def verify_id(
     request: dict, # {id_path: str}
     user: dict = Depends(get_current_user)
 ):
     user_id = user["sub"]
     try:
-        supabase.table("candidate_profiles").update({
+        await supabase.table("candidate_profiles").update({
             "identity_verified": True,
             "onboarding_step": "AWAITING_TC"
         }).eq("user_id", user_id).execute()
@@ -255,12 +269,12 @@ def verify_id(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/accept-tc")
-def accept_tc(
+async def accept_tc(
     user: dict = Depends(get_current_user)
 ):
     user_id = user["sub"]
     try:
-        supabase.table("candidate_profiles").update({
+        await supabase.table("candidate_profiles").update({
             "terms_accepted": True,
             "onboarding_step": "COMPLETED",
             "assessment_status": "not_started"

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
 import { useRouter } from "next/navigation";
-import RecruiterSidebar from "@/components/RecruiterSidebar";
+import LockedView from "@/components/dashboard/LockedView";
 
 interface Candidate {
   user_id: string;
@@ -102,124 +102,85 @@ export default function CandidatePoolPage() {
     );
   }
 
-  // Check if either the recruiter or their company has completed onboarding
-  const isAssessmentCompleted =
-    recruiterProfile?.assessment_status === "completed" ||
-    (recruiterProfile?.companies?.profile_score ?? 0) > 0;
+  const isLocked = (recruiterProfile?.companies?.profile_score ?? 0) === 0;
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      <RecruiterSidebar
-        assessmentStatus={recruiterProfile?.assessment_status}
-      />
-
-      <main className="flex-1 ml-64 p-6 md:p-12">
-        {!isAssessmentCompleted && (
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 mb-8 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="h-10 w-10 bg-amber-100 rounded-full flex items-center justify-center text-amber-600">
-                <svg
-                  className="h-6 w-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                  />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-amber-900 font-bold">
-                  Trust Verification Needed
-                </h3>
-                <p className="text-amber-700 text-sm">
-                  Onboarding signals help verify recruiter intent. Complete your
-                  assessment to finalize pairing.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => router.push("/onboarding/recruiter")}
-              className="px-6 py-2 bg-amber-600 text-white rounded-xl font-bold text-sm hover:bg-amber-700 transition"
-            >
-              Complete Now
-            </button>
-          </div>
-        )}
-        {error ? (
-          <div className="min-h-[70vh] flex items-center justify-center">
-            <div className="text-center p-8 bg-white rounded-3xl border border-red-100 shadow-xl max-w-sm">
-              <div className="h-16 w-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                <svg
-                  className="h-8 w-8 text-red-500"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                  />
-                </svg>
-              </div>
-              <h2 className="text-lg font-bold text-slate-900 mb-2 uppercase tracking-tight">
-                Sync Offline
-              </h2>
-              <p className="text-slate-500 text-sm mb-6 leading-relaxed">
-                {error.includes("Server disconnected")
-                  ? "The Identity Server is currently unreachable. Please check your connection or try again in a few minutes."
-                  : error}
-              </p>
-              <button
-                onClick={fetchPool}
-                className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-indigo-600 transition-all"
-              >
-                Retry Sync
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-            <header className="mb-12 flex justify-between items-end">
-              <div>
-                <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase italic">
-                  Candidate Pool
-                </h1>
-                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.3em] mt-3">
-                  Real-time synchronized top-tier talent
-                </p>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-slate-100 shadow-sm">
-                  <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                    Live Pool
-                  </span>
+    <div className="p-6 md:p-12">
+      {isLocked ? (
+        <LockedView featureName="Candidate Pool" />
+      ) : (
+        <>
+          {error ? (
+            <div className="min-h-[70vh] flex items-center justify-center">
+              <div className="text-center p-8 bg-white rounded-3xl border border-red-100 shadow-xl max-w-sm">
+                <div className="h-16 w-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <svg
+                    className="h-8 w-8 text-red-500"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                    />
+                  </svg>
                 </div>
+                <h2 className="text-lg font-bold text-slate-900 mb-2 uppercase tracking-tight">
+                  Sync Offline
+                </h2>
+                <p className="text-slate-500 text-sm mb-6 leading-relaxed">
+                  {error.includes("Server disconnected")
+                    ? "The Identity Server is currently unreachable. Please check your connection or try again in a few minutes."
+                    : error}
+                </p>
                 <button
-                  onClick={handleLogout}
-                  className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-red-500 hover:bg-red-50 hover:border-red-100 transition-all shadow-sm active:scale-95"
+                  onClick={fetchPool}
+                  className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-indigo-600 transition-all"
                 >
-                  Logout
+                  Retry Sync
                 </button>
               </div>
-            </header>
-
-            <div className="space-y-16">
-              <PoolSection title="Leadership" candidates={bands.leadership} />
-              <PoolSection title="Senior" candidates={bands.senior} />
-              <PoolSection title="Mid-Level" candidates={bands.mid} />
-              <PoolSection title="Freshers" candidates={bands.fresher} />
             </div>
-          </>
-        )}
-      </main>
+          ) : (
+            <>
+              <header className="mb-12 flex justify-between items-end">
+                <div>
+                  <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase italic">
+                    Candidate Pool
+                  </h1>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.3em] mt-3">
+                    Real-time synchronized top-tier talent
+                  </p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-slate-100 shadow-sm">
+                    <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                      Live Pool
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-red-500 hover:bg-red-50 hover:border-red-100 transition-all shadow-sm active:scale-95"
+                  >
+                    Logout
+                  </button>
+                </div>
+              </header>
+
+              <div className="space-y-16">
+                <PoolSection title="Leadership" candidates={bands.leadership} />
+                <PoolSection title="Senior" candidates={bands.senior} />
+                <PoolSection title="Mid-Level" candidates={bands.mid} />
+                <PoolSection title="Freshers" candidates={bands.fresher} />
+              </div>
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -333,7 +294,7 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
 
       <button
         onClick={() =>
-          router.push(`/dashboard/recruiter/candidate/${candidate.user_id}`)
+          router.push(`/dashboard/recruiter/intelligence/search/${candidate.user_id}`)
         }
         className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase tracking-[0.2em] hover:bg-indigo-600 transition-all duration-300 shadow-lg shadow-slate-200"
       >
@@ -345,4 +306,3 @@ function CandidateCard({ candidate }: { candidate: Candidate }) {
     </div>
   );
 }
-

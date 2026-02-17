@@ -15,10 +15,12 @@
 
 1. **Signup/Login**: Role selection (`recruiter`), professional email only.
 2. **Company Registration**: Mandatory CIN/GSTIN entry (Regex-validated).
-3. **Profile Creation**: Company name, website, and description.
-4. **Recruiter Assessment**: 5 AI-evaluated questions on intent and ethics.
-5. **Company Scoring**: Generation of "Company Profile Score."
-6. **Dashboard & Outreach**: Locked until assessment completion; elite 1-to-1 messaging with shortlisted candidates.
+3. **Profile Creation**: Company name, website, and AI-suggested description.
+4. **Assessment Strategy**: Option to **Take Assessment Now** or **Do It Later**.
+5. **Locking Mechanism**: High-impact tools (GPS, Jobs, Pool) are "Hard Locked" for "Do It Later" users.
+6. **Company Scoring**: Completion of 5 questions generates a "Company Profile Score."
+7. **Analytics Hub**: Access to the **Cumulative Hiring Funnel** and Market Intelligence.
+8. **Automated Interviews**: Generation of secure Jitsi Meet links for scheduled syncs.
 
 ## Real-time Sync & Engagement
 

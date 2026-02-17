@@ -10,7 +10,11 @@ from src.schemas.recruiter import (
     JobUpdate,
     JobResponse,
     JobAIPrompt,
-    ApplicationStatusUpdate
+    ApplicationStatusUpdate,
+    BulkApplicationStatusUpdate,
+    JobInviteRequest,
+    TeamInviteRequest,
+    TeamMemberUpdate
 )
 from pydantic import BaseModel
 from typing import Dict, Any, List
@@ -109,6 +113,90 @@ async def update_company(data: CompanyProfileUpdate, user: dict = Depends(get_cu
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/team")
+async def get_team(user: dict = Depends(get_current_user)):
+    user_id = user["sub"]
+    try:
+        prof = await recruiter_service.get_or_create_profile(user_id)
+        company_id = prof.get("company_id")
+        if not company_id:
+            return []
+            
+        res = supabase.table("recruiter_profiles").select("*, users(email)").eq("company_id", company_id).execute()
+        return res.data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/invite")
+async def invite_member(data: TeamInviteRequest, user: dict = Depends(get_current_user)):
+    user_id = user["sub"]
+    try:
+        prof = await recruiter_service.get_or_create_profile(user_id)
+        if not prof.get("is_admin"):
+            raise HTTPException(status_code=403, detail="Only admins can invite team members")
+            
+        company_id = prof.get("company_id")
+        if not company_id:
+            raise HTTPException(status_code=400, detail="No company linked to profile")
+            
+        invite_data = {
+            "company_id": company_id,
+            "inviter_id": user_id,
+            "email": data.email
+        }
+        
+        supabase.table("team_invitations").insert(invite_data).execute()
+        # TODO: Send invitation email via NotificationService
+        
+        return {"status": "invited"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/team/{member_id}")
+async def remove_member(member_id: str, user: dict = Depends(get_current_user)):
+    user_id = user["sub"]
+    try:
+        current_prof = await recruiter_service.get_or_create_profile(user_id)
+        if not current_prof.get("is_admin"):
+            raise HTTPException(status_code=403, detail="Only admins can remove team members")
+            
+        # Cannot remove self
+        if member_id == user_id:
+            raise HTTPException(status_code=400, detail="Cannot remove yourself")
+            
+        # Ensure member is in the same company
+        member_prof = await recruiter_service.get_or_create_profile(member_id)
+        if member_prof.get("company_id") != current_prof.get("company_id"):
+            raise HTTPException(status_code=403, detail="Member does not belong to your company")
+            
+        supabase.table("recruiter_profiles").update({"company_id": None, "is_admin": False}).eq("user_id", member_id).execute()
+        
+        return {"status": "removed"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.patch("/team/{member_id}/role")
+async def update_member_role(member_id: str, data: TeamMemberUpdate, user: dict = Depends(get_current_user)):
+    user_id = user["sub"]
+    try:
+        current_prof = await recruiter_service.get_or_create_profile(user_id)
+        if not current_prof.get("is_admin"):
+            raise HTTPException(status_code=403, detail="Only admins can change roles")
+            
+        if member_id == user_id:
+            raise HTTPException(status_code=400, detail="Cannot change your own role")
+            
+        # Ensure member is in same company
+        member_prof = await recruiter_service.get_or_create_profile(member_id)
+        if member_prof.get("company_id") != current_prof.get("company_id"):
+            raise HTTPException(status_code=403, detail="Member does not belong to your company")
+            
+        supabase.table("recruiter_profiles").update({"is_admin": data.is_admin}).eq("user_id", member_id).execute()
+        
+        return {"status": "success", "is_admin": data.is_admin}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/stats", response_model=RecruiterStats)
 async def get_stats(user: dict = Depends(get_current_user)):
     try:
@@ -123,6 +211,11 @@ async def get_candidate_pool(user: dict = Depends(get_current_user)):
         return await recruiter_service.get_candidate_pool()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/recommended-candidates")
+async def get_recommended_candidates(user: dict = Depends(get_current_user)):
+    """Fetch behavioral/cultural matches for the recruiter."""
+    return await recruiter_service.get_recommended_candidates(user["sub"])
 
 @router.get("/candidate/{candidate_id}")
 async def get_candidate_details(candidate_id: str, user: dict = Depends(get_current_user)):
@@ -144,24 +237,81 @@ async def update_registration(data: RegistrationUpdate, user: dict = Depends(get
 async def list_jobs(user: dict = Depends(get_current_user)):
     return await recruiter_service.list_jobs(user["sub"])
 
+@router.get("/team")
+async def get_team_members(user: dict = Depends(get_current_user)):
+    """Fetch teammate details for the company."""
+    return await recruiter_service.get_team_members(user["sub"])
+
+@router.get("/market-insights")
+async def get_market_insights(user: dict = Depends(get_current_user)):
+    """Fetch Career GPS insights."""
+    return await recruiter_service.get_market_insights(user["sub"])
+
 @router.post("/jobs", response_model=JobResponse)
 async def create_job(data: JobCreate, user: dict = Depends(get_current_user)):
     try:
         return await recruiter_service.create_job(user["sub"], data.model_dump())
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-@router.post("/applications/status")
-async def update_application_status(data: ApplicationStatusUpdate, user: dict = Depends(get_current_user)):
-    """Update status for a job application."""
+@router.post("/candidate/{candidate_id}/invite")
+async def invite_candidate(candidate_id: str, request: JobInviteRequest, user: dict = Depends(get_current_user)):
+    """Invite a candidate from the pool to a specific job."""
     try:
-        return await recruiter_service.update_application_status(
-            user["sub"], 
-            data.application_id, 
+        return await recruiter_service.invite_candidate(user["sub"], candidate_id, request.job_id, request.message)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/candidate/{candidate_id}/application-status")
+async def get_candidate_application_status(candidate_id: str, user: dict = Depends(get_current_user)):
+    """Check if candidate has an active application with recruiter's company."""
+    user_id = user["sub"]
+    profile = await recruiter_service.get_or_create_profile(user_id)
+    company_id = profile.get("company_id")
+    
+    # Fetch all apps for this candidate and company
+    res = supabase.table("job_applications")\
+        .select("*, jobs!inner(*)")\
+        .eq("candidate_id", candidate_id)\
+        .eq("jobs.company_id", company_id)\
+        .execute()
+    
+    return res.data
+
+@router.get("/applications/pipeline")
+async def get_applications_pipeline(user: dict = Depends(get_current_user)):
+    """Fetch all applications grouped by job for the pipeline view."""
+    return await recruiter_service.get_applications_pipeline(user["sub"])
+
+@router.post("/applications/bulk-status")
+async def bulk_update_status(data: BulkApplicationStatusUpdate, user: dict = Depends(get_current_user)):
+    """Bulk update application statuses."""
+    try:
+        return await recruiter_service.bulk_update_application_status(
+            user["sub"],
+            data.application_ids, 
             data.status, 
             data.feedback
         )
     except Exception as e:
-        raise HTTPException(status_code=403 if "Unauthorized" in str(e) else 500, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/applications/{application_id}/history")
+async def get_application_history(application_id: str, user: dict = Depends(get_current_user)):
+    """Fetch the status transition history for an application."""
+    return await recruiter_service.get_application_history(application_id)
+
+@router.post("/applications/status")
+async def update_application_status(data: ApplicationStatusUpdate, user: dict = Depends(get_current_user)):
+    """Update status for a job application."""
+    try:
+        return await recruiter_service.bulk_update_application_status(
+            user["sub"],
+            [data.application_id], 
+            data.status, 
+            data.feedback
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 @router.patch("/jobs/{job_id}", response_model=JobResponse)
 async def update_job(job_id: str, data: JobUpdate, user: dict = Depends(get_current_user)):
     try:
@@ -197,14 +347,14 @@ async def submit_answer(submission: RecruiterAnswerSubmission, user: dict = Depe
         submission.answer, 
         submission.category
     )
-    if result.get("status") == "error":
+    if isinstance(result, dict) and result.get("status") == "error":
         raise HTTPException(status_code=500, detail=result.get("message"))
     return result
 
 @router.post("/complete-assessment")
 async def complete_assessment(user: dict = Depends(get_current_user)):
     result = await recruiter_service.complete_recruiter_assessment(user["sub"])
-    if result.get("status") == "error":
+    if isinstance(result, dict) and result.get("status") == "error":
         raise HTTPException(status_code=400, detail=result.get("message"))
     return result
 

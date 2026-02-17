@@ -201,13 +201,8 @@ export default function AssessmentExam() {
           setCurrentQuestion(nextQ);
           setAnswer("");
           setTimeLeft(60);
-          // Refresh session state for progress bar
-          const startRes = await apiClient.post(
-            "/assessment/start",
-            {},
-            authSession.access_token,
-          );
-          setSession(startRes);
+          // Refresh progress bar implicitly via current step from nextQ metadata if needed
+          // Removed redundant /start call to reduce latency
         }
       } catch (err) {
         console.error("Submission error:", err);
@@ -576,4 +571,3 @@ export default function AssessmentExam() {
     </div>
   );
 }
-

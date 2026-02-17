@@ -69,19 +69,20 @@ async def post_login(user: dict = Depends(get_current_user)):
     user_id = user["sub"]
     email = user["email"]
     
+    print(f"HANDSHAKE START: User {user_id} ({email})")
+    
     # Check if blocked
     blocked = supabase.table("blocked_users").select("*").eq("user_id", user_id).execute()
     if blocked.data:
+        print(f"HANDSHAKE BLOCKED: User {user_id} is in blocked_users")
         raise HTTPException(status_code=403, detail="Your account has been permanently blocked due to security violations.")
 
     try:
-        # 1. Fetch user role (removing .single() to handle 0 rows manually)
+        # 1. Fetch user role
         user_res = supabase.table("users").select("role").eq("id", user_id).execute()
         
         if not user_res.data:
-            # AUTO-RECOVERY: If user exists in Auth but not in public.users
-            # This happens if a previous signup was interrupted.
-            # We determine role based on email (personal = candidate)
+            print(f"HANDSHAKE: User {user_id} not found in users table. Initializing recovery...")
             from src.utils.email_validation import is_personal_email
             
             recovered_role = "candidate" if is_personal_email(email) else "recruiter"
@@ -103,6 +104,7 @@ async def post_login(user: dict = Depends(get_current_user)):
                 from src.services.recruiter_service import recruiter_service
                 await recruiter_service.get_or_create_profile(user_id)
             
+            print(f"HANDSHAKE RECOVERY SUCCESS: Role={recovered_role}")
             return {
                 "next_step": f"/onboarding/{recovered_role}",
                 "role": recovered_role,
@@ -110,6 +112,7 @@ async def post_login(user: dict = Depends(get_current_user)):
             }
         
         role = user_res.data[0]["role"]
+        print(f"HANDSHAKE: Found role '{role}' for user {user_id}")
         
         # 2. Check assessment status
         if role == "candidate":
@@ -121,11 +124,10 @@ async def post_login(user: dict = Depends(get_current_user)):
         status = "not_started"
         if profile_res.data and len(profile_res.data) > 0:
             status = profile_res.data[0]["assessment_status"]
+            print(f"HANDSHAKE: Assessment status is '{status}'")
         
         # 3. Determine next step
         if role == "candidate":
-            # RELAXED GATING: Allow dashboard access if basic profile is ready (experience + resume)
-            # even if assessment is not completed.
             profile_data = profile_res.data[0] if profile_res.data else {}
             has_experience = profile_data.get("experience") is not None
             has_resume = profile_data.get("resume_uploaded", False)
@@ -140,11 +142,12 @@ async def post_login(user: dict = Depends(get_current_user)):
             else:
                 next_step = "/onboarding/recruiter"
             
+        print(f"HANDSHAKE COMPLETED: Redirecting to {next_step}")
         return {
             "next_step": next_step,
             "role": role,
             "status": status
         }
     except Exception as e:
-        print(f"Post-Login Error: {str(e)}")
+        print(f"HANDSHAKE CRITICAL ERROR: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

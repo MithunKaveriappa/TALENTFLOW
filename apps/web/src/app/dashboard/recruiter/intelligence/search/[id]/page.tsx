@@ -15,7 +15,9 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
-import RecruiterSidebar from "@/components/RecruiterSidebar";
+import InterviewScheduler from "@/components/InterviewScheduler";
+import JobInviteModal from "@/components/JobInviteModal";
+import LockedView from "@/components/dashboard/LockedView";
 
 interface Candidate {
   user_id: string;
@@ -28,14 +30,40 @@ interface Candidate {
   skills: string[];
 }
 
+interface Application {
+  id: string;
+  job_id: string;
+  status: string;
+  jobs?: { title: string };
+}
+
+interface Job {
+  id: string;
+  title: string;
+  status: string;
+  location: string;
+  recruiter_id: string;
+}
+
 export default function CandidateProfileView() {
   const router = useRouter();
   const { id } = useParams();
   const [candidate, setCandidate] = useState<Candidate | null>(null);
-  const [profile, setProfile] = useState<{ assessment_status?: string } | null>(
-    null,
-  );
+  const [profile, setProfile] = useState<{ 
+    assessment_status?: string;
+    user_id?: string;
+    team_role?: "admin" | "recruiter";
+    companies?: {
+      profile_score: number;
+    };
+  } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [showScheduler, setShowScheduler] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [recruiterJobs, setRecruiterJobs] = useState<Job[]>([]);
+
+  const isLocked = profile && (profile.companies?.profile_score ?? 0) === 0;
 
   useEffect(() => {
     async function fetchData() {
@@ -48,13 +76,21 @@ export default function CandidateProfileView() {
           return;
         }
 
-        const [candidateData, profileData] = await Promise.all([
-          apiClient.get(`/recruiter/candidate/${id}`, session.access_token),
-          apiClient.get("/recruiter/profile", session.access_token),
-        ]);
+        const [candidateData, profileData, appsData, jobsData] =
+          await Promise.all([
+            apiClient.get(`/recruiter/candidate/${id}`, session.access_token),
+            apiClient.get("/recruiter/profile", session.access_token),
+            apiClient.get(
+              `/recruiter/candidate/${id}/application-status`,
+              session.access_token,
+            ),
+            apiClient.get("/recruiter/jobs", session.access_token),
+          ]);
 
         setCandidate(candidateData);
         setProfile(profileData);
+        setApplications(appsData || []);
+        setRecruiterJobs(jobsData || []);
       } catch (err) {
         console.error("Failed to fetch data:", err);
       } finally {
@@ -64,10 +100,49 @@ export default function CandidateProfileView() {
     fetchData();
   }, [id, router]);
 
+  const handleInvite = async (jobId: string, message: string) => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return;
+
+      await apiClient.post(
+        `/recruiter/candidate/${id}/invite`,
+        {
+          job_id: jobId,
+          message: message,
+        },
+        session.access_token,
+      );
+
+      // Refresh status
+      const updatedApps = await apiClient.get(
+        `/recruiter/candidate/${id}/application-status`,
+        session.access_token,
+      );
+      setApplications(updatedApps || []);
+      setShowInviteModal(false);
+
+      alert(`Invitation sent successfully!`);
+    } catch (err) {
+      console.error("Invite failed:", err);
+      alert("Failed to send invitation.");
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50/50">
         <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
+      </div>
+    );
+  }
+
+  if (isLocked) {
+    return (
+      <div className="p-12 min-h-screen bg-slate-50">
+        <LockedView featureName="Candidate Intelligence" />
       </div>
     );
   }
@@ -82,10 +157,11 @@ export default function CandidateProfileView() {
           Candidate Not Found
         </h1>
         <p className="text-slate-500 mt-2 mb-6">
-          The profile you&apos;re looking for doesn&apos;t exist or you don&apos;t have access.
+          The profile you&apos;re looking for doesn&apos;t exist or you
+          don&apos;t have access.
         </p>
         <Link
-          href="/dashboard/recruiter/pool"
+          href="/dashboard/recruiter/hiring/pool"
           className="text-blue-600 font-bold hover:underline"
         >
           Return to Candidate Pool
@@ -95,16 +171,14 @@ export default function CandidateProfileView() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
-      <RecruiterSidebar assessmentStatus={profile?.assessment_status} />
-
+    <div className="min-h-screen">
       {/* Main Content Area */}
-      <div className="flex-1 ml-64 flex flex-col">
+      <div className="flex flex-col">
         {/* Top Header */}
         <header className="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-8 sticky top-0 z-10 w-full">
           <div className="flex items-center space-x-4">
             <Link
-              href="/dashboard/recruiter/pool"
+              href="/dashboard/recruiter/hiring/pool"
               className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
             >
               <ChevronLeft className="w-5 h-5" />
@@ -116,7 +190,7 @@ export default function CandidateProfileView() {
           </div>
           <div className="flex items-center space-x-4">
             <Link
-              href="/dashboard/recruiter/profile"
+              href="/dashboard/recruiter/account/profile"
               className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-colors"
             >
               <Settings className="w-5 h-5" />
@@ -162,7 +236,7 @@ export default function CandidateProfileView() {
                         Trust Score
                       </div>
                       <div className="text-2xl font-black text-blue-700">
-                        {(candidate.trust_score * 100).toFixed(0)}%
+                        {(candidate.trust_score || 0).toFixed(0)}%
                       </div>
                     </div>
                   </div>
@@ -177,11 +251,11 @@ export default function CandidateProfileView() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-8">
               <ScoreCard
                 label="Verified Trust Score"
-                score={candidate.trust_score}
+                score={candidate.trust_score || 0}
               />
               <ScoreCard
                 label="Skill Alignment"
-                score={candidate.skills_alignment}
+                score={candidate.skills_alignment || 0}
               />
             </div>
           </div>
@@ -239,22 +313,52 @@ export default function CandidateProfileView() {
                 <button className="w-full px-6 py-4 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-50 transition-all flex items-center justify-center">
                   Add to Shortlist
                 </button>
+                {applications.length > 0 ? (
+                  <button
+                    onClick={() => setShowScheduler(true)}
+                    className="w-full px-6 py-4 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all shadow-lg flex items-center justify-center"
+                  >
+                    Schedule Interview
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setShowInviteModal(true)}
+                    className="w-full px-6 py-4 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all shadow-lg flex items-center justify-center"
+                  >
+                    Invite to Job
+                  </button>
+                )}
               </div>
             </div>
           </div>
         </main>
       </div>
+
+      {showScheduler && (
+        <InterviewScheduler
+          candidateName={candidate.full_name}
+          applications={applications}
+          onClose={() => setShowScheduler(false)}
+          onSuccess={() => {
+            setShowScheduler(false);
+            alert("Interview proposal sent!");
+          }}
+        />
+      )}
+
+      {showInviteModal && (
+        <JobInviteModal
+          candidateName={candidate.full_name}
+          jobs={recruiterJobs.filter(j => j.recruiter_id === profile?.user_id)}
+          onClose={() => setShowInviteModal(false)}
+          onInvite={handleInvite}
+        />
+      )}
     </div>
   );
 }
 
-function ScoreCard({
-  label,
-  score,
-}: {
-  label: string;
-  score: number;
-}) {
+function ScoreCard({ label, score }: { label: string; score: number }) {
   return (
     <div className="p-6 bg-slate-50/50 rounded-xl border border-slate-100 relative overflow-hidden group hover:border-blue-100 transition-all">
       <div className="absolute top-0 left-0 w-1 h-full bg-blue-600 opacity-20 group-hover:opacity-100 transition-opacity" />
@@ -263,14 +367,14 @@ function ScoreCard({
       </span>
       <div className="flex items-end gap-2">
         <span className="text-3xl font-black text-slate-900 tracking-tighter leading-none">
-          {(score * 100).toFixed(0)}
+          {(score || 0).toFixed(0)}
         </span>
         <span className="text-xs font-bold text-slate-400 mb-1">%</span>
       </div>
       <div className="mt-4 h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
         <div
           className="h-full bg-blue-600 transition-all duration-1000 ease-out"
-          style={{ width: `${score * 100}%` }}
+          style={{ width: `${score || 0}%` }}
         />
       </div>
     </div>

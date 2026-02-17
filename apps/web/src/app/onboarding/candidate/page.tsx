@@ -1,14 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
 import { useVoice } from "@/hooks/useVoice";
 import { extractNameFromEmail } from "@/utils/emailValidation";
 import { SKILLS_BY_EXPERIENCE } from "./skillsData";
-import { TermsModal } from "@/components/TermsModal";
 
 type Message = {
   id: string;
@@ -27,9 +26,8 @@ type OnboardingState =
   | "AWAITING_TC"
   | "COMPLETED";
 
-function CandidateOnboardingContent() {
+export default function CandidateOnboarding() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [messages, setMessages] = useState<Message[]>([]);
   const [state, setState] = useState<OnboardingState>("INITIAL");
   const [experienceBand, setExperienceBand] = useState<string>("fresher");
@@ -37,7 +35,6 @@ function CandidateOnboardingContent() {
   const userIdRef = useRef<string | null>(null);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [showTerms, setShowTerms] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const initialized = useRef(false);
 
@@ -151,39 +148,6 @@ function CandidateOnboardingContent() {
         session?.access_token,
       );
 
-      const targetStep = searchParams.get("target") as OnboardingState | null;
-
-      if (
-        targetStep &&
-        (targetStep === "AWAITING_ID" || targetStep === "AWAITING_TC")
-      ) {
-        setState(targetStep);
-        setExperienceBand(profile?.experience || "fresher");
-        setSelectedSkills(profile?.skills || []);
-
-        if (targetStep === "AWAITING_ID") {
-          addMessage(
-            `Welcome back, ${name}! Let's get your identity verified.`,
-            "bot",
-          );
-          addMessage(
-            "Please upload any government-issued ID (DL, Passport, or any ID proof).",
-            "bot",
-          );
-        } else {
-          addMessage(
-            `Welcome back, ${name}! Final step: Legal synchronization.`,
-            "bot",
-          );
-          addMessage(
-            "Please review and accept our Terms and Conditions to complete your onboarding.",
-            "bot",
-            ["Read Terms", "Accept Terms & Conditions"],
-          );
-        }
-        return;
-      }
-
       if (
         profile &&
         profile.onboarding_step &&
@@ -220,7 +184,7 @@ function CandidateOnboardingContent() {
             addMessage(
               "Almost done! Please review and accept our Terms and Conditions to complete your onboarding.",
               "bot",
-              ["Read Terms", "Accept Terms & Conditions"],
+              ["Accept Terms & Conditions"],
             );
           }
         }
@@ -248,7 +212,7 @@ function CandidateOnboardingContent() {
       }
     }
     init();
-  }, [router, searchParams]);
+  }, [router]);
 
   const handleSend = async (textOverride?: string) => {
     const workingInput = textOverride || input.trim();
@@ -268,10 +232,6 @@ function CandidateOnboardingContent() {
     if (isLoading) return;
 
     if (workingInput) {
-      if (workingInput === "Read Terms") {
-        setShowTerms(true);
-        return;
-      }
       addMessage(workingInput, "user");
     } else if (state === "AWAITING_SKILLS" && selectedSkills.length > 0) {
       addMessage(`Confirmed ${selectedSkills.length} skills`, "user");
@@ -413,7 +373,7 @@ function CandidateOnboardingContent() {
       if (!user || !session) throw new Error("Not authenticated");
 
       const fileExt = file.name.split(".").pop();
-      const folder = state === "AWAITING_RESUME" ? "resumes" : "documents";
+      const folder = state === "AWAITING_RESUME" ? "resumes" : "id-proofs";
       const filePath = `${folder}/${user.id}-${Math.random()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
@@ -468,7 +428,7 @@ function CandidateOnboardingContent() {
           addMessage(
             "Last step: Please accept our Terms and Conditions to finalize your profile.",
             "bot",
-            ["Read Terms", "Accept Terms & Conditions"],
+            ["Accept Terms & Conditions"],
           );
           const nextState = "AWAITING_TC";
           await saveStep(nextState);
@@ -771,15 +731,6 @@ function CandidateOnboardingContent() {
           </div>
         </div>
       </div>
-      <TermsModal isOpen={showTerms} onClose={() => setShowTerms(false)} />
     </div>
-  );
-}
-
-export default function Page() {
-  return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <CandidateOnboardingContent />
-    </Suspense>
   );
 }

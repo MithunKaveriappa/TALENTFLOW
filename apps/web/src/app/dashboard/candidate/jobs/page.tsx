@@ -27,7 +27,6 @@ export default function CandidateJobsPage() {
   const [applying, setApplying] = useState<string | null>(null);
   const [assessmentStatus, setAssessmentStatus] =
     useState<string>("not_started");
-  const [dailyCount, setDailyCount] = useState(0);
 
   useEffect(() => {
     const loadData = async () => {
@@ -36,7 +35,7 @@ export default function CandidateJobsPage() {
           data: { session },
         } = await supabase.auth.getSession();
         if (!session) {
-          router.replace("/login");
+          router.push("/login");
           return;
         }
 
@@ -47,7 +46,6 @@ export default function CandidateJobsPage() {
 
         setJobs(jobsData);
         setAssessmentStatus(statsData.assessment_status);
-        setDailyCount(statsData.daily_applications_count || 0);
       } catch (err) {
         console.error("Failed to load jobs:", err);
       } finally {
@@ -58,11 +56,6 @@ export default function CandidateJobsPage() {
   }, [router]);
 
   const handleApply = async (jobId: string) => {
-    if (dailyCount >= 5) {
-      alert("Daily application limit reached (5/day). Quality over quantity!");
-      return;
-    }
-
     setApplying(jobId);
     try {
       const {
@@ -80,15 +73,8 @@ export default function CandidateJobsPage() {
       setJobs(
         jobs.map((j) => (j.id === jobId ? { ...j, has_applied: true } : j)),
       );
-      setDailyCount((prev) => prev + 1);
-    } catch (err: unknown) {
+    } catch (err) {
       console.error("Application failed:", err);
-      const errorMsg = err instanceof Error ? err.message : "";
-      if (errorMsg.includes("limit exceeded")) {
-        alert("Daily limit reached. Please try tomorrow!");
-      } else {
-        alert("Action failed. Please check your signal strength.");
-      }
     } finally {
       setApplying(null);
     }
@@ -106,39 +92,15 @@ export default function CandidateJobsPage() {
     <div className="flex min-h-screen bg-slate-50">
       <CandidateSidebar assessmentStatus={assessmentStatus} />
 
-      <main className="flex-1 ml-64 p-6 md:p-12">
-        <div className="max-w-5xl mx-auto">
-          <header className="mb-12 flex justify-between items-end">
-            <div>
-              <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase">
-                Job Board
-              </h1>
-              <div className="flex items-center gap-3 mt-1">
-                <p className="text-slate-500 font-medium italic">
-                  Elite roles matching your talent signals.
-                </p>
-                {dailyCount > 0 && (
-                  <span
-                    className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${
-                      dailyCount >= 5
-                        ? "bg-red-50 text-red-600 border-red-100"
-                        : "bg-indigo-50 text-indigo-600 border-indigo-100"
-                    }`}
-                  >
-                    Daily Signal Count: {dailyCount}/5
-                  </span>
-                )}
-              </div>
-            </div>
-            <button
-              onClick={async () => {
-                await supabase.auth.signOut();
-                router.replace("/login");
-              }}
-              className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-red-500 hover:bg-red-50 hover:border-red-100 transition-all shadow-sm active:scale-95"
-            >
-              Logout
-            </button>
+      <main className="flex-1 ml-64 p-6 md:p-12 overflow-y-auto">
+        <div className="max-w-4xl mx-auto">
+          <header className="mb-12">
+            <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase">
+              Open Signals
+            </h1>
+            <p className="text-slate-500 font-medium">
+              Elite roles currently matching the TalentFlow ecosystem.
+            </p>
           </header>
 
           <div className="space-y-6">
@@ -185,8 +147,7 @@ export default function CandidateJobsPage() {
                         disabled={
                           job.has_applied ||
                           applying === job.id ||
-                          assessmentStatus !== "completed" ||
-                          (dailyCount >= 5 && !job.has_applied)
+                          assessmentStatus !== "completed"
                         }
                         onClick={() => handleApply(job.id)}
                         className={`px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-lg active:scale-95 ${
@@ -194,9 +155,7 @@ export default function CandidateJobsPage() {
                             ? "bg-slate-100 text-slate-400 cursor-default"
                             : assessmentStatus !== "completed"
                               ? "bg-slate-200 text-slate-400 cursor-not-allowed"
-                              : dailyCount >= 5
-                                ? "bg-slate-200 text-slate-300 cursor-not-allowed"
-                                : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100"
+                              : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100"
                         }`}
                       >
                         {applying === job.id
@@ -205,18 +164,11 @@ export default function CandidateJobsPage() {
                             ? "Applied"
                             : assessmentStatus !== "completed"
                               ? "LOCKED"
-                              : dailyCount >= 5
-                                ? "LIMIT"
-                                : "Apply Now"}
+                              : "Apply Now"}
                       </button>
                       {assessmentStatus !== "completed" && (
                         <span className="text-[8px] font-bold text-amber-600 uppercase tracking-widest text-center max-w-30">
                           Complete assessment to unlock applications
-                        </span>
-                      )}
-                      {dailyCount >= 5 && !job.has_applied && (
-                        <span className="text-[8px] font-bold text-red-600 uppercase tracking-widest text-center max-w-30">
-                          Daily quota reached (5/5)
                         </span>
                       )}
                     </div>

@@ -13,6 +13,10 @@ interface Application {
   status: string;
   applied_at: string;
   feedback?: string;
+  metadata?: {
+    interview_link?: string;
+    interview_time?: string;
+  };
 }
 
 const STATUS_ORDER = [
@@ -28,7 +32,8 @@ export default function CandidateApplicationsPage() {
   const router = useRouter();
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
-  const [assessmentStatus, setAssessmentStatus] = useState<string>("not_started");
+  const [assessmentStatus, setAssessmentStatus] =
+    useState<string>("not_started");
 
   useEffect(() => {
     const loadData = async () => {
@@ -96,15 +101,26 @@ export default function CandidateApplicationsPage() {
           {applications.length === 0 ? (
             <div className="bg-white p-12 rounded-4xl text-center border border-slate-100 shadow-sm">
               <div className="h-16 w-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-6 text-slate-300">
-                <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                <svg
+                  className="h-8 w-8"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                  />
                 </svg>
               </div>
               <h2 className="text-xl font-black text-slate-900 mb-2 uppercase tracking-tight">
                 No Active Signals
               </h2>
               <p className="text-slate-500 mb-8 max-w-sm mx-auto font-medium">
-                You haven&apos;t transmitted any signals to open roles yet. Explore the Job Board to find your next match.
+                You haven&apos;t transmitted any signals to open roles yet.
+                Explore the Job Board to find your next match.
               </p>
               <button
                 onClick={() => router.push("/dashboard/candidate/jobs")}
@@ -151,8 +167,8 @@ function ApplicationCard({ application }: { application: Application }) {
               isRejected
                 ? "bg-red-50 text-red-600 border-red-100"
                 : isClosed
-                ? "bg-slate-50 text-slate-500 border-slate-200"
-                : "bg-indigo-50 text-indigo-600 border-indigo-100"
+                  ? "bg-slate-50 text-slate-500 border-slate-200"
+                  : "bg-indigo-50 text-indigo-600 border-indigo-100"
             }`}
           >
             {application.status.replace("_", " ")}
@@ -162,7 +178,48 @@ function ApplicationCard({ application }: { application: Application }) {
 
       {/* Lifecycle Timeline */}
       {!isRejected && !isClosed ? (
-        <div className="relative pt-4 pb-8">
+        <div className="relative pt-4 pb-12">
+          {/* Interview Action Component */}
+          {application.status === "interview_scheduled" &&
+            application.metadata?.interview_link && (
+              <div className="mb-8 p-4 bg-indigo-600 rounded-2xl flex items-center justify-between shadow-lg shadow-indigo-200 animate-in fade-in slide-in-from-top-4 duration-500">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 bg-white/20 rounded-xl flex items-center justify-center text-white">
+                    <svg
+                      className="h-5 w-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+                      />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-white text-xs font-black uppercase tracking-widest">
+                      Virtual War Room Ready
+                    </p>
+                    <p className="text-indigo-100 text-[10px] font-bold">
+                      Secure Signal:{" "}
+                      {application.metadata.interview_time || "Check calendar"}
+                    </p>
+                  </div>
+                </div>
+                <a
+                  href={application.metadata.interview_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-6 py-2 bg-white text-indigo-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all active:scale-95"
+                >
+                  Join Jitsi
+                </a>
+              </div>
+            )}
+
           <div className="absolute top-1/2 left-0 w-full h-0.5 bg-slate-100 -translate-y-1/2" />
           <div
             className="absolute top-1/2 left-0 h-0.5 bg-indigo-500 -translate-y-1/2 transition-all duration-1000"
@@ -182,7 +239,9 @@ function ApplicationCard({ application }: { application: Application }) {
                 />
                 <span
                   className={`absolute -bottom-6 text-[8px] font-black uppercase tracking-tighter whitespace-nowrap transition-colors ${
-                    idx <= currentStatusIndex ? "text-slate-900" : "text-slate-300"
+                    idx <= currentStatusIndex
+                      ? "text-slate-900"
+                      : "text-slate-300"
                   }`}
                 >
                   {step.replace("_", " ")}
@@ -195,8 +254,18 @@ function ApplicationCard({ application }: { application: Application }) {
         <div className="bg-red-50/50 border border-red-100 rounded-2xl p-6">
           <div className="flex items-center gap-3 mb-3">
             <div className="h-8 w-8 bg-red-100 text-red-600 rounded-lg flex items-center justify-center">
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
               </svg>
             </div>
             <h4 className="font-black text-red-900 uppercase tracking-tight text-xs">
@@ -204,7 +273,8 @@ function ApplicationCard({ application }: { application: Application }) {
             </h4>
           </div>
           <p className="text-red-700/70 text-xs font-medium leading-relaxed mb-4">
-            {application.feedback || "The recruiter has chosen not to move forward with this signal at this time. Standard criteria evaluation suggests a focus on aligning your core signals for similar roles."}
+            {application.feedback ||
+              "The recruiter has chosen not to move forward with this signal at this time. Standard criteria evaluation suggests a focus on aligning your core signals for similar roles."}
           </p>
           <div className="flex items-center gap-2 text-[8px] font-black text-red-400 uppercase tracking-widest">
             <span className="h-1 w-1 bg-red-400 rounded-full" />
@@ -221,4 +291,3 @@ function ApplicationCard({ application }: { application: Application }) {
     </div>
   );
 }
-

@@ -9,6 +9,7 @@ from src.api.recruiter import router as recruiter_router
 from src.api.posts import router as posts_router
 from src.api.notifications import router as notifications_router
 from src.api.chat import router as chat_router
+from src.api.interviews import router as interviews_router
 import time
 
 app = FastAPI(title="TalentFlow API")
@@ -28,11 +29,7 @@ async def log_requests(request: Request, call_next):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://0.0.0.0:3000",
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -47,6 +44,7 @@ app.include_router(recruiter_router)
 app.include_router(posts_router, prefix="/posts")
 app.include_router(notifications_router)
 app.include_router(chat_router)
+app.include_router(interviews_router)
 
 @app.get("/")
 def root():

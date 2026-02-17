@@ -15,7 +15,12 @@ class ChatService:
         }).execute()
 
         if response.data:
-            return response.data[0]
+            thread = response.data[0]
+            if not thread.get("is_active"):
+                # Unlock existing thread if it was previously inactive
+                update_res = supabase.table("chat_threads").update({"is_active": True}).eq("id", thread["id"]).execute()
+                return update_res.data[0]
+            return thread
 
         # Create new thread
         new_thread = {
@@ -30,11 +35,53 @@ class ChatService:
     def send_message(thread_id: str, sender_id: str, content: str) -> dict:
         """
         Sends a message within a thread.
+        Includes a gate check for Behavioral and Psychometric assessment completion.
         """
-        # Verify thread is active
-        thread = supabase.table("chat_threads").select("is_active").eq("id", thread_id).single().execute()
-        if not thread.data or not thread.data.get("is_active"):
+        # 1. Fetch thread and candidate status
+        thread_res = supabase.table("chat_threads").select("*, candidate_id").eq("id", thread_id).execute()
+        if not thread_res.data:
+            raise ValueError("Thread not found")
+        
+        thread = thread_res.data[0]
+        if not thread.get("is_active"):
             raise ValueError("Cannot send message to an inactive thread.")
+
+        candidate_id = thread["candidate_id"]
+
+        # 2. Gate Check: Behavioral & Psychometric scores must be >= 50 (DNA Gate)
+        session_res = supabase.table("assessment_sessions").select("component_scores, status").eq("candidate_id", candidate_id).execute()
+        
+        dna_unlocked = False
+        if session_res.data:
+            session = session_res.data[0]
+            if session.get("status") == "completed":
+                scores = session.get("component_scores", {})
+                beh_score = scores.get("behavioral", 0)
+                psy_score = scores.get("psychometric", 0)
+                if beh_score >= 50 and psy_score >= 50:
+                    dna_unlocked = True
+
+        # 3. Contextual Status Check (Status Gate - Messaging Manifesto 8.1)
+        # Determine the company context
+        recruiter_id = thread["recruiter_id"]
+        recruiter_res = supabase.table("recruiter_profiles").select("company_id").eq("user_id", recruiter_id).execute()
+        if not recruiter_res.data:
+            raise ValueError("Recruiter context not found")
+        company_id = recruiter_res.data[0].get("company_id")
+
+        # Fetch applications linked to this company
+        # Valid statuses to unlock chat: shortlisted, invited, interview_scheduled, offered, recommended
+        unlocked_statuses = ['shortlisted', 'invited', 'interview_scheduled', 'offered', 'recommended']
+        valid_apps = supabase.table("job_applications").select("status, jobs!inner(company_id)")\
+            .eq("candidate_id", candidate_id)\
+            .eq("jobs.company_id", company_id)\
+            .execute()
+
+        context_unlocked = any(a['status'] in unlocked_statuses for a in valid_apps.data)
+
+        # 4. Final Unlock Logic (OR)
+        if not (dna_unlocked or context_unlocked):
+            raise ValueError("Chat Locked: Communications unlock when Candidate DNA Score >= 50 OR Application is Shortlisted/Invited.")
 
         message = {
             "thread_id": thread_id,

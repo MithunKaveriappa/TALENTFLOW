@@ -188,16 +188,16 @@ export default function CandidateProfilePage() {
 
   if (loading)
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      <div className="flex-1 flex justify-center items-center p-6 md:p-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
       </div>
     );
 
   return (
-    <div className="flex min-h-screen bg-slate-50 overflow-hidden">
-      <CandidateSidebar />
+    <div className="flex min-h-screen bg-slate-50">
+      <CandidateSidebar assessmentStatus={profile?.assessment_status} />
 
-      <main className="flex-1 overflow-y-auto ml-64 p-12">
+      <main className="flex-1 ml-64 p-6 md:p-12 overflow-y-auto">
         <div className="max-w-5xl mx-auto space-y-8">
           {/* Header */}
           <div className="flex items-center justify-between mb-12">
@@ -220,8 +220,8 @@ export default function CandidateProfilePage() {
             </button>
           </div>
 
-          <div className="flex items-center gap-8">
-            <div className="text-right">
+          <div className="flex items-center gap-8 bg-white p-8 rounded-4xl border border-slate-200/60 shadow-sm relative overflow-hidden">
+            <div className="text-left">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                 Profile Completion
               </span>
@@ -229,6 +229,8 @@ export default function CandidateProfilePage() {
                 {profile?.completion_score || 0}%
               </div>
             </div>
+
+            <div className="flex-1" />
 
             <button
               onClick={handleLogout}
@@ -254,146 +256,40 @@ export default function CandidateProfilePage() {
               </div>
             </button>
           </div>
-        </div>
 
-        {message && (
-          <div
-            className={`p-4 rounded-2xl border ${message.type === "success" ? "bg-emerald-50 border-emerald-100 text-emerald-700" : "bg-red-50 border-red-100 text-red-700"} font-bold text-sm`}
-          >
-            {message.text}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-8">
-          {/* Section 1: Identity */}
-          <div className="bg-white rounded-4xl p-8 md:p-12 shadow-sm border border-slate-200/60 overflow-hidden relative">
-            <h3 className="text-xl font-black text-slate-900 mb-10 flex items-center gap-3 italic">
-              <span className="h-1 w-8 bg-indigo-600 rounded-full" />
-              IDENTITY & BIO
-            </h3>
-
-            <div className="flex flex-col md:flex-row gap-12 items-start">
-              {/* Photo Upload */}
-              <div className="flex flex-col items-center gap-4 group">
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="h-32 w-32 rounded-4xl bg-slate-100 border-2 border-dashed border-slate-200 flex items-center justify-center cursor-pointer overflow-hidden relative group-hover:border-indigo-400 transition-all"
-                >
-                  {profile?.profile_photo_url ? (
-                    <Image
-                      src={profile.profile_photo_url}
-                      alt="Profile"
-                      fill
-                      className="object-cover"
-                    />
-                  ) : (
-                    <svg
-                      className="h-8 w-8 text-slate-300"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 4v16m8-8H4"
-                      />
-                    </svg>
-                  )}
-                  {uploading && (
-                    <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
-                    </div>
-                  )}
-                </div>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handlePhotoUpload}
-                  className="hidden"
-                  accept="image/*"
-                />
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  {uploading ? "Uploading..." : "Click to Upload Photo"}
-                </span>
-              </div>
-
-              {/* Basic Fields */}
-              <div className="flex-1 space-y-6 w-full">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                      Full Name
-                    </label>
-                    <input
-                      type="text"
-                      name="full_name"
-                      value={profile?.full_name || ""}
-                      onChange={handleInputChange}
-                      className="w-full px-6 py-4 rounded-xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all font-bold text-slate-700"
-                      placeholder="Enter your full name"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                      Phone Number
-                    </label>
-                    <input
-                      type="text"
-                      name="phone_number"
-                      value={profile?.phone_number || ""}
-                      onChange={handleInputChange}
-                      className="w-full px-6 py-4 rounded-xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all font-bold text-slate-700"
-                      placeholder="+1 234 567 8900"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                    Professional Bio
-                  </label>
-                  <textarea
-                    name="bio"
-                    value={profile?.bio || ""}
-                    onChange={handleInputChange}
-                    className="w-full px-6 py-4 rounded-xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all font-bold text-slate-700 min-h-30"
-                    placeholder="Tell your professional story..."
-                  />
-                </div>
-              </div>
+          {message?.text && (
+            <div
+              className={`p-4 rounded-2xl border ${message?.type === "success" ? "bg-emerald-50 border-emerald-100 text-emerald-700" : "bg-red-50 border-red-100 text-red-700"} font-bold text-sm`}
+            >
+              {message?.text}
             </div>
-          </div>
+          )}
 
-          {/* Section 2: Career Details */}
-          <div className="bg-white rounded-4xl p-8 md:p-12 shadow-sm border border-slate-200/60">
-            <h3 className="text-xl font-black text-slate-900 mb-10 flex items-center gap-3 italic">
-              <span className="h-1 w-8 bg-indigo-600 rounded-full" />
-              CAREER & EXPERIENCE
-            </h3>
+          <form onSubmit={handleSubmit} className="space-y-8">
+            {/* Section 1: Identity */}
+            <div className="bg-white rounded-4xl p-8 md:p-12 shadow-sm border border-slate-200/60 overflow-hidden relative">
+              <h3 className="text-xl font-black text-slate-900 mb-10 flex items-center gap-3 italic">
+                <span className="h-1 w-8 bg-indigo-600 rounded-full" />
+                IDENTITY & BIO
+              </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                  Current Role
-                </label>
-                <input
-                  type="text"
-                  name="current_role"
-                  value={profile?.current_role || ""}
-                  onChange={handleInputChange}
-                  className="w-full px-6 py-4 rounded-xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all font-bold text-slate-700"
-                  placeholder="e.g. Senior Account Executive"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-2">
-                  Experience Band
-                  {profile?.assessment_status === "completed" && (
-                    <div className="flex items-center gap-1 text-[8px] text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+              <div className="flex flex-col md:flex-row gap-12 items-start">
+                {/* Photo Upload */}
+                <div className="flex flex-col items-center gap-4 group">
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="h-32 w-32 rounded-4xl bg-slate-100 border-2 border-dashed border-slate-200 flex items-center justify-center cursor-pointer overflow-hidden relative group-hover:border-indigo-400 transition-all"
+                  >
+                    {profile?.profile_photo_url ? (
+                      <Image
+                        src={profile.profile_photo_url}
+                        alt="Profile"
+                        fill
+                        className="object-cover"
+                      />
+                    ) : (
                       <svg
-                        className="h-2.5 w-2.5"
+                        className="h-8 w-8 text-slate-300"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -401,203 +297,212 @@ export default function CandidateProfilePage() {
                         <path
                           strokeLinecap="round"
                           strokeLinejoin="round"
-                          strokeWidth={3}
-                          d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                          strokeWidth={2}
+                          d="M12 4v16m8-8H4"
                         />
                       </svg>
-                      LOCKED
-                    </div>
-                  )}
-                </label>
-                {profile?.assessment_status === "completed" ? (
-                  <div className="w-full px-6 py-4 rounded-xl bg-slate-100 border border-slate-200 font-black text-slate-400 uppercase tracking-widest flex justify-between items-center group/lock">
-                    <span>{profile?.experience || "Not Set"}</span>
-                    <span className="text-[8px] opacity-0 group-hover/lock:opacity-100 transition-opacity">
-                      Requires Assessment Reset to change
-                    </span>
+                    )}
+                    {uploading && (
+                      <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <select
-                    name="experience"
-                    value={profile?.experience || "fresher"}
-                    onChange={handleInputChange}
-                    className="w-full px-6 py-4 rounded-xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all font-bold text-slate-700 appearance-none"
-                  >
-                    <option value="fresher">Fresher</option>
-                    <option value="mid">Mid-Level</option>
-                    <option value="senior">Senior</option>
-                    <option value="leadership">Leadership</option>
-                  </select>
-                )}
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                  Job Preference
-                </label>
-                <select
-                  name="job_type"
-                  value={profile?.job_type || "onsite"}
-                  onChange={handleInputChange}
-                  className="w-full px-6 py-4 rounded-xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all font-bold text-slate-700 appearance-none"
-                >
-                  <option value="onsite">On-Site</option>
-                  <option value="remote">Remote</option>
-                  <option value="hybrid">Hybrid</option>
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                  Total Years of Experience
-                </label>
-                <input
-                  type="number"
-                  name="years_of_experience"
-                  value={profile?.years_of_experience || 0}
-                  onChange={handleInputChange}
-                  className="w-full px-6 py-4 rounded-xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all font-bold text-slate-700"
-                />
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handlePhotoUpload}
+                    className="hidden"
+                    accept="image/*"
+                  />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    {uploading ? "Uploading..." : "Click to Upload Photo"}
+                  </span>
+                </div>
+
+                {/* Basic Fields */}
+                <div className="flex-1 space-y-6 w-full">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                        Full Name
+                      </label>
+                      <input
+                        type="text"
+                        name="full_name"
+                        value={profile?.full_name || ""}
+                        onChange={handleInputChange}
+                        className="w-full px-6 py-4 rounded-xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all font-bold text-slate-700"
+                        placeholder="Enter your full name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                        Phone Number
+                      </label>
+                      <input
+                        type="text"
+                        name="phone_number"
+                        value={profile?.phone_number || ""}
+                        onChange={handleInputChange}
+                        className="w-full px-6 py-4 rounded-xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all font-bold text-slate-700"
+                        placeholder="+1 234 567 8900"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                      Professional Bio
+                    </label>
+                    <textarea
+                      name="bio"
+                      value={profile?.bio || ""}
+                      onChange={handleInputChange}
+                      className="w-full px-6 py-4 rounded-xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all font-bold text-slate-700 min-h-30"
+                      placeholder="Tell your professional story..."
+                    />
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Section 3: Sales Intelligence */}
-          <div className="bg-white rounded-4xl p-8 md:p-12 shadow-sm border border-slate-200/60">
-            <h3 className="text-xl font-black text-slate-900 mb-10 flex items-center gap-3 italic">
-              <span className="h-1 w-8 bg-indigo-600 rounded-full" />
-              SALES INTELLIGENCE
-            </h3>
+            {/* Section 2: Career Details */}
+            <div className="bg-white rounded-4xl p-8 md:p-12 shadow-sm border border-slate-200/60">
+              <h3 className="text-xl font-black text-slate-900 mb-10 flex items-center gap-3 italic">
+                <span className="h-1 w-8 bg-indigo-600 rounded-full" />
+                CAREER & EXPERIENCE
+              </h3>
 
-            <div className="space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                    Primary Industry Focus
+                    Current Role
                   </label>
                   <input
                     type="text"
-                    name="primary_industry_focus"
-                    value={profile?.primary_industry_focus || ""}
+                    name="current_role"
+                    value={profile?.current_role || ""}
                     onChange={handleInputChange}
                     className="w-full px-6 py-4 rounded-xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all font-bold text-slate-700"
-                    placeholder="e.g. Fintech, SaaS, Healthtech"
+                    placeholder="e.g. Senior Account Executive"
                   />
                 </div>
                 <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-2">
+                    Experience Band
+                    {profile?.assessment_status === "completed" && (
+                      <div className="flex items-center gap-1 text-[8px] text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                        <svg
+                          className="h-2.5 w-2.5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={3}
+                            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                          />
+                        </svg>
+                        LOCKED
+                      </div>
+                    )}
+                  </label>
+                  {profile?.assessment_status === "completed" ? (
+                    <div className="w-full px-6 py-4 rounded-xl bg-slate-100 border border-slate-200 font-black text-slate-400 uppercase tracking-widest flex justify-between items-center group/lock">
+                      <span>{profile?.experience || "Not Set"}</span>
+                      <span className="text-[8px] opacity-0 group-hover/lock:opacity-100 transition-opacity">
+                        Requires Assessment Reset to change
+                      </span>
+                    </div>
+                  ) : (
+                    <select
+                      name="experience"
+                      value={profile?.experience || "fresher"}
+                      onChange={handleInputChange}
+                      className="w-full px-6 py-4 rounded-xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all font-bold text-slate-700 appearance-none"
+                    >
+                      <option value="fresher">Fresher</option>
+                      <option value="mid">Mid-Level</option>
+                      <option value="senior">Senior</option>
+                      <option value="leadership">Leadership</option>
+                    </select>
+                  )}
+                </div>
+                <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                    Current Employment Status
+                    Job Preference
                   </label>
                   <select
-                    name="current_employment_status"
-                    value={profile?.current_employment_status || "Employed"}
+                    name="job_type"
+                    value={profile?.job_type || "onsite"}
                     onChange={handleInputChange}
                     className="w-full px-6 py-4 rounded-xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all font-bold text-slate-700 appearance-none"
                   >
-                    <option value="Employed">Employed</option>
-                    <option value="Unemployed">Unemployed</option>
-                    <option value="Student">Student</option>
+                    <option value="onsite">On-Site</option>
+                    <option value="remote">Remote</option>
+                    <option value="hybrid">Hybrid</option>
                   </select>
                 </div>
-              </div>
-
-              <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 italic text-slate-400 text-xs text-center flex items-center justify-center gap-3">
-                <svg
-                  className="h-4 w-4 text-slate-300"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                    Total Years of Experience
+                  </label>
+                  <input
+                    type="number"
+                    name="years_of_experience"
+                    value={profile?.years_of_experience || 0}
+                    onChange={handleInputChange}
+                    className="w-full px-6 py-4 rounded-xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all font-bold text-slate-700"
                   />
-                </svg>
-                <span>
-                  Skills, CRM Tools, and Sales Methodologies are synchronized
-                  from your initial assessment and resume analysis. Manual
-                  editing of these core signals is restricted to ensure system
-                  trust.
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Section 4: Professional Links */}
-          <div className="bg-slate-900 rounded-4xl p-8 md:p-12 shadow-2xl text-white relative overflow-hidden">
-            <h3 className="text-xl font-black mb-10 flex items-center gap-3 italic">
-              <span className="h-1 w-8 bg-indigo-400 rounded-full" />
-              DIGITAL PRESENCE
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-indigo-300 ml-1">
-                  LinkedIn URL
-                </label>
-                <input
-                  type="url"
-                  name="linkedin_url"
-                  value={profile?.linkedin_url || ""}
-                  onChange={handleInputChange}
-                  className="w-full px-6 py-4 rounded-xl bg-white/10 border border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:bg-white/20 transition-all font-bold text-white placeholder-white/20"
-                  placeholder="https://linkedin.com/in/username"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-indigo-300 ml-1">
-                  Portfolio / Website URL
-                </label>
-                <input
-                  type="url"
-                  name="portfolio_url"
-                  value={profile?.portfolio_url || ""}
-                  onChange={handleInputChange}
-                  className="w-full px-6 py-4 rounded-xl bg-white/10 border border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:bg-white/20 transition-all font-bold text-white placeholder-white/20"
-                  placeholder="https://yourportfolio.com"
-                />
+                </div>
               </div>
             </div>
 
-            {/* Mesh Background */}
-            <div className="absolute top-0 right-0 w-1/3 h-full opacity-5 pointer-events-none">
-              <div className="grid grid-cols-5 gap-1 h-full w-full">
-                {[...Array(25)].map((_, i) => (
-                  <div
-                    key={i}
-                    className="border-[0.5px] border-white h-full w-full"
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
+            {/* Section 3: Sales Intelligence */}
+            <div className="bg-white rounded-4xl p-8 md:p-12 shadow-sm border border-slate-200/60">
+              <h3 className="text-xl font-black text-slate-900 mb-10 flex items-center gap-3 italic">
+                <span className="h-1 w-8 bg-indigo-600 rounded-full" />
+                SALES INTELLIGENCE
+              </h3>
 
-          {/* Action Footer */}
-          <div className="flex justify-between items-center py-6">
-            <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest flex items-center gap-2">
-              <span className="h-1 w-1 rounded-full bg-slate-300" />
-              Auto-saves only on submission
-            </p>
+              <div className="space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                      Primary Industry Focus
+                    </label>
+                    <input
+                      type="text"
+                      name="primary_industry_focus"
+                      value={profile?.primary_industry_focus || ""}
+                      onChange={handleInputChange}
+                      className="w-full px-6 py-4 rounded-xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all font-bold text-slate-700"
+                      placeholder="e.g. Fintech, SaaS, Healthtech"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                      Current Employment Status
+                    </label>
+                    <select
+                      name="current_employment_status"
+                      value={profile?.current_employment_status || "Employed"}
+                      onChange={handleInputChange}
+                      className="w-full px-6 py-4 rounded-xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all font-bold text-slate-700 appearance-none"
+                    >
+                      <option value="Employed">Employed</option>
+                      <option value="Unemployed">Unemployed</option>
+                      <option value="Student">Student</option>
+                    </select>
+                  </div>
+                </div>
 
-            <button
-              type="submit"
-              disabled={saving}
-              className={`px-12 py-5 rounded-2xl font-black uppercase tracking-[0.2em] shadow-2xl transition-all flex items-center gap-4 ${
-                saving
-                  ? "bg-slate-200 text-slate-400 cursor-not-allowed"
-                  : "bg-indigo-600 text-white hover:bg-slate-900 hover:shadow-indigo-200"
-              }`}
-            >
-              {saving ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  SAVING SIGNALS...
-                </>
-              ) : (
-                <>
-                  SYNCHRONIZE PROFILE
+                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 italic text-slate-400 text-xs text-center flex items-center justify-center gap-3">
                   <svg
-                    className="h-5 w-5"
+                    className="h-4 w-4 text-slate-300"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -606,39 +511,136 @@ export default function CandidateProfilePage() {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M5 13l4 4L19 7"
+                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
                     />
                   </svg>
-                </>
-              )}
+                  <span>
+                    Skills, CRM Tools, and Sales Methodologies are synchronized
+                    from your initial assessment and resume analysis. Manual
+                    editing of these core signals is restricted to ensure system
+                    trust.
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 4: Professional Links */}
+            <div className="bg-slate-900 rounded-4xl p-8 md:p-12 shadow-2xl text-white relative overflow-hidden">
+              <h3 className="text-xl font-black mb-10 flex items-center gap-3 italic">
+                <span className="h-1 w-8 bg-indigo-400 rounded-full" />
+                DIGITAL PRESENCE
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-indigo-300 ml-1">
+                    LinkedIn URL
+                  </label>
+                  <input
+                    type="url"
+                    name="linkedin_url"
+                    value={profile?.linkedin_url || ""}
+                    onChange={handleInputChange}
+                    className="w-full px-6 py-4 rounded-xl bg-white/10 border border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:bg-white/20 transition-all font-bold text-white placeholder-white/20"
+                    placeholder="https://linkedin.com/in/username"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-indigo-300 ml-1">
+                    Portfolio / Website URL
+                  </label>
+                  <input
+                    type="url"
+                    name="portfolio_url"
+                    value={profile?.portfolio_url || ""}
+                    onChange={handleInputChange}
+                    className="w-full px-6 py-4 rounded-xl bg-white/10 border border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:bg-white/20 transition-all font-bold text-white placeholder-white/20"
+                    placeholder="https://yourportfolio.com"
+                  />
+                </div>
+              </div>
+
+              {/* Mesh Background */}
+              <div className="absolute top-0 right-0 w-1/3 h-full opacity-5 pointer-events-none">
+                <div className="grid grid-cols-5 gap-1 h-full w-full">
+                  {[...Array(25)].map((_, i) => (
+                    <div
+                      key={i}
+                      className="border-[0.5px] border-white h-full w-full"
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Action Footer */}
+            <div className="flex justify-between items-center py-6">
+              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest flex items-center gap-2">
+                <span className="h-1 w-1 rounded-full bg-slate-300" />
+                Auto-saves only on submission
+              </p>
+
+              <button
+                type="submit"
+                disabled={saving}
+                className={`px-12 py-5 rounded-2xl font-black uppercase tracking-[0.2em] shadow-2xl transition-all flex items-center gap-4 ${
+                  saving
+                    ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                    : "bg-indigo-600 text-white hover:bg-slate-900 hover:shadow-indigo-200"
+                }`}
+              >
+                {saving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    SAVING SIGNALS...
+                  </>
+                ) : (
+                  <>
+                    SYNCHRONIZE PROFILE
+                    <svg
+                      className="h-5 w-5"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+
+          {/* Danger Zone: Retake Assessment */}
+          <div className="bg-white rounded-4xl p-8 md:p-12 shadow-sm border border-red-50 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-red-50/50 rounded-full blur-3xl -mr-16 -mt-16" />
+
+            <h3 className="text-xl font-black text-slate-900 mb-4 flex items-center gap-3 italic uppercase">
+              <span className="h-1 w-8 bg-red-500 rounded-full" />
+              Performance Reset
+            </h3>
+
+            <p className="text-slate-500 text-sm font-medium leading-relaxed mb-8 max-w-xl">
+              Unsatisfied with your current signals? You can reset your
+              evaluation history to retake the assessment. This will{" "}
+              <span className="text-red-600 font-bold uppercase underline">
+                permanently delete
+              </span>{" "}
+              all previous scores and insights.
+            </p>
+
+            <button
+              onClick={handleRetakeAssessment}
+              className="px-8 py-4 bg-white border-2 border-red-100 text-red-500 rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-300 shadow-sm"
+            >
+              RE-INITIALIZE EVALUATION ENGINE
             </button>
           </div>
-        </form>
-
-        {/* Danger Zone: Retake Assessment */}
-        <div className="bg-white rounded-4xl p-8 md:p-12 shadow-sm border border-red-50 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-red-50/50 rounded-full blur-3xl -mr-16 -mt-16" />
-
-          <h3 className="text-xl font-black text-slate-900 mb-4 flex items-center gap-3 italic uppercase">
-            <span className="h-1 w-8 bg-red-500 rounded-full" />
-            Performance Reset
-          </h3>
-
-          <p className="text-slate-500 text-sm font-medium leading-relaxed mb-8 max-w-xl">
-            Unsatisfied with your current signals? You can reset your evaluation
-            history to retake the assessment. This will{" "}
-            <span className="text-red-600 font-bold uppercase underline">
-              permanently delete
-            </span>{" "}
-            all previous scores and insights.
-          </p>
-
-          <button
-            onClick={handleRetakeAssessment}
-            className="px-8 py-4 bg-white border-2 border-red-100 text-red-500 rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-red-500 hover:text-white hover:border-red-500 transition-all duration-300 shadow-sm"
-          >
-            RE-INITIALIZE EVALUATION ENGINE
-          </button>
         </div>
       </main>
     </div>

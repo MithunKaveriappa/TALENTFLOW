@@ -32,12 +32,14 @@ The Frontend is a **stateless thin client** designed for high engagement and acc
 
 TalentFlow implements a modular layout system to enforce design consistency across both recruiter and candidate portals:
 
-- **Component Abstraction**: Key UI elements like the Sidebar are abstracted into shared components (`RecruiterSidebar.tsx` and `CandidateSidebar.tsx`) to prevent UI drift.
+- **Component Abstraction**: Key UI elements like the Sidebar are abstracted into shared components (`RecruiterSidebar.tsx` and `CandidateSidebar.tsx`).
+- **Feature Gating (LockedView)**: A reusable high-order component used to restrict access to premium features (GPS, Jobs, Search) based on the user's `profile_score`.
+- **Hiring Funnel Integration**: A data-driven visualization component that maps API funnel metrics (`funnel_data`) to a progression UI with status health indicators.
 - **Role-Based Theme**:
   - **Recruiter**: Blue-themed accents for professional, authoritative signaling.
   - **Candidate**: Indigo-themed accents for talent-focused engagement.
-- **Verification Hub**: A unified sidebar widget that monitors and displays assessment status in real-time, serving as the central "call-to-action" for incomplete profiles.
-- **Standardized Navigation**: Consistent application of typography, spacing (`ml-64` responsive layout), and naming conventions (e.g., specific Dashboard, Feed, and Profile routes).
+- **Verification Hub**: A unified sidebar widget that monitors and displays assessment status in real-time.
+- **Standardized Navigation**: Consistent application of typography, spacing (`ml-64` responsive layout), and naming conventions.
 
 ### Trust Level
 

@@ -41,9 +41,9 @@ TalentFlow is a high-trust recruitment platform designed to verify candidate sig
 6. **Onboarding Completion**: Marks profile as `COMPLETED`.
 
 - **Strict Gating Logic**: Dashboards are locked behind a "Verification Gate" until the user has:
-    1.  Completed the Assessment.
-    2.  Verified Identity (Aadhaar).
-    3.  Accepted Terms.
+  1.  Completed the Assessment.
+  2.  Verified Identity (Aadhaar).
+  3.  Accepted Terms.
 - **Persistence**: The flow uses `onboarding_step` to track progress. If a user exits mid-flow, they return to the exact step where they left.
 - **Data Integrity**: Profile fields like `experience_band` and core skills are **LOCKED** after assessment completion to prevent manipulation of matching results.
 
@@ -85,7 +85,7 @@ TalentFlow is a high-trust recruitment platform designed to verify candidate sig
 ### 3.5 Account Settings (Managed Identity)
 
 - **Status**: **IMPLEMENTED**
-- **Profile vs Account**: 
+- **Profile vs Account**:
   - **Profile**: Public-facing professional presence (Skills, Bio, Experience).
   - **Settings**: Private account management (Email, Password, Security, Data export).
 - **Navigation**: Integrated into the unified sidebar for both roles.
@@ -98,6 +98,29 @@ TalentFlow is a high-trust recruitment platform designed to verify candidate sig
 - **Auto-Bio Generation**:
   - The system scrapes the company website provided by the recruiter.
   - **Intelligence**: Gemini 1.5 Flash extracts a concise mission statement/bio from raw HTML.
+
+#### B. Recruitment Pipelines (Category A vs. B)
+
+- **The Dual Strategy**:
+  - **Pipeline A (Applied)**: Candidates grouped by job. Implements an automatic `is_skill_match` flag (≥40% skill alignment) to surfaces top talent within high-volume applications.
+  - **Pipeline B (Recommended)**: Proactive talent discovery utilizing the `Culture Fit` score (70% Psychometric / 30% Behavioral weighting).
+- **Global Pool**: A searchable index of all 100% verified identities on the platform.
+
+#### C. Lifecycle Guardrails (The Golden Process)
+
+To ensure process integrity, the system implements **Lifecycle Guardrails** at the database level:
+
+1.  **State Machine Enforcement**: A PostgreSQL trigger `check_status_transition` prevents invalid jumps (e.g., Shortlisted -> Offered skipping Interview).
+2.  **Audit Trail**: Every status change is logged in `job_application_status_history` with the recruiter's UUID and a timestamp.
+3.  **Chat Restrictions**: The `ChatService.check_chat_permission` method enforces that a thread is only "active" if the candidate status is `shortlisted` or higher.
+4.  **Bulk Workflow**: Recruiters can multi-select candidates in Pipeline A for bulk actions (Shortlist/Reject), significantly reducing manual overhead.
+
+#### D. Virtual Interview Integration
+
+- **Infrastructure**: Integration with Jitsi Meet (Open Source).
+- **Logic**: When an interview is scheduled, a secure room link is generated: `https://meet.jit.si/TalentFlow-<application_id>`.
+- **Automation**: Meeting links are automatically injected into both recruiter and candidate dashboards upon confirmation of the proposal.
+- **Time Management**: All scheduling is done in **UTC** at the API layer, with frontend conversion to local timezone to prevent scheduling conflicts across regions.
   - **Confirmation Flow**: Users must approve the generated bio before it is persisted, maintaining a "Human-in-the-loop" pattern.
 - **Teammate Hook**: Multiple recruiters can link to the same `company_id`.
 - **Inheritance Logic**:
@@ -147,6 +170,37 @@ TalentFlow is a high-trust recruitment platform designed to verify candidate sig
 - `chat_threads`: 1-to-1 elite messaging channels.
 - `chat_messages`: Audited real-time message logs.
 
+### 3.7 Interview & Process Scheduling
+
+- **Status**: **IMPLEMENTED**
+- **The "Propose" Workflow**: Recruiters do not "assign" times. They propose 1-5 available slots (UTC), and the candidate must confirm one.
+- **Trust-First Design**:
+  - **Transparency**: Interviewer names are mandatory to build candidate trust.
+  - **Audit Trail**: Cancellations require a reason and are logged in the process history.
+- **Auto-Meeting Links**: Integrated with **Jitsi Meet**. The system generates a secure, unique meeting room link upon candidate confirmation.
+- **Lifecycle Integration**: Automatically transitions application status from `Shortlisted` to `Interview Scheduled` upon confirmation.
+- **Feedback Loop**: After an interview, recruiters are required to provide structured feedback to either mark as `Complete` (Next Round/Offer) or `Rejected`.
+
+### 3.8 Recruiter "Do It Later" Locking System
+
+- **Status**: **IMPLEMENTED**
+- **The Friction Logic**: Recruiters can skip the DNA assessment during onboarding to browse the dashboard.
+- **Hard Locks**: High-impact transmissions are locked until a `profile_score > 0` is achieved.
+- **Restricted Features**:
+  - **Talent Search (Career GPS)**: Market insights are hidden behind a `LockedView`.
+  - **Job Management**: Recruiters cannot post or manage live jobs.
+  - **Candidate Intelligence**: Full profile details and "Elite Pool" access are restricted.
+  - **Messaging**: The communication channel remains dormant.
+- **Unlocking**: Requires completion of the 5-question Cultural DNA assessment.
+
+### 3.9 Advanced Hiring Funnel (Cumulative Analytics)
+
+- **Status**: **IMPLEMENTED**
+- **Logic**: Unlike independent counters, the funnel tracks **successful transitions** through the recruitment lifecycle.
+- **Funnel Stages**: `Applied` → `Shortlisted` → `Interviewed` → `Hired`.
+- **Pass-through Rates**: The system calculates the conversion efficiency from initial interest to final hire.
+- **UI Architecture**: Visualized via the `HiringFunnel` component with real-time "Optimal/Sub-optimal" health indicators.
+
 ## 5. Scoring Math
 
 - **Raw Dimension Score**: 0 to 6 (AI Generated).
@@ -170,6 +224,22 @@ TalentFlow is a high-trust recruitment platform designed to verify candidate sig
 - [x] Premium Dashboard UI for both roles
 - [x] Feature 5: Controlled Chat (Architecture/DB/Impl)
 - [x] Feature 6: Notifications Hub (Architecture/Impl)
-- [x] Feature 7: Integrated Account Settings (Personal vs Profile)
+- [x] Feature 7: Interview & Process Scheduling
+- [x] **Feature 9: Pipeline A (Applied Candidates View)**
+- [x] **Feature 10: Bulk Actions & Ethical Rejection Feedback**
+- [x] **Feature 11: Lifecycle Guardrails & Audit Trail**
+- [x] **Feature 12: Context-Aware Chat Restrictions**
+- [x] Feature 8: Integrated Account Settings (Personal vs Profile)
 - [x] API Connection Stability (127.0.0.1 alignment)
-- [ ] Feature 3: Career GPS & Market Insights (In Progress)
+- [x] Feature 13: Recruiter "Do It Later" Gating & Hard Locks
+- [x] Feature 14: Cumulative Hiring Funnel Analytics
+- [x] Feature 3: Career GPS & Market Insights (UI Standardized)
+- [x] Branding Enhancements (Lifestyle Photos & Employer DNA)
+- [x] Automated Jitsi Video URIs
+- [x] TypeScript & Linting Build Fixes (100% Type Safe)
+- [ ] Feature 15: Matching Algorithm Refinement (Next)
+- [ ] Feature 16: Automated Candidate Screening AI (Planned)
+
+```
+taskkill /F /IM node.exe /T; taskkill /F /IM python.exe /T; taskkill /F /IM uvicorn.exe /T; Remove-Item -Path "apps/web/.next" -Recurse -Force -ErrorAction SilentlyContinue; Get-ChildItem -Path . -Filter "__pycache__" -Recurse | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+```
