@@ -23,6 +23,16 @@ class CandidateService:
             "crm_tools": 5,
             "sales_methodologies": 5,
             "resume_uploaded": 10,
+            "gender": 2,
+            "birthdate": 3,
+            "university": 5,
+            "qualification_held": 5,
+            "graduation_year": 5,
+            "referral": 2,
+            "location": 5,
+            "education_history": 10,
+            "experience_history": 15,
+            "career_gap_report": 5,
         }
         
         total_score = 0
@@ -170,12 +180,31 @@ class CandidateService:
             "job_id": job_id,
             "status": "applied"
         }).execute()
-        
-        # 4. Trigger Notification
+
+        # 4. Audit Trail: Log initial application
         if res.data:
-            # Fetch job title for better message
-            job_data = supabase.table("jobs").select("title").eq("id", job_id).single().execute()
-            job_title = job_data.data.get("title", "a job") if job_data.data else "a job"
+            application_id = res.data[0]["id"]
+            # Manual log to ensure visibility
+            try:
+                supabase.table("job_application_status_history").insert({
+                    "application_id": application_id,
+                    "new_status": "applied",
+                    "changed_by": user_id,
+                    "reason": "Initial application by candidate"
+                }).execute()
+            except Exception as e:
+                print(f"FAILED TO LOG INITIAL HISTORY: {e}")
+
+        # 5. Trigger Notification
+        if res.data:
+            # Fetch job info for better message
+            job_data = supabase.table("jobs").select("title, recruiter_id").eq("id", job_id).single().execute()
+            job_title = "a job"
+            recruiter_id = None
+            if job_data.data:
+                job_title = job_data.data.get("title", "a job")
+                recruiter_id = job_data.data.get("recruiter_id")
+
             NotificationService.create_notification(
                 user_id=user_id,
                 type="APPLICATION_SUBMITTED",
@@ -183,6 +212,16 @@ class CandidateService:
                 message=f"Your signal for {job_title} has been successfully transmitted to the recruiter.",
                 metadata={"job_id": job_id}
             )
+
+            # Notify Recruiter
+            if recruiter_id:
+                NotificationService.create_notification(
+                    user_id=recruiter_id,
+                    type="NEW_APPLICATION",
+                    title=f"New Candidate Alert: {job_title}",
+                    message=f"A new candidate has submitted their profile for the {job_title} position.",
+                    metadata={"job_id": job_id, "application_id": res.data[0]["id"]}
+                )
 
         return {"status": "success", "data": res.data[0] if res.data else None}
 

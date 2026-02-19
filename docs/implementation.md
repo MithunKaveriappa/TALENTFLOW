@@ -76,35 +76,57 @@ TalentFlow is a high-trust recruitment platform designed to verify candidate sig
 - **Supabase Realtime**: Fully operational. Uses PostgreSQL replication to push messages instantly.
 - **History Persistence**: Single-thread logic ensures a single source of truth between pairs.
 
-### 3.4 Notifications (Event-Driven)
+### 3.4 Notifications (Signal Center)
 
-- **Status**: **IMPLEMENTED**
-- **Hub**: All system alerts (Assessment updates, Profile views, Chat invites) are aggregated in the `notifications` table.
-- **Realtime Sync**: Integrated with the top-bar "Notification Hub" drawer.
+- **Status**: **IMPLEMENTED / FULL FEATURE PARITY**
+- **Hub Architecture**: A dedicated full-page "Signal Center" ([notifications/page.tsx](apps/web/src/app/dashboard/recruiter/notifications/page.tsx)) aggregating all platform activity.
+- **Categorization Logic**:
+  - **System Protocols**: Software updates and platform news.
+  - **Candidate Activity**: New applications and interview updates.
+  - **Security Alerts**: Login and account-specific changes.
+- **Data Synchronization**: Powered by Supabase Realtime using PostgreSQL replication.
+- **Interaction Model**:
+  - **Mark All Read**: `PATCH /recruiter/notifications/read-all`.
+  - **Delete All**: `DELETE /recruiter/notifications`.
+  - **Action Context**: Every notification includes a `primary_action_url` for deep-linked dashboard transitions.
 
-### 3.5 Account Settings (Managed Identity)
+### 3.5 Account Settings (Executive Control Hub)
 
-- **Status**: **IMPLEMENTED**
-- **Profile vs Account**:
-  - **Profile**: Public-facing professional presence (Skills, Bio, Experience).
-  - **Settings**: Private account management (Email, Password, Security, Data export).
-- **Navigation**: Integrated into the unified sidebar for both roles.
+- **Status**: **IMPLEMENTED / REFACTORED**
+- **UI Architecture**: A high-density, tabbed interface utilizing a left-aligned configuration sidebar.
+- **Core Toggles**:
+  - **Email Intelligence**: Manages summary report delivery.
+  - **In-App Alerts**: Controls real-time web socket signals.
+  - **Push Channels**: Manages mobile administrative signals.
+- **Security Logic**:
+  - **Password Reset**: Integrated email-based reset flow.
+  - **2FA Deprecation**: Fully removed from the UI and backend schemas to streamline the recruiter experience.
+- **API Optimization**: Uses the `RecruiterAccountSettingsUpdate` Pydantic model with `exclude_unset=True` to allow granular `PATCH` updates without database field collisions.
+- **UI Standard**: Implements an "Executive Suite" aesthetic (reduced `p-8` padding, `9px` metadata tags, and `rounded-24px` containers).
 
 ### 3.6 Recruiter Implementation
 
-#### A. Company Onboarding & Sync
+#### A. Company Onboarding & Profile Sync
 
 - **Validation**: Recruiters must provide a valid Company Registration Number (CIN or GSTIN) validated via Regex.
 - **Auto-Bio Generation**:
   - The system scrapes the company website provided by the recruiter.
   - **Intelligence**: Gemini 1.5 Flash extracts a concise mission statement/bio from raw HTML.
+  - **Validation Loop**: Post-onboarding, recruiters can use the "AI SUGGEST" engine in the Profile suite to re-synthesize this bio from their official website.
+- **Dual-Scope Data Logic**:
+  - **Individual Intent**: Professional details (LinkedIn, Job Title, Bio) are synchronized with the `recruiter_profiles` table.
+  - **Organizational Identity**: Company details (Location, Industry, Sales Model, deal sizes) are synchronized with the `companies` table.
+- **Profile Strength Scoring**:
+  - Every update triggers a background task `sync_completion_score(user_id)`.
+  - It calculates a weighted "Optimization Percentage" based on mandatory and value-add fields across both the recruiter and company records.
 
 #### B. Recruitment Pipelines (Category A vs. B)
 
 - **The Dual Strategy**:
   - **Pipeline A (Applied)**: Candidates grouped by job. Implements an automatic `is_skill_match` flag (≥40% skill alignment) to surfaces top talent within high-volume applications.
-  - **Pipeline B (Recommended)**: Proactive talent discovery utilizing the `Culture Fit` score (70% Psychometric / 30% Behavioral weighting).
-- **Global Pool**: A searchable index of all 100% verified identities on the platform.
+  - **Pipeline B (Recommended)**: Proactive talent discovery utilizing the **NeuralMatch** engine. It identifies talent through a **60% minimum threshold** based on a weighted Cultural Fit score (70% Psychometric / 30% Behavioral weighting).
+- **Career GPS (Market Intelligence)**: Live market insights derived from pool data and job data. Implemented via the `get_market_insights` backend service, which calculates skill prevalence and competitive indices to define the `market_state` (High Demand vs. Balanced).
+- **Global Pool**: A searchable index of all 100% verified identities on the platform with categorical seniority banding (Fresher to Executive).
 
 #### C. Lifecycle Guardrails (The Golden Process)
 
@@ -155,6 +177,126 @@ To ensure process integrity, the system implements **Lifecycle Guardrails** at t
   - **Skill Case Studies**: **90-120 seconds** limit.
   - **Result**: Timeout leads to a 0.0 grade for that response.
 
+### 3.10 Candidate Pool Discovery (Elite Talent Ecosystem)
+
+- **Status**: **IMPLEMENTED / FULL FEATURE PARITY**
+- **Discovery Architecture**: A high-signal talent sourcing engine that bypasses the need for active job postings.
+- **Deep Hydration Logic**:
+  - The pool initially loads lightweight candidate summaries for UI performance.
+  - Clicking "View Profile" triggers `GET /recruiter/candidate/{user_id}`, which performs a multi-table join (profiles + resume_data + user_data) to hydrate the modal.
+  - **Signed Resume URLs**: The system generates time-limited (3600s) signed URLs from the Supabase `resumes` bucket for candidates who have uploaded original PDFs.
+- **Elite Invite & Ghost Roles**:
+  - **Direct Invitation**: `POST /recruiter/candidate/{user_id}/invite` allows recruiters to bypass the standard application flow.
+  - **Unlisted Role Support**: If a recruiter selects "Other / Unlisted Role", the system creates a private, unlisted `job` record with a `custom_role_title`.
+  - **Thread Generation**: This creates an application record status of `invited` and immediately initializes a `chat_thread` to facilitate direct communication.
+- **Discovery View Gating**:
+  - The `CandidateProfileModal` implements an `isDiscovery` prop to prune job-specific tabs (Form Submissions, Application History, Interview Scheduler) when viewing candidates from the general pool.
+- **UI Design**:
+  - **High-Density Card Grid**: Specifically designed to fit 4 columns per row on standard desktop screens.
+  - **Experience Banding**: Vertical segmentation of talent into Leadership, Senior, Mid, and Fresher bands for rapid scanning.
+  - **Signal (Trust Score)**: Visual representation of the candidate's verified psychometric and behavioral alignment.
+
+### 3.11 Job Lifecycle & Inventory (Jobs Posted)
+
+- **Status**: **COMPLETE / FULL FEATURE PARITY**
+- **Architecture**: A high-stakes recruitment command center utilizing centralized state for real-time orchestration.
+- **Operational Controls**:
+  - **Status Toggle**: Seamless switching between `active`, `paused`, and `closed` via `PATCH /recruiter/jobs/{job_id}`. Paused roles are preserved in the DB but hidden from public candidate discovery APIs.
+  - **Hard Deletion**: Implemented `DELETE /recruiter/jobs/{job_id}` with strict owner-id verification to prevent unauthorized data removal.
+  - **Architect Mode (Edit)**: A comprehensive editing suite enabling full-blueprint updates (title, mission, skills, logistics) via a dedicated UI route.
+- **Search & Discovery**:
+  - **Client-Side Filtering**: High-performance memoized filtering for job titles and status chips.
+  - **Typography Normalization**: UI components use standardized tokenized styling (`text-lg` titles, `text-[8px]` sub-metadata) to maintain "Executive Suite" consistency.
+- **Security & Authorization**:
+  - **Locked View**: Global gating using the `LockedView` pattern—prevents job management if `profile_score` is 0.
+  - **API Guardrails**: Every management operation validates the `company_id` of the requester against the job's owning entity.
+- **UI Design**:
+  - **Executive Card Matrix**: `rounded-4xl` containers with floating action menus.
+  - **Compact Filters**: Minimalist search and status selection integrated into the header.
+
+### 3.11 Acquisition Pipeline & Orchestration
+
+- **Status**: **COMPLETE / FULL FEATURE PARITY**
+- **Architecture**: A grouping-based state machine for cross-job candidate management.
+- **Workflow Automation**:
+  - **Chat Unlocking**: Transitioning to `shortlisted` or `invited` invokes `ChatService.get_or_create_thread`, granting messaging permissions.
+  - **Thread Lock (Rejection)**: Transitioning to `rejected` updates `chat_threads.is_active` to `false`.
+  - **Interview Integration**: The `InterviewScheduler` component triggers status transitions to `interview_scheduled` upon candidate confirmation, generating unique **Jitsi** URIs.
+- **Frontend Intelligence**:
+  - **Memoized Filtering**: Full-text search and status chip filtering implemented on the client-side for zero-latency inventory navigation.
+  - **Skill Transparency**: Hover-triggered tooltips displaying the exact intersection of `candidate_profiles.skills` and `jobs.skills_required`.
+- **Database Architecture**:
+  - **Audit Log**: Utilizes `job_application_status_history` populated by the `trg_log_application_status` trigger.
+  - **Lifecycle Guardrails**: PostgreSQL trigger `trg_validate_application_status` enforces the transition path: `applied` -> `shortlisted` -> `interview_scheduled` -> `offered`.
+- **UI Design**:
+  - **High-Fidelity Status Badges**: Detailed theme mapping for 6+ application states using the Tailwind 4.0 palette.
+  - **Job-Centric Accordions**: Expandable/collapsible job sections using state-driven rendering.
+
+### 3.12 Organization & Branding (Employer Identity)
+
+- **Status**: **IMPLEMENTED / FULL FEATURE PARITY**
+- **Architecture**: A non-technical, high-fidelity visual management suite.
+- **Data Persistence**:
+  - **Company Branding**: Stored in the `companies` table as `brand_colors` (JSONB: `primary`, `secondary`) and `brand_bio` (text).
+  - **Culture Photos**: Stored as an array of URLs (`culture_photos`) in the `companies` table.
+- **Storage Management (Supabase Buckets)**:
+  - **`company-logos`**: Dedicated bucket for brand identity vectors/images.
+  - **`company-assets`**: Dedicated bucket for "Life At [Company]" culture photos.
+  - **Path Logic**: `[user_id]/[asset_type]-[timestamp]` for strict per-user ownership and cache busting.
+- **Intelligence Hook**:
+  - Updating branding assets (Logo, 3x Photos, or Primary Colors) triggers `recruiter_service.sync_completion_score`.
+  - This background task recalculates the **Company Profile Score** to reflect profile hydration.
+- **Frontend Design**:
+  - **Non-Technical Language**: Terms like "Hex", "Nodes", and "DNA" were purged in favor of "Style" and "Color".
+  - **Spectral Control**: Features 18 curated color presets plus a hidden `input type="color"` triggered via a visual "Spectral Selection" hub.
+
+### 3.13 Community & Social Architecture (The Feed)
+
+- **Status**: **IMPLEMENTED / FULL FEATURE PARITY**
+- **Architecture**: A centralized social and professional synchronization layer.
+- **REST Endpoints (`api/posts.py`)**:
+  - `POST /posts`: Creation of broadcasts.
+  - `GET /posts/feed`: Retrieves the 50 most recent posts with deep author hydration and persistent "Pinned" signals.
+  - `PATCH /posts/{post_id}`: Ownership-verified content updates.
+  - `DELETE /posts/{post_id}`: Ownership-verified post removal.
+  - `POST /posts/follow` / `DELETE /posts/unfollow/{id}`: Relationship management.
+  - `POST /posts/{id}/pin` / `DELETE /posts/{id}/unpin`: Persistent signal storage.
+- **Data Hydration Logic**:
+  - The feed engine performs a 4-table lookup: `posts` -> `users` -> `candidate_profiles` / `recruiter_profiles` -> `follows`.
+  - Determines author roles (Candidate/Recruiter) and fetches corresponding metadata (Full Name, Photo).
+  - Cross-references the `user_pinned_posts` junction table to identify saved signals for the current user.
+- **Storage Management (Supabase Buckets)**:
+  - **`community-media`**: Dedicated bucket for broadcast attachments.
+  - **Path Logic**: `[user_id]/[random_filename].[ext]` for strict ownership and collision avoidance.
+- **UI Architecture**:
+  - **Component**: `CommunityFeed.tsx`.
+  - **Pinned Side-Panel**: Dedicated "Pinned for You" tactical dashboard section featuring real-time state synchronization.
+  - **Media Grid**: Dynamic 1-column vs. 2-column grid based on number of `media_urls`.
+  - **Ownership Verification**: Frontend-side `currentUserId === post.user_id` check for rendering Edit/Delete controls.
+- **Database Tables**:
+  - `posts`: Base content, `user_id`, media URLs, and type.
+  - `follows`: Map of `follower_id` to `following_id`.
+  - `user_pinned_posts`: Persistent junction table for M:N user-post relationships.
+
+### 3.14 Team Management & Roles (Multi-Recruiter)
+
+- **Status**: **IMPLEMENTED / FULL FEATURE PARITY**
+- **Architecture**: A hierarchical Multi-Recruiter system based on a shared `company_id`.
+- **Role-Based Access Control (RBAC)**:
+  - **Admin**: Has full CRUD permissions for job posts and team members. Can promote/demote colleagues and remove them from the organization.
+  - **Recruiter**: Limited-access persona. Can browse the dashboard and manage jobs but cannot access "Team Management" actions.
+- **REST Endpoints (`api/recruiter.py`)**:
+  - `GET /recruiter/team`: Fetches all profiles sharing the same `company_id` with a joined lookup on the `users` table for email addresses.
+  - `POST /recruiter/invite`: Inserts a record into `team_invitations` for new recruiter onboarding.
+  - `PATCH /recruiter/team/{id}/role`: Toggles the `is_admin` boolean for a teammate.
+  - `DELETE /recruiter/team/{id}`: Detaches a member by setting their `company_id` to `null` and `is_admin` to `false`.
+- **Administrative Guardrails**:
+  - **Self-Operation Lock**: Backend `if member_id == user_id` checks prevent admins from demoting or removing themselves.
+  - **Company-Isolation Validation**: Every management API call validates that the target `member_id` shares the same `company_id` as the authenticated requester.
+- **Deployment Logic**:
+  - Uses **Optimistic State Updates** for role changes and teardowns, ensuring the UI remains high-performance for executive users.
+  - UI Component: `TeamManagementPage` ([page.tsx](apps/web/src/app/dashboard/recruiter/organization/team/page.tsx)).
+
 ## 4. Database Schema Summary
 
 - `users`: Base identity and role tracking.
@@ -172,12 +314,14 @@ To ensure process integrity, the system implements **Lifecycle Guardrails** at t
 
 ### 3.7 Interview & Process Scheduling
 
-- **Status**: **IMPLEMENTED**
-- **The "Propose" Workflow**: Recruiters do not "assign" times. They propose 1-5 available slots (UTC), and the candidate must confirm one.
+- **Status**: **IMPLEMENTED (Hybrid Support)**
+- **The "Propose" Workflow**: Recruiters do not "assign" times. They propose up to 3 available slots (UTC), and the candidate must confirm one.
+- **Hybrid Support**:
+  - **Virtual**: Integrated with **Jitsi Meet**. The system generates a secure, unique meeting room link upon candidate confirmation.
+  - **Face-to-Face (On-site)**: Specific workflow for physical meetings including a dedicated `location` field for the physical address.
 - **Trust-First Design**:
   - **Transparency**: Interviewer names are mandatory to build candidate trust.
   - **Audit Trail**: Cancellations require a reason and are logged in the process history.
-- **Auto-Meeting Links**: Integrated with **Jitsi Meet**. The system generates a secure, unique meeting room link upon candidate confirmation.
 - **Lifecycle Integration**: Automatically transitions application status from `Shortlisted` to `Interview Scheduled` upon confirmation.
 - **Feedback Loop**: After an interview, recruiters are required to provide structured feedback to either mark as `Complete` (Next Round/Offer) or `Rejected`.
 
@@ -236,9 +380,12 @@ To ensure process integrity, the system implements **Lifecycle Guardrails** at t
 - [x] Feature 3: Career GPS & Market Insights (UI Standardized)
 - [x] Branding Enhancements (Lifestyle Photos & Employer DNA)
 - [x] Automated Jitsi Video URIs
+- [x] **Feature 15: Candidate Pool Discovery (High-Density & Deep Hydration)**
+- [x] **Feature 16: Elite Invite & Ghost Role Supporting Recruitment**
 - [x] TypeScript & Linting Build Fixes (100% Type Safe)
-- [ ] Feature 15: Matching Algorithm Refinement (Next)
-- [ ] Feature 16: Automated Candidate Screening AI (Planned)
+- [x] Feature 19: Tactical Signal Pinning (Post Persistence)
+- [ ] Feature 17: Matching Algorithm Refinement (Next)
+- [ ] Feature 18: Automated Candidate Screening AI (Planned)
 
 ```
 taskkill /F /IM node.exe /T; taskkill /F /IM python.exe /T; taskkill /F /IM uvicorn.exe /T; Remove-Item -Path "apps/web/.next" -Recurse -Force -ErrorAction SilentlyContinue; Get-ChildItem -Path . -Filter "__pycache__" -Recurse | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue

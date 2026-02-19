@@ -1,6 +1,6 @@
 # PROJECT MASTER BLUEPRINT (Official Project Documentation)
 
-**Last Updated:** February 15, 2026 (Revision: Elite Messaging & Notification Hub Implemented)  
+**Last Updated:** February 18, 2026 (Revision: Full-Page Notification Hub & Executive Settings Implemented)  
 **Status:** Live Implementation / Active Development
 
 This is the primary source of truth for the TalentFlow ecosystem. It contains comprehensive technical specifications, business logic, and architectural patterns.
@@ -26,10 +26,21 @@ To ensure a seamless, high-performance experience, TalentFlow uses a unified lay
 | **Matching**       | Recommended Talent | -                |
 | **Talent Search**  | Candidate Pool     | -                |
 | **Primary Action** | Post a Job         | Job Board        |
-| **Management**     | My Jobs            | -                |
+| **Management**     | Jobs Posted        | -                |
+| **Signals**        | Notifications      | Notifications    |
+| **Intelligence**   | Career GPS         | -                |
+| **Organization**   | Employer Branding  | -                |
 | **Social**         | Feed               | Feed             |
 | **Identity**       | Profile            | Profile          |
 | **System**         | Settings           | Settings         |
+
+### 0.4 Profile & Organizational Intelligence Ecosystem
+
+The **Identity Hub** (Recruiter Profile) is critical for matching and trust verification. Unlike standard profiles, it captures behavioral organizational signals:
+
+- **Sales Model Alignment**: Categorizes companies as Inbound, Outbound, or Hybrid.
+- **Deal Size Tiers**: Segments companies by `<$10k`, `$10k-$50k`, `$50k-$150k`, and `$150k+ Enterprise`.
+- **AI Synthesis**: AI-driven Bio generation ensuring consistent high-quality "Employer Brand" signals across the platform.
 
 ### 0.3 Navigation UX
 
@@ -82,9 +93,17 @@ The final Profile Score (0-100) is a weighted average of these component scores,
 
 ### 3.3 The Recruiter "Trust Score" Matrix
 
-To protect candidate raw data, recruiters see a masked **Trust Score** calculated as:
-$$Trust Score = (Psychometric Score \times 0.6) + (Behavioral Score \times 0.4)$$
-Raw psychometric and behavioral metrics are deleted from the API payload before delivery to the frontend.
+TalentFlow uses two distinct algorithmic layers to evaluate candidate suitability:
+
+1.  **Trust Score (Used in Candidate Pool)**:
+    - **Formula**: `(Psychometric Score * 0.6) + (Behavioral Score * 0.4)`
+    - **Usage**: A general reliability signal displayed on the candidate card.
+
+2.  **Culture Match Score (Used in NeuralMatch Recommendations)**:
+    - **Formula**: `(Psychometric Score * 0.7) + (Behavioral Score * 0.3)`
+    - **Usage**: A high-tier behavioral alignment signal. Proactive discovery requires a **minimum threshold of 60%** for a candidate to be recommended.
+
+Raw psychometric and behavioral metrics are purged from the API payload before delivery to protect candidate data privacy.
 
 ---
 
@@ -157,19 +176,28 @@ The recruiter workspace is a high-stakes management interface designed to priori
 1.  **Applied Pipeline (Category A)**:
     - **Purpose**: Manage reactive applicants who proactive applied to a job.
     - **Match Detection**: Automatically flags "Skill Matches" for candidates possessing ≥2 key skills or ≥40% JD alignment.
-    - **Bulk Actions**: Supports multi-selection for bulk shortlisting or rejection to optimize workflow.
+    - **Orchestration**: Integrated workflow for **Shortlisting**, **Interviewing** (via Jitsi), and **Offering**.
+    - **Search & Status Navigation**: Compact real-time search and 6-stage status chips for inventory management.
+    - **Elite Hub Integration**: Automatic chat thread activation for shortlisted/invited candidates and deactivation upon rejection.
 
 2.  **Recommended Talent (Category B)**:
     - **Purpose**: Proactive sourcing of the "Elite 1%."
     - **Matching Logic**: 70% Psychometric / 30% Behavioral weighting.
     - **Filter Logic**: Focuses on cultural and character alignment over mere keyword matching.
 
-3.  **Global Candidate Pool**:
-    - **Purpose**: A discovery hub for all verified talent on the platform.
-    - **Search Criteria**: Filter by Role, Experience, and Skill keywords.
-    - **Invite System**: Recruiters can send "Elite Invites" with personalized messages and specific Job Description context.
+3.  **Jobs Posted (Inventory Management)**:
+    - **Purpose**: A command-and-control center for all active and historical roles.
+    - **Lifecycle Controls**: Supports real-time toggling (Active/Paused), final closure, and hard deletion.
+    - **Architect Mode**: Dedicated editing interface for "Blueprint Reconstruction"—allowing recruiters to modify job DNA without starting from scratch.
+    - **Search Optimization**: Compact multi-signal filters (Search string + Status chips) for low-latency navigation.
 
-### 6.2 Interview Scheduling & Virtual Rooms
+4.  **Global Candidate Pool (Elite Discovery Hub)**:
+    - **Purpose**: A proactive sourcing engine for all verified talent on the platform.
+    - **Proactive Sourcing**: Recruiters can discover and engage candidates before they apply to any specific job.
+    - **Elite Invite**: High-fidelity invitation system allowing direct connection to active or unlisted roles.
+    - **Deep Hydration (View Profile)**: Integrated "Double-Fetch" logic for high-performance talent scanning.
+
+### 6.2 Interview Scheduling & Virtual Rooms\*\*:
 
 - **Jitsi Integration**: Automated generation of secure Jitsi Meet URIs (`TalentFlow-<app_id>`) upon scheduling. Links are persistent and synchronized between candidate and recruiter dashboards.
 - **UTC Standardization**: All timestamps are handled in UTC and converted to local time via the frontend (`date-fns`) for global team coordination.
@@ -190,6 +218,74 @@ The primary analytics hub for recruiters utilizes a cumulative logic model:
 - **Funnel Progression**: Calculates the total volume of talent passing through each stage (`applied` + `shortlisted` + `interviewed` + `hired`).
 - **Optimal Health Signal**: Based on conversion ratios between stages (e.g., Shortlist-to-Interview ratio).
 - **Visual Feedback**: A multi-stage progress component on the dashboard provides immediate visibility into pipeline efficiency.
+
+### 6.5 Candidate Pool Discovery (Elite Talent Ecosystem)
+
+The Candidate Pool is the platform's primary proactive sourcing engine, allowing recruiters to discover high-signal talent before they apply to any specific role.
+
+#### A. High-Density Discovery Architecture
+
+The interface ([pool/page.tsx](apps/web/src/app/dashboard/recruiter/hiring/pool/page.tsx)) uses a high-density, 4-column "Elite Talent" grid with specialized `CandidateCard` components.
+
+- **Vertical Experience Bands**: Talent is automatically segmented into Fresher, Mid, Senior, and Leadership bands for rapid navigation.
+- **Signal Signal (Trust Score)**: Visual indicator (0-100%) representing the candidate's verified psychometric and behavioral alignment.
+
+#### B. Deep Hydration Strategy
+
+To maintain low latency, the system uses a **Double-Fetch Strategy**:
+
+1. **Summary Scan**: Initial load of lightweight candidate records (Name, Role, Primary Skills).
+2. **Deep Profile Hydration**: On-click fetch from `GET /recruiter/candidate/{id}` that populates a specialized **Discovery Mode** of the profile modal.
+   - **Pruned Controls**: Specialized UI filters job-specific tabs (Application Forms, Interview Schedulers) to focus on the candidate's professional pedigree.
+   - **Signed Resume Support**: Real-time generation of temporary signed URLs for original resume PDFs stored in the `resumes` bucket.
+
+#### C. Elite Invite & Ghost Roles
+
+Recruiters can move from discovery to engagement without a public job posting:
+
+- **Direct Application Creation**: Inviting a candidate creates a `job_application` record with an `invited` status.
+- **Ghost Job Hosting**: If a recruiter selects **"+ Other / Unlisted Role"**, the system creates a private, unlisted `job` record. This allows:
+  - Immediate opening of a **Controlled Chat** thread.
+  - Tracking of the candidate's journey through a role that isn't publicly visible.
+
+### 6.6 Employer Branding (Visual Organization Hub)
+
+The Employer Branding suite ([branding/page.tsx](apps/web/src/app/dashboard/recruiter/organization/branding/page.tsx)) provides a high-fidelity environment for companies to manage their professional digital presence.
+
+#### A. Visual Logic (The Palette)
+
+To maintain a high-trust, elite aesthetic, branding is managed through a **Curated Selection Engine**:
+
+- **18 Curated Presets**: A grid of professional "Executive Suite" colors (Slate, Indigo, Emerald, Rose, etc.) for rapid setup.
+- **Unlimited Spectral Hub**: A specialized card that enables custom hex-color selection for brands with specific identity guidelines.
+
+#### B. Asset Hierarchy
+
+Companies can showcase their culture through a structured asset system:
+
+- **Company Identity (Logo)**: Primary identification branding.
+- **Culture Vault (3x Photos)**: A triple-slot gallery for "Life At" office photos, team events, or workspace ambiance.
+- **Storage Strategy**: Managed via Supabase buckets `company-logos` and `company-assets` using signed paths.
+
+#### C. Profile Signal Weighting
+
+Updating branding assets is not purely aesthetic; it is a **Hydration Event**:
+
+- **Sync Event**: Saving branding updates triggers `recruiter_service.sync_completion_score`.
+- **Score Impact**: Completing the branding profile (Logo + 3 Photos + Color Selection) significantly increases the company's **Profile Score** (Signal Power).
+
+#### 6.7 Team Management & Organization Hierarchy
+
+TalentFlow supports a Multi-Recruiter organizational structure, allowing teams to collaborate on job postings and application management within a shared workspace.
+
+- **Corporate Identification**: Every recruiter is linked to a single `company_id`.
+- **Role Permissions (RBAC)**:
+  - **Admin**: Strategic owner of the organization. Can invite, promote, and remove teammates.
+  - **Recruiter**: Operational member who can manage jobs and communicate with candidates.
+- **Administrative Guardrails**:
+  - The system implements **Self-Locking** at both the UI and API levels, preventing an Admin from demoting themselves or removing their own account from the team to ensure the organization always has at least one person in control.
+  - Role management and member detachment are restricted to current Admins.
+- **High-Fidelity Interface**: The **Team Management** suite ([team/page.tsx](apps/web/src/app/dashboard/recruiter/organization/team/page.tsx)) features a high-density "Compact Profile" grid designed for rapid executive oversight and hierarchy management.
 
 ---
 
@@ -323,7 +419,109 @@ TalentFlow handles companies with multiple recruiters through an inheritance/com
 
 ---
 
-## 8. Infrastructure Overview
+## 9. Job Inventory & Lifecycle Management
+
+### 9.1 The Jobs Posted Ecosystem
+
+The "Jobs Posted" interface ([jobs/page.tsx](apps/web/src/app/dashboard/recruiter/hiring/jobs/page.tsx)) is the primary management hub for recruiter roles. It is designed to provide high-velocity control over the talent acquisition pipeline.
+
+### 9.2 Lifecycle States
+
+Every job role exists in one of three primary states:
+
+- **Active**: Publicly visible in the Candidate Pool and matching algorithms. Signals readiness via a "Live Activity Ping".
+- **Paused**: Hidden from public view but preserved for existing applicants. Used for internal deliberations or budget pauses.
+- **Closed**: Archived role. No further applications accepted.
+
+### 9.3 Logic & Guardrails
+
+- **Unified Status Toggle**: Recruiters can instantly toggle between `Active` and `Paused` directly from the inventory card without navigating away.
+- **Verification Gating**: Access to the job management interface is strictly gated by the **Presence Authenticity** check. If a recruiter has not completed the Company DNA assessment, the inventory is replaced with a `LockedView`.
+- **Search & Filter**: Implements real-time omni-search logic allowing recruiters to manage high-volume role distributions (50+ active roles) with precision filtering by status, department, and location.
+- **Metric Hydration**: Cards are architected to display live acquisition funnel metrics (total views vs. total applications) to provide immediate feedback on role resonance.
+
+---
+
+## 11. Acquisition Pipeline (The Applied Feature Hub)
+
+### 11.1 Candidate Orchestration & Lifecycle
+
+The Acquisition Pipeline ([applications/page.tsx](apps/web/src/app/dashboard/recruiter/hiring/applications/page.tsx)) is a high-fidelity "Openings & Talent" layout that prioritizes status oversight and role-based tracking.
+
+### 11.2 Core Tracking Architecture
+
+- **Current Openings Suite**: A horizontal grid of high-density cards at the top showing active roles, applicant counts, and "today's interest" signals. Optimized to fit 4 jobs per row on standard displays for rapid scanning.
+- **Unified Talent Table**: A consolidated candidate matrix inspired by enterprise ERP designs.
+  - **Applied Role Column**: Instantly identify which position a candidate is targeting.
+  - **Elite Match Intelligence**:
+    - **Signal**: Backend-calculated `is_skill_match` flags elite talent with a **Zap** icon.
+    - **Transparency**: Hovering over match signals reveals the precise intersection of skills.
+- **High-Fidelity Candidate Profile Hub**:
+  - **Secure Resume Viewer**: Integrated Adobe-style PDF viewer using Supabase Signed URLs (1-hour expiry) to display private candidate resumes securely.
+  - **Dual-View CV System**: Toggle between the platform's high-fidelity "Generated CV" (AI-standardized) and the candidate's "Original PDF."
+  - **Skill Performance Matrix**: Visual breakdown of 0-6 dimensional assessment scores (Relevance, Specificity, Clarity, Ownership).
+  - **Internal Star Ratings**: 1-5 star "Internal Rating" system for recruiter-only notes to standardize talent evaluation.
+
+### 11.3 Interview Orchestration (Hybrid)
+
+- **Virtual & Face-to-Face Support**: Specialized workflows for Video calls (Zoom/Google Meet) or On-site meetings with precise physical address/location inputs.
+- **Multi-Slot Proposals**: Propose up to 3 time slots per candidate to minimize back-and-forth coordination.
+- **Automated Room Generation**: Automatic generation of **Jitsi Meet** rooms for virtual sessions upon status transition.
+
+### 11.4 Lifecycle & Process Controls
+
+- **The Gold Path Guardrail**: A strict database-level state machine prevents "stage jumping" (e.g., Screening → Offer is blocked without an Interview Scheduled).
+- **Audit Trail (Accountability Engine)**:
+  - **Chronological Ledger**: Every status transition is logged in the `job_application_status_history` table.
+  - **Manual Bridge**: Implements a redundant logging layer in the Python services to ensure every action—whether from a bulk recruiter update or a candidate submission—is captured with the correct `user_id`.
+  - **Transparency**: Logs include old status, new status, the person who made the change, and any associated feedback/reasoning.
+- **Automated Stage Badges**:
+  - `Screening` (Applied/Shortlisted) → Amber
+  - `Interview` (Interview Scheduled) → Cyan
+  - `Offer` (Offered) → Rose
+  - `Hired` (Closed) → Indigo
+- **Shortlist Automation**: Shortlisting a candidate instantly unlocks the **Elite Hub** (Real-time Messaging).
+
+---
+
+## 12. Community & Social Synchronization (The Feed)
+
+The Community Feed ([CommunityFeed.tsx](apps/web/src/components/CommunityFeed.tsx)) is the platform's professional social layer, designed to foster high-trust synchronization between recruiters and talent.
+
+### 12.1 Broadcast Logic (Content Sharing)
+
+The feed operates on a "Broadcast" model rather than a standard social post to maintain professional integrity.
+
+- **Multimedia Streams**: Supports text, images (PNG/JPG), and videos (MP4/WEBM).
+- **Storage Strategy**: Assets are isolated in the `community-media` bucket within `[user_id]` subdirectories to ensure per-user ownership and GDPR compliance.
+- **Dynamic Media Grid**: Smart 1/2-column grid rendering that automatically optimizes based on attachment count.
+
+### 12.2 Author Attribution & Identity
+
+To ensure high-trust communication, every broadcast is heavily attributed:
+
+- **Identity Badging**: Displays a specialized role badge (Recruiter vs. Candidate) colored by seniority/visibility norms.
+- **Author Hydration**: Every post undergoes a backend "Deep Hydration" scan:
+  - Joins `posts` with `users` (Role).
+  - Joins with `candidate_profiles` or `recruiter_profiles` (Full Name/Photo).
+  - Matches with the `follows` table (Relationship state).
+
+### 12.3 The Professional "Follow" Engine
+
+The platform implements a unidirectional follow mechanism (`follows` table):
+
+- **Connect Action**: Recruiters can "connect" with high-value candidates directly from their broadcast.
+- **Relationship Persistence**: Following a user curates the global feed content and updates reciprocal UI buttons.
+
+### 12.4 Content Control & Ownership
+
+- **Post Sovereignty**: Authors retain 100% control over their broadcasts.
+- **Integrated Tooling**: Inline **Edit (Edit3)** and **Delete (Trash2)** actions are available for post owners directly within the feed UI.
+- **Sanitized Deletion**: Removing a post removes all associated record entries, maintaining a clean architectural state.
+
+---
+
+## 13. Infrastructure Overview
 
 - **Primary Model**: Gemini 1.5 Flash (for speed and semantic grading).
 - **Secondary Model**: Gemini 1.5 Pro (for complex skill-based Case Studies for Leadership roles).

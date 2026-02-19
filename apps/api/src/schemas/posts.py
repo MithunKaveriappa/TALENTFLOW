@@ -23,6 +23,7 @@ class PostResponse(BaseModel):
     created_at: datetime
     author: Optional[PostAuthor] = None
     is_following: bool = False
+    is_pinned: bool = False
 
 class FollowRequest(BaseModel):
     following_id: UUID

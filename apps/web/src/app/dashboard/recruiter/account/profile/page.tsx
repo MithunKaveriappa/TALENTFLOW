@@ -50,6 +50,7 @@ export default function RecruiterProfilePage() {
   const [profile, setProfile] = useState<RecruiterProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [generatingBio, setGeneratingBio] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
 
   const handleLogout = async () => {
@@ -81,6 +82,58 @@ export default function RecruiterProfilePage() {
     }
     loadData();
   }, [router]);
+
+  const handleSuggestBio = async () => {
+    if (!profile?.companies?.website) {
+      setMessage({
+        type: "error",
+        text: "Add a website first to generate a bio.",
+      });
+      return;
+    }
+
+    setGeneratingBio(true);
+    try {
+      const {
+        data: { session: authSession },
+      } = await supabase.auth.getSession();
+      if (!authSession) return;
+
+      const res = await apiClient.post(
+        "/recruiter/generate-bio",
+        { website: profile.companies.website },
+        authSession.access_token,
+      );
+
+      if (res.bio) {
+        setProfile((p) =>
+          p
+            ? {
+                ...p,
+                companies: { ...p.companies, description: res.bio },
+              }
+            : null,
+        );
+        setMessage({
+          type: "success",
+          text: "AI has synthesized a new mission statement.",
+        });
+      } else {
+        setMessage({
+          type: "error",
+          text: "Unable to synthesize bio. Ensure the website content is public.",
+        });
+      }
+    } catch (err: any) {
+      console.error("Failed to generate bio:", err);
+      setMessage({
+        type: "error",
+        text: err.message || "Synthesis engine failed. Please try again.",
+      });
+    } finally {
+      setGeneratingBio(false);
+    }
+  };
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,75 +193,117 @@ export default function RecruiterProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50/50">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative h-16 w-16">
+            <div className="absolute inset-0 border-4 border-indigo-100 rounded-full" />
+            <div className="absolute inset-0 border-4 border-indigo-600 rounded-full border-t-transparent animate-spin" />
+          </div>
+          <p className="text-slate-400 text-xs font-bold uppercase tracking-[0.2em] animate-pulse">
+            Loading Profile...
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen">
-      <main className="flex flex-col overflow-y-auto">
-        {/* Top Header */}
-        <header className="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-8 sticky top-0 z-10 w-full">
+    <div className="min-h-screen bg-slate-50/50">
+      <main className="flex flex-col">
+        {/* Premium Header */}
+        <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 h-16 flex items-center justify-between px-8 sticky top-0 z-20 w-full">
           <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-200">
+            <div className="flex items-center space-x-2 bg-slate-900 px-3 py-1.5 rounded-full shadow-sm">
               <div
-                className={`w-2 h-2 rounded-full ${
-                  profile?.is_verified ? "bg-green-500" : "bg-amber-500"
+                className={`w-1.5 h-1.5 rounded-full ${
+                  profile?.is_verified ? "bg-emerald-400" : "bg-amber-400"
                 } animate-pulse`}
               />
-              <span className="text-sm font-medium text-slate-600">
-                Hub Status: {profile?.is_verified ? "Active" : "Pending Sync"}
+              <span className="text-[10px] font-bold text-white uppercase tracking-widest">
+                Hub Status: {profile?.is_verified ? "Verified" : "Syncing"}
               </span>
             </div>
           </div>
-          <div className="flex items-center space-x-4">
-            <button className="p-2 text-blue-600 bg-blue-50 rounded-lg transition-colors">
-              <Settings className="w-5 h-5" />
-            </button>
-            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-bold border border-blue-200">
-              {profile?.full_name?.[0] || "R"}
+          <div className="flex items-center space-x-6">
+            <div className="flex items-center gap-3">
+              <div className="flex flex-col items-end">
+                <span className="text-xs font-bold text-slate-900 leading-none">
+                  {profile?.full_name}
+                </span>
+                <span className="text-[10px] text-slate-500 font-medium">
+                  {profile?.team_role?.toUpperCase()}
+                </span>
+              </div>
+              <div className="w-9 h-9 bg-linear-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-200">
+                {profile?.full_name?.[0] || "R"}
+              </div>
             </div>
             <button
               onClick={handleLogout}
-              className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-red-500 hover:bg-red-50 hover:border-red-100 transition-all shadow-sm active:scale-95 ml-2"
+              className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-red-500 hover:bg-red-50 hover:border-red-100 transition-all active:scale-95"
             >
               Logout
             </button>
           </div>
         </header>
 
-        {/* Content Container */}
         <div className="p-8 max-w-5xl mx-auto w-full">
-          <div className="mb-10">
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
-              Profile Settings
-            </h1>
-            <p className="text-slate-500 mt-1 font-medium">
-              Manage your professional identity and company details
-            </p>
+          {/* Banner Card */}
+          <div className="relative mb-10 overflow-hidden bg-slate-900 rounded-4xl p-10 shadow-2xl">
+            <div className="absolute top-0 right-0 w-1/2 h-full bg-linear-to-l from-indigo-500/20 to-transparent pointer-none" />
+            <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-indigo-600/30 rounded-full blur-[80px]" />
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
+              <div>
+                <h1 className="text-4xl font-black text-white tracking-tight mb-2">
+                  Profile Settings
+                </h1>
+                <p className="text-slate-400 font-medium text-lg max-w-md">
+                  Calibrate your professional visual signals and organizational
+                  intelligence.
+                </p>
+              </div>
+              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/10">
+                <div className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest mb-3">
+                  Profile Strength
+                </div>
+                <div className="flex items-end gap-3 mb-2">
+                  <div className="text-3xl font-black text-white">85%</div>
+                  <div className="text-indigo-400 text-xs font-bold mb-1">
+                    OPTIMIZED
+                  </div>
+                </div>
+                <div className="w-48 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  <div className="w-[85%] h-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
+                </div>
+              </div>
+            </div>
           </div>
 
-          <form onSubmit={handleUpdateProfile} className="space-y-8 pb-20">
+          <form onSubmit={handleUpdateProfile} className="space-y-8 pb-32">
             {message.text && (
               <div
-                className={`p-4 rounded-xl flex items-center gap-3 border shadow-sm transition-all ${
+                className={`p-4 rounded-2xl flex items-center gap-3 border shadow-sm transition-all animate-in fade-in slide-in-from-top-4 ${
                   message.type === "success"
-                    ? "bg-green-50 border-green-200 text-green-800"
-                    : "bg-red-50 border-red-200 text-red-800"
+                    ? "bg-emerald-50 border-emerald-100 text-emerald-800"
+                    : "bg-rose-50 border-rose-100 text-rose-800"
                 }`}
               >
                 <CheckCircle2
-                  className={`w-5 h-5 ${message.type === "success" ? "text-green-600" : "text-red-600"}`}
+                  className={`w-5 h-5 ${message.type === "success" ? "text-emerald-500" : "text-rose-500"}`}
                 />
-                <p className="text-sm font-semibold">{message.text}</p>
+                <p className="text-sm font-bold tracking-tight">
+                  {message.text}
+                </p>
               </div>
             )}
 
             {/* Recruiter Details */}
-            <Section title="Professional Liaison" icon={User}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Section
+              title="Profile"
+              description="Personal professional identifiers"
+              icon={User}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <Field label="Full Name" icon={User}>
                   <input
                     type="text"
@@ -218,7 +313,7 @@ export default function RecruiterProfilePage() {
                         p ? { ...p, full_name: e.target.value } : null,
                       )
                     }
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
                   />
                 </Field>
                 <Field label="Job Title" icon={Briefcase}>
@@ -230,25 +325,28 @@ export default function RecruiterProfilePage() {
                         p ? { ...p, job_title: e.target.value } : null,
                       )
                     }
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
                   />
                 </Field>
                 <Field label="LinkedIn Profile" icon={Linkedin}>
-                  <input
-                    type="text"
-                    value={profile?.linkedin_url || ""}
-                    onChange={(e) =>
-                      setProfile((p) =>
-                        p ? { ...p, linkedin_url: e.target.value } : null,
-                      )
-                    }
-                    placeholder="linkedin.com/in/username"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={profile?.linkedin_url || ""}
+                      onChange={(e) =>
+                        setProfile((p) =>
+                          p ? { ...p, linkedin_url: e.target.value } : null,
+                        )
+                      }
+                      placeholder="linkedin.com/in/username"
+                      className="w-full bg-slate-50/50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                    />
+                    <Linkedin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  </div>
                 </Field>
-                <Field label="Professional Bio" icon={FileText} fullWidth>
+                <Field label="Professional Pitch" icon={FileText} fullWidth>
                   <textarea
-                    rows={3}
+                    rows={4}
                     value={profile?.bio || ""}
                     onChange={(e) =>
                       setProfile((p) =>
@@ -256,15 +354,19 @@ export default function RecruiterProfilePage() {
                       )
                     }
                     placeholder="Brief professional intro..."
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none resize-none"
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none resize-none"
                   />
                 </Field>
               </div>
             </Section>
 
             {/* Company Details */}
-            <Section title="Company Intelligence" icon={Building2}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Section
+              title="Company profile"
+              description="Company intelligence & market positioning"
+              icon={Building2}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <Field label="Company Name" icon={Building2}>
                   <input
                     type="text"
@@ -282,7 +384,7 @@ export default function RecruiterProfilePage() {
                           : null,
                       )
                     }
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
                   />
                 </Field>
                 <Field label="Official Website" icon={Globe}>
@@ -302,7 +404,7 @@ export default function RecruiterProfilePage() {
                           : null,
                       )
                     }
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
                   />
                 </Field>
                 <Field label="Headquarters" icon={MapPin}>
@@ -322,7 +424,7 @@ export default function RecruiterProfilePage() {
                           : null,
                       )
                     }
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
                   />
                 </Field>
                 <Field label="Industry / Domain" icon={Tag}>
@@ -343,10 +445,10 @@ export default function RecruiterProfilePage() {
                       )
                     }
                     placeholder="e.g. Fintech, SaaS, HealthTech"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
                   />
                 </Field>
-                <Field label="Sales Model" icon={Target}>
+                <Field label="Core Sales Model" icon={Target}>
                   <select
                     value={profile?.companies?.sales_model || ""}
                     onChange={(e) =>
@@ -362,12 +464,12 @@ export default function RecruiterProfilePage() {
                           : null,
                       )
                     }
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none appearance-none"
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none appearance-none"
                   >
                     <option value="">Select Model</option>
-                    <option value="Inbound">Inbound</option>
-                    <option value="Outbound">Outbound</option>
-                    <option value="Hybrid">Hybrid</option>
+                    <option value="Inbound">Inbound Intelligence</option>
+                    <option value="Outbound">Outbound Strategy</option>
+                    <option value="Hybrid">Hybrid Ecosystem</option>
                   </select>
                 </Field>
                 <Field label="Avg. Deal Size" icon={DollarSign}>
@@ -386,53 +488,76 @@ export default function RecruiterProfilePage() {
                           : null,
                       )
                     }
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none appearance-none"
+                    className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none appearance-none"
                   >
-                    <option value="">Select Range</option>
+                    <option value="">Range Configuration</option>
                     <option value="< $10k">Under $10k</option>
                     <option value="$10k - $50k">$10k - $50k</option>
                     <option value="$50k - $150k">$50k - $150k</option>
-                    <option value="$150k+">$150k+</option>
+                    <option value="$150k+">$150k Enterprise</option>
                   </select>
                 </Field>
                 <Field label="Company Mission" icon={FileText} fullWidth>
-                  <textarea
-                    rows={4}
-                    value={profile?.companies?.description || ""}
-                    onChange={(e) =>
-                      setProfile((p) =>
-                        p
-                          ? {
-                              ...p,
-                              companies: {
-                                ...p.companies,
-                                description: e.target.value,
-                              },
-                            }
-                          : null,
-                      )
-                    }
-                    placeholder="What makes your company a great place for sales talent?"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none resize-none"
-                  />
+                  <div className="relative group">
+                    <textarea
+                      rows={4}
+                      value={profile?.companies?.description || ""}
+                      onChange={(e) =>
+                        setProfile((p) =>
+                          p
+                            ? {
+                                ...p,
+                                companies: {
+                                  ...p.companies,
+                                  description: e.target.value,
+                                },
+                              }
+                            : null,
+                        )
+                      }
+                      placeholder="What makes your company a great place for sales talent?"
+                      className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none resize-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSuggestBio}
+                      disabled={generatingBio}
+                      className="absolute right-4 top-4 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-indigo-600 hover:text-white transition-all shadow-sm border border-indigo-100 disabled:opacity-50"
+                    >
+                      {generatingBio ? (
+                        <div className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-3 h-3" />
+                      )}
+                      {generatingBio ? "SYNTHESIZING..." : "AI SUGGEST"}
+                    </button>
+                  </div>
                 </Field>
               </div>
             </Section>
 
-            <div className="flex justify-end gap-3 pt-6">
-              <Link
-                href="/dashboard/recruiter"
-                className="px-6 py-2.5 rounded-lg font-bold text-sm text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all"
-              >
-                Discard Changes
-              </Link>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-10 py-2.5 bg-blue-600 text-white rounded-lg font-bold text-sm hover:bg-blue-700 disabled:opacity-50 transition-all shadow-md shadow-blue-100 active:scale-95"
-              >
-                {saving ? "SAVING..." : "SAVE PROFILE"}
-              </button>
+            {/* Sticky Actions */}
+            <div className="fixed bottom-0 left-64 right-0 bg-white/80 backdrop-blur-xl border-t border-slate-200 p-6 z-30 flex justify-center shadow-[0_-20px_50px_rgba(0,0,0,0.05)]">
+              <div className="max-w-5xl w-full flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => router.push("/dashboard/recruiter")}
+                    className="px-6 py-2.5 rounded-xl font-bold text-xs text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-all active:scale-95"
+                  >
+                    Discard changes
+                  </button>
+                </div>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="relative group overflow-hidden px-10 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 active:scale-95 disabled:opacity-70"
+                >
+                  <span className="relative z-10">
+                    {saving ? "SAVING..." : "UPDATE"}
+                  </span>
+                </button>
+              </div>
             </div>
           </form>
         </div>
@@ -443,21 +568,28 @@ export default function RecruiterProfilePage() {
 
 function Section({
   title,
+  description,
   icon: Icon,
   children,
 }: {
   title: string;
+  description?: string;
   icon: React.ElementType;
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
-      <h2 className="text-xl font-bold text-slate-900 mb-8 flex items-center gap-3">
-        <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
-          <Icon className="w-5 h-5" />
-        </div>
-        {title}
-      </h2>
+    <div className="bg-white rounded-4xl border border-slate-200 p-10 shadow-sm transition-all hover:shadow-xl hover:shadow-slate-200/50">
+      <div className="mb-10">
+        <h2 className="text-2xl font-black text-slate-900 flex items-center gap-4 mb-2">
+          <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-600 shadow-sm border border-indigo-100/50">
+            <Icon className="w-6 h-6" />
+          </div>
+          {title}
+        </h2>
+        {description && (
+          <p className="text-slate-500 font-medium ml-16">{description}</p>
+        )}
+      </div>
       {children}
     </div>
   );
@@ -475,13 +607,12 @@ function Field({
   fullWidth?: boolean;
 }) {
   return (
-    <div className={fullWidth ? "md:col-span-2" : ""}>
-      <label className="flex items-center text-xs font-bold text-slate-500 uppercase tracking-wider mb-2.5 ml-1">
-        <Icon className="w-3.5 h-3.5 mr-1.5 text-slate-400" />
+    <div className={fullWidth ? "md:col-span-2" : "group"}>
+      <label className="flex items-center text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 ml-1 group-focus-within:text-indigo-600 transition-colors">
+        <Icon className="w-3.5 h-3.5 mr-2 opacity-70" />
         {label}
       </label>
       {children}
     </div>
   );
 }
-

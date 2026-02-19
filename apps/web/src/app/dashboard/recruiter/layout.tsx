@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
 import { useRouter } from "next/navigation";
 import RecruiterSidebar from "@/components/RecruiterSidebar";
+import RecruiterHeader from "@/components/RecruiterHeader";
 
 export default function RecruiterDashboardLayout({
   children,
@@ -18,19 +19,24 @@ export default function RecruiterDashboardLayout({
     team_role?: string;
     companies?: {
       profile_score: number;
-    }
+    };
   } | null>(null);
 
   useEffect(() => {
     async function init() {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) {
         router.replace("/login");
         return;
       }
 
       try {
-        const profileData = await apiClient.get("/recruiter/profile", session.access_token);
+        const profileData = await apiClient.get(
+          "/recruiter/profile",
+          session.access_token,
+        );
         setProfile(profileData);
       } catch (err) {
         console.error("Failed to load recruiter profile in layout:", err);
@@ -56,18 +62,17 @@ export default function RecruiterDashboardLayout({
 
   return (
     <div className="flex min-h-screen bg-[#f8fafc]">
-      <RecruiterSidebar 
-        assessmentStatus={profile?.assessment_status} 
-        teamRole={profile?.team_role} 
+      <RecruiterSidebar
+        assessmentStatus={profile?.assessment_status}
+        teamRole={profile?.team_role}
         profileScore={profile?.companies?.profile_score ?? 0}
       />
-      <div className="flex-1 ml-64 min-h-screen">
+      <div className="flex-1 ml-64 min-h-screen relative">
+        <RecruiterHeader />
         <div className="relative">
           {/* Subtle top decoration */}
           <div className="absolute top-0 right-0 left-0 h-64 bg-linear-to-b from-indigo-50/50 to-transparent -z-10" />
-          <main className="p-8">
-            {children}
-          </main>
+          <main className="p-8">{children}</main>
         </div>
       </div>
     </div>

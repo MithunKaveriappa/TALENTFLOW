@@ -16,15 +16,16 @@ export default function LockedView({ featureName }: LockedViewProps) {
       <div className="h-20 w-20 bg-amber-50 rounded-3xl flex items-center justify-center text-amber-500 mb-8 border border-amber-100 shadow-sm shadow-amber-50">
         <Lock size={40} />
       </div>
-      
+
       <h2 className="text-3xl font-black text-slate-900 mb-4 uppercase tracking-tight italic">
         {featureName} Locked
       </h2>
-      
+
       <p className="text-slate-500 font-medium mb-10 leading-relaxed max-w-md">
-        This high-impact transmission channel is currently disabled. 
-        To unlock <span className="text-slate-900 font-bold">{featureName}</span> and other advanced recruiter features, 
-        your company must complete the TalentFlow DNA Assessment.
+        This high-impact transmission channel is currently disabled. To unlock{" "}
+        <span className="text-slate-900 font-bold">{featureName}</span> and
+        other advanced recruiter features, your company must complete the
+        TalentFlow DNA Assessment.
       </p>
 
       <div className="flex flex-col sm:flex-row gap-4 w-full justify-center">

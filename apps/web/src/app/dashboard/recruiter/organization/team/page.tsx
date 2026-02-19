@@ -2,15 +2,15 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { 
-  Users, 
-  ShieldCheck, 
-  UserPlus, 
+import {
+  Users,
+  ShieldCheck,
+  UserPlus,
   BadgeCheck,
   UserMinus,
   Mail,
   X,
-  Loader2
+  Loader2,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
@@ -43,16 +43,24 @@ export default function TeamManagementPage() {
 
   const loadTeamData = useCallback(async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) {
         router.replace("/login");
         return;
       }
 
-      const profileData = await apiClient.get("/recruiter/profile", session.access_token);
+      const profileData = await apiClient.get(
+        "/recruiter/profile",
+        session.access_token,
+      );
       setProfile(profileData);
 
-      const teamData = await apiClient.get("/recruiter/team", session.access_token);
+      const teamData = await apiClient.get(
+        "/recruiter/team",
+        session.access_token,
+      );
       setTeam(teamData || []);
     } catch (err) {
       console.error("Failed to load team:", err);
@@ -68,13 +76,19 @@ export default function TeamManagementPage() {
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteEmail) return;
-    
+
     setInviting(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) return;
 
-      await apiClient.post("/recruiter/invite", { email: inviteEmail }, session.access_token);
+      await apiClient.post(
+        "/recruiter/invite",
+        { email: inviteEmail },
+        session.access_token,
+      );
       setIsInviteModalOpen(false);
       setInviteEmail("");
       alert("Invitation sent successfully!");
@@ -87,15 +101,25 @@ export default function TeamManagementPage() {
   };
 
   const handleRemove = async (memberId: string) => {
-    if (!confirm("Are you sure you want to remove this team member? They will lose access to the company dashboard.")) return;
-    
+    if (
+      !confirm(
+        "Are you sure you want to remove this team member? They will lose access to the company dashboard.",
+      )
+    )
+      return;
+
     setActioningId(memberId);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) return;
 
-      await apiClient.delete(`/recruiter/team/${memberId}`, session.access_token);
-      setTeam(prev => prev.filter(m => m.user_id !== memberId));
+      await apiClient.delete(
+        `/recruiter/team/${memberId}`,
+        session.access_token,
+      );
+      setTeam((prev) => prev.filter((m) => m.user_id !== memberId));
     } catch (err) {
       console.error("Remove failed:", err);
       alert("Failed to remove member. Make sure you are an admin.");
@@ -106,15 +130,30 @@ export default function TeamManagementPage() {
 
   const handlePromote = async (member: TeamMember) => {
     const action = member.is_admin ? "demote" : "promote";
-    if (!confirm(`Are you sure you want to ${action} ${member.full_name || member.users.email}?`)) return;
+    if (
+      !confirm(
+        `Are you sure you want to ${action} ${member.full_name || member.users.email}?`,
+      )
+    )
+      return;
 
     setActioningId(member.user_id);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) return;
 
-      await apiClient.patch(`/recruiter/team/${member.user_id}/role`, { is_admin: !member.is_admin }, session.access_token);
-      setTeam(prev => prev.map(m => m.user_id === member.user_id ? { ...m, is_admin: !m.is_admin } : m));
+      await apiClient.patch(
+        `/recruiter/team/${member.user_id}/role`,
+        { is_admin: !member.is_admin },
+        session.access_token,
+      );
+      setTeam((prev) =>
+        prev.map((m) =>
+          m.user_id === member.user_id ? { ...m, is_admin: !m.is_admin } : m,
+        ),
+      );
     } catch (err) {
       console.error("Role change failed:", err);
       alert("Failed to change role.");
@@ -136,12 +175,13 @@ export default function TeamManagementPage() {
               Team Management
             </h1>
             <p className="text-slate-500 mt-2 text-lg">
-              Manage recruiters and hiring permissions for {profile?.companies?.name || "your company"}.
+              Manage recruiters and hiring permissions for{" "}
+              {profile?.companies?.name || "your company"}.
             </p>
           </div>
 
           {profile?.is_admin && (
-            <button 
+            <button
               onClick={() => setIsInviteModalOpen(true)}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-blue-100 active:scale-95"
             >
@@ -153,86 +193,104 @@ export default function TeamManagementPage() {
 
         {loading ? (
           <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
           </div>
         ) : (
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50/50 border-b border-slate-100">
-                  <th className="px-8 py-5 text-sm font-bold text-slate-400 uppercase tracking-wider">Member</th>
-                  <th className="px-8 py-5 text-sm font-bold text-slate-400 uppercase tracking-wider">Role</th>
-                  <th className="px-8 py-5 text-sm font-bold text-slate-400 uppercase tracking-wider">Status</th>
-                  <th className="px-8 py-5 text-sm font-bold text-slate-400 uppercase tracking-wider">Joined</th>
-                  <th className="px-8 py-5 text-sm font-bold text-slate-400 uppercase tracking-wider text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {team.map((member) => (
-                  <tr key={member.user_id} className="group hover:bg-slate-50/50 transition-colors">
-                    <td className="px-8 py-6">
-                      <div className="flex items-center gap-4">
-                        <div className="h-12 w-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-500 font-bold border border-slate-200 shadow-sm">
-                          {member.full_name?.charAt(0) || member.users.email.charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <div className="font-bold text-slate-900 flex items-center gap-2">
-                            {member.full_name || "New Recruiter"}
-                            {member.is_admin && <ShieldCheck className="h-4 w-4 text-blue-600" />}
-                          </div>
-                          <div className="text-sm text-slate-500">{member.users.email}</div>
-                          {member.job_title && <div className="text-[10px] text-blue-600 font-bold uppercase tracking-widest mt-0.5">{member.job_title}</div>}
-                        </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {team.map((member) => (
+              <div
+                key={member.user_id}
+                className="group relative bg-white rounded-[2.5rem] border border-slate-100 p-6 shadow-sm hover:shadow-2xl hover:shadow-blue-500/10 transition-all duration-500 hover:-translate-y-1"
+              >
+                {/* Visual Accent */}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 h-1 w-12 bg-blue-600/10 rounded-b-full group-hover:w-20 group-hover:bg-blue-600/30 transition-all duration-500" />
+
+                <div className="flex flex-col items-center text-center pt-4">
+                  {/* Avatar Section */}
+                  <div className="relative mb-4">
+                    <div className="h-20 w-20 rounded-[1.8rem] bg-slate-50 flex items-center justify-center text-2xl font-black text-slate-300 border-2 border-slate-100 shadow-inner group-hover:border-blue-100 group-hover:bg-blue-50/30 transition-all duration-500">
+                      {member.full_name?.charAt(0) ||
+                        member.users.email.charAt(0).toUpperCase()}
+                    </div>
+                    {member.is_admin && (
+                      <div className="absolute -top-1 -right-1 bg-white p-1.5 rounded-xl shadow-md border border-slate-50 group-hover:scale-110 transition-transform">
+                        <ShieldCheck className="h-4 w-4 text-blue-600" />
                       </div>
-                    </td>
-                    <td className="px-8 py-6">
-                      <span className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest ${
-                        member.is_admin ? "bg-blue-50 text-blue-600 border border-blue-100" : "bg-slate-50 text-slate-500 border border-slate-100"
-                      }`}>
-                        {member.is_admin ? "Admin" : "Recruiter"}
-                      </span>
-                    </td>
-                    <td className="px-8 py-6">
-                      <div className="flex items-center gap-2">
-                        <BadgeCheck className={`h-4 w-4 ${member.assessment_status === 'completed' ? 'text-emerald-500' : 'text-slate-300'}`} />
-                        <span className="text-sm font-semibold capitalize bg-slate-100/50 px-3 py-1 rounded-lg">
-                          {member.assessment_status.replace('_', ' ')}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-8 py-6 text-sm text-slate-500 font-medium">
-                      {new Date(member.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="px-8 py-6 text-right">
-                      {profile?.is_admin && member.user_id !== profile.user_id && (
-                        <div className="flex items-center justify-end gap-2">
-                          <button 
-                            onClick={() => handlePromote(member)}
-                            disabled={actioningId === member.user_id}
-                            title={member.is_admin ? "Demote to Recruiter" : "Promote to Admin"}
-                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
-                          >
-                            <ShieldCheck className="h-5 w-5" />
-                          </button>
-                          <button 
-                            onClick={() => handleRemove(member.user_id)}
-                            disabled={actioningId === member.user_id}
-                            title="Remove from Team"
-                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                          >
-                            {actioningId === member.user_id ? (
-                              <Loader2 className="h-5 w-5 animate-spin" />
-                            ) : (
-                              <UserMinus className="h-5 w-5" />
-                            )}
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    )}
+                  </div>
+
+                  {/* Identity */}
+                  <div className="space-y-1 mb-6">
+                    <h3 className="font-black text-slate-900 tracking-tight text-lg group-hover:text-blue-600 transition-colors">
+                      {member.full_name || "Nexus Recruiter"}
+                    </h3>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                      {member.job_title || "Strategic Talent Partner"}
+                    </p>
+                    <div className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-slate-400 pt-1">
+                      <Mail size={12} className="opacity-50" />
+                      {member.users.email}
+                    </div>
+                  </div>
+
+                  {/* Status Badges */}
+                  <div className="flex flex-wrap justify-center gap-2 mb-8">
+                    <span
+                      className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
+                        member.is_admin
+                          ? "bg-blue-50 text-blue-600 border-blue-100"
+                          : "bg-slate-50 text-slate-500 border-slate-100"
+                      }`}
+                    >
+                      {member.is_admin ? "Admin" : "Recruiter"}
+                    </span>
+                    <span
+                      className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${
+                        member.assessment_status === "completed"
+                          ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                          : "bg-amber-50 text-amber-600 border-amber-100"
+                      }`}
+                    >
+                      <BadgeCheck size={10} />
+                      {member.assessment_status.split("_")[0]}
+                    </span>
+                  </div>
+
+                  {/* Action Bar */}
+                  {profile?.is_admin && member.user_id !== profile.user_id && (
+                    <div className="w-full flex items-center justify-center gap-2 pt-6 border-t border-slate-50">
+                      <button
+                        onClick={() => handlePromote(member)}
+                        disabled={actioningId === member.user_id}
+                        className="flex-1 py-3 px-4 bg-slate-50 hover:bg-blue-600 hover:text-white rounded-[1.2rem] text-[9px] font-black uppercase tracking-widest text-slate-500 transition-all border border-slate-100 flex items-center justify-center gap-2 group/btn"
+                      >
+                        <ShieldCheck
+                          size={14}
+                          className="group-hover/btn:scale-110 transition-transform"
+                        />
+                        {member.is_admin ? "Demote" : "Promote"}
+                      </button>
+                      <button
+                        onClick={() => handleRemove(member.user_id)}
+                        disabled={actioningId === member.user_id}
+                        className="p-3 bg-slate-50 hover:bg-rose-500 hover:text-white rounded-[1.2rem] text-slate-400 transition-all border border-slate-100"
+                      >
+                        {actioningId === member.user_id ? (
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                          <UserMinus size={18} />
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Decorative Elements */}
+                <div className="absolute bottom-4 right-6 text-[8px] font-black text-slate-200 uppercase tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity">
+                  ID: {member.user_id.split("-")[0]}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </main>
@@ -244,21 +302,30 @@ export default function TeamManagementPage() {
             <div className="p-8">
               <div className="flex justify-between items-start mb-6">
                 <div>
-                  <h2 className="text-2xl font-black text-slate-900 tracking-tight">Invite Team Member</h2>
-                  <p className="text-slate-500 text-sm mt-1">Send an invitation to join your company team.</p>
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight">
+                    Invite Team Member
+                  </h2>
+                  <p className="text-slate-500 text-sm mt-1">
+                    Send an invitation to join your company team.
+                  </p>
                 </div>
-                <button onClick={() => setIsInviteModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                <button
+                  onClick={() => setIsInviteModalOpen(false)}
+                  className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
+                >
                   <X className="h-5 w-5 text-slate-400" />
                 </button>
               </div>
 
               <form onSubmit={handleInvite} className="space-y-6">
                 <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Professional Email</label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                    Professional Email
+                  </label>
                   <div className="relative">
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                    <input 
-                      type="email" 
+                    <input
+                      type="email"
                       required
                       value={inviteEmail}
                       onChange={(e) => setInviteEmail(e.target.value)}
@@ -272,22 +339,27 @@ export default function TeamManagementPage() {
                   <div className="flex gap-3">
                     <ShieldCheck className="h-5 w-5 text-blue-600 shrink-0" />
                     <div>
-                      <p className="text-xs font-bold text-blue-900 mb-1">Standard Recruiter Role</p>
+                      <p className="text-xs font-bold text-blue-900 mb-1">
+                        Standard Recruiter Role
+                      </p>
                       <p className="text-xs text-blue-700/80 leading-relaxed">
-                        Invited members can post jobs, manage applications, and interview candidates. Only you can manage team members.
+                        Invited members can post jobs, manage applications, and
+                        interview candidates. Only you can manage team members.
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <button 
+                <button
                   type="submit"
                   disabled={inviting}
                   className="w-full bg-slate-900 hover:bg-slate-800 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-sm transition-all shadow-xl active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {inviting ? (
-                     <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : "Send Invitation"}
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    "Send Invitation"
+                  )}
                 </button>
               </form>
             </div>
@@ -297,4 +369,3 @@ export default function TeamManagementPage() {
     </div>
   );
 }
-

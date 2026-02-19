@@ -22,6 +22,9 @@ type OnboardingState =
   | "AWAITING_EXPERIENCE"
   | "AWAITING_RESUME"
   | "AWAITING_SKILLS"
+  | "AWAITING_GPS_VISION"
+  | "AWAITING_GPS_INTERESTS"
+  | "AWAITING_GPS_GOAL"
   | "AWAITING_ID"
   | "AWAITING_TC"
   | "COMPLETED";
@@ -175,6 +178,15 @@ export default function CandidateOnboarding() {
               "We were just finalizing your skills. Feel free to refine them below.",
               "bot",
             );
+          } else if (
+            savedStep === "AWAITING_GPS_VISION" ||
+            savedStep === "AWAITING_GPS_INTERESTS" ||
+            savedStep === "AWAITING_GPS_GOAL"
+          ) {
+            addMessage(
+              "We were just talking about your career vision. What's your next big target?",
+              "bot",
+            );
           } else if (savedStep === "AWAITING_ID") {
             addMessage(
               "I just need to verify your identity. Please upload any government-issued ID (DL, Passport, or any ID proof).",
@@ -310,17 +322,101 @@ export default function CandidateOnboarding() {
 
           addMessage("Skills saved! Your profile is now enriched.", "bot");
 
-          const nextState = "AWAITING_ID";
+          const nextState = "AWAITING_GPS_VISION";
           await saveStep(nextState);
-          setState(nextState); // Change state immediately to hide skills UI
+          setState(nextState);
 
           setTimeout(() => {
             addMessage(
-              "For verification and security, please provide a scan or photo of any government-issued ID (DL, Passport, or other proof).",
+              "Before we finish, let's look at your future. What's your target role in IT Tech Sales (e.g. Enterprise AE)?",
+              "bot",
+              ["Skip Career Vision for Now"],
+            );
+          }, 1000);
+        }
+      } else if (state === "AWAITING_GPS_VISION") {
+        if (workingInput.toLowerCase().includes("skip")) {
+          addMessage(
+            "No problem! You can set up your Career GPS anytime from your dashboard.",
+            "bot",
+          );
+          const nextState = "AWAITING_ID";
+          await saveStep(nextState);
+          setState(nextState);
+          setTimeout(() => {
+            addMessage(
+              "Now, for verification and security, please upload a scan or photo of your government-issued ID (DL, Passport, etc).",
+              "bot",
+            );
+          }, 1000);
+        } else {
+          // Save target_role temporarily (or just proceed)
+          // We'll update the profile at the end or per step.
+          await supabase.auth.getSession();
+          await supabase
+            .from("candidate_profiles")
+            .update({ target_role: workingInput })
+            .eq("user_id", userIdRef.current);
+
+          addMessage(`Got it! Target: ${workingInput}.`, "bot");
+          const nextState = "AWAITING_GPS_INTERESTS";
+          await saveStep(nextState);
+          setState(nextState);
+          setTimeout(() => {
+            addMessage(
+              "Which specific categories or tech verticals interest you most (e.g. SaaS, Cloud, CyberSecurity)?",
               "bot",
             );
           }, 1000);
         }
+      } else if (state === "AWAITING_GPS_INTERESTS") {
+        await supabase.auth.getSession();
+        // Split comma-separated string into an array for the TEXT[] database column
+        const interestsArray = workingInput
+          .split(",")
+          .map((i) => i.trim())
+          .filter(Boolean);
+        await supabase
+          .from("candidate_profiles")
+          .update({ career_interests: interestsArray })
+          .eq("user_id", userIdRef.current);
+
+        addMessage(`Tech Interests recorded: ${workingInput}.`, "bot");
+        const nextState = "AWAITING_GPS_GOAL";
+        await saveStep(nextState);
+        setState(nextState);
+        setTimeout(() => {
+          addMessage(
+            "Finally, what's your ultimate career long-term goal?",
+            "bot",
+          );
+        }, 1000);
+      } else if (state === "AWAITING_GPS_GOAL") {
+        await supabase.auth.getSession();
+        await supabase
+          .from("candidate_profiles")
+          .update({ long_term_goal: workingInput })
+          .eq("user_id", userIdRef.current);
+
+        addMessage(
+          "Career vision captured! We'll use this to build your personalized Career GPS.",
+          "bot",
+        );
+        const nextState = "AWAITING_ID";
+        await saveStep(nextState);
+        setState(nextState);
+        setTimeout(() => {
+          addMessage(
+            "Now, for verification and security, please upload a scan or photo of your government-issued ID (DL, Passport, etc).",
+            "bot",
+          );
+        }, 1000);
+      } else if (state === "AWAITING_ID") {
+        // Add a message if someone tries to type during ID upload step
+        addMessage(
+          "Please upload your ID document using the upload button below.",
+          "bot",
+        );
       } else if (state === "AWAITING_TC") {
         const {
           data: { session },

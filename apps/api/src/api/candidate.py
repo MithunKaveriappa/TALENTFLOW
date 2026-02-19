@@ -53,10 +53,29 @@ async def get_profile(user: dict = Depends(get_current_user)):
     user_id = user["sub"]
     try:
         # Use execute() instead of single() to avoid 404/PGRST116 errors
-        res = await supabase.table("candidate_profiles").select("*").eq("user_id", user_id).execute()
+        # Join with users table for email consistency
+        res = await supabase.table("candidate_profiles").select("*, users(email)").eq("user_id", user_id).execute()
         if not res.data:
             return None
-        return res.data[0]
+        profile = res.data[0]
+        # Flatten email
+        if "users" in profile and profile["users"]:
+            profile["email"] = profile["users"].get("email")
+        else:
+            profile["email"] = user.get("email")
+            
+        # Add Signed URL for Profile Photo
+        if profile.get("profile_photo_url") and not profile["profile_photo_url"].startswith("http"):
+            try:
+                # Use sync supabase for storage until async is fully vetted for storage.create_signed_url
+                from src.core.supabase import supabase as sync_supabase
+                signed_url_res = sync_supabase.storage.from_("avatars").create_signed_url(profile["profile_photo_url"], 3600)
+                if signed_url_res and "signedURL" in signed_url_res:
+                    profile["profile_photo_url"] = signed_url_res["signedURL"]
+            except Exception as e:
+                print(f"FAILED TO SIGN PROFILE PHOTO: {e}")
+                
+        return profile
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -68,16 +87,23 @@ async def update_profile(
     user_id = user["sub"]
     try:
         # 0. Check Integrity Lock
-        profile_check = await supabase.table("candidate_profiles").select("assessment_status").eq("user_id", user_id).execute()
-        is_completed = profile_check.data and profile_check.data[0].get("assessment_status") == "completed"
+        profile_check = await supabase.table("candidate_profiles").select("assessment_status, experience, years_of_experience").eq("user_id", user_id).execute()
+        current_profile = profile_check.data[0] if profile_check.data else {}
+        is_completed = current_profile.get("assessment_status") == "completed"
 
         # 1. Update Profile Fields
         update_data = request.model_dump(exclude_unset=True, by_alias=True)
         
-        # Prevent experience change if locked
-        if is_completed and ("experience" in update_data or "years_of_experience" in update_data):
-            raise HTTPException(status_code=403, detail="Seniority signals are locked post-assessment. Use Performance Reset to update.")
-
+        # SILENT PROTECTION: If assessment is completed, we don't allow changing seniority signals.
+        # Instead of erroring out (which blocks profile saves), we just strip them from the payload 
+        # to ensure the save succeeds for other fields.
+        if is_completed:
+            for field in ["experience", "years_of_experience"]:
+                if field in update_data:
+                    # Log for server-side audit
+                    print(f"DEBUG: Stripping locked field {field} from profile update.")
+                    del update_data[field]
+            
         await supabase.table("candidate_profiles").update(update_data).eq("user_id", user_id).execute()
         
         # 2. Recalculate Completion Score (Safe fetch)
@@ -102,7 +128,7 @@ async def update_profile(
 async def get_latest_application(user: dict = Depends(get_current_user)):
     user_id = user["sub"]
     try:
-        res = supabase.table("job_applications")\
+        res = await supabase.table("job_applications")\
             .select("*, jobs(*, companies(*)), interviews(*, interview_slots(*))")\
             .eq("candidate_id", user_id)\
             .order("created_at", desc=True)\
@@ -121,13 +147,13 @@ def get_stats(user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/step")
-def update_step(
+async def update_step(
     request: StepUpdate,
     user: dict = Depends(get_current_user)
 ):
     user_id = user["sub"]
     try:
-        supabase.table("candidate_profiles").update({
+        await supabase.table("candidate_profiles").update({
             "onboarding_step": request.step
         }).eq("user_id", user_id).execute()
         return {"status": "step_updated"}
@@ -135,7 +161,7 @@ def update_step(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/experience")
-def update_experience(
+async def update_experience(
     request: ExperienceBandUpdate,
     user: dict = Depends(get_current_user)
 ):
@@ -147,11 +173,11 @@ def update_experience(
     
     try:
         # Check integrity lock
-        profile_check = supabase.table("candidate_profiles").select("assessment_status").eq("user_id", user_id).execute()
+        profile_check = await supabase.table("candidate_profiles").select("assessment_status").eq("user_id", user_id).execute()
         if profile_check.data and profile_check.data[0].get("assessment_status") == "completed":
              raise HTTPException(status_code=403, detail="Experience band is locked after assessment completion.")
 
-        supabase.table("candidate_profiles").update({
+        await supabase.table("candidate_profiles").update({
             "experience": request.experience
         }).eq("user_id", user_id).execute()
         
@@ -167,9 +193,12 @@ async def update_resume(
     user_id = user["sub"]
     
     try:
-        # 1. Mark as uploaded in profile
-        supabase.table("candidate_profiles").update({
-            "resume_uploaded": True
+        # 1. Mark as uploaded in profile and store path
+        # Generate a public URL (assuming public bucket, otherwise use signed URL)
+        # For simplicity, we store the full path.
+        await supabase.table("candidate_profiles").update({
+            "resume_uploaded": True,
+            "resume_path": request.resume_path
         }).eq("user_id", user_id).execute()
         
         # 2. Trigger Parsing (In dev, we'll do it sync. For prod, use BackgroundTasks)
@@ -200,14 +229,14 @@ async def generate_resume(
         file_path = f"resumes/{user_id}-generated.pdf"
         
         # Check if bucket exists/overwrite
-        supabase.storage.from_("resumes").upload(
+        await supabase.storage.from_("resumes").upload(
             file_path, 
             pdf_content, 
             {"content-type": "application/pdf", "x-upsert": "true"}
         )
         
         # 4. Update Profile
-        supabase.table("candidate_profiles").update({
+        await supabase.table("candidate_profiles").update({
             "resume_uploaded": True,
             "full_name": request.full_name,
             "phone_number": request.phone,
@@ -220,7 +249,7 @@ async def generate_resume(
         }).eq("user_id", user_id).execute()
         
         # 5. Store detailed data in resume_data table
-        supabase.table("resume_data").upsert({
+        await supabase.table("resume_data").upsert({
             "user_id": user_id,
             "raw_text": f"Generated Resume Content:\n{str(resume_data_dict)}",
             "timeline": [item.model_dump() for item in request.timeline],

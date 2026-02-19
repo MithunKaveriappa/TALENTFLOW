@@ -11,8 +11,8 @@ from src.core.config import GOOGLE_API_KEY
 class RecruiterService:
     def __init__(self):
         genai.configure(api_key=GOOGLE_API_KEY)
-        # Using gemma-3-27b-it as gemini models have 0 quota in this region/project
-        self.model = genai.GenerativeModel('gemma-3-27b-it')
+        # Migrated to Gemini 3 Flash (Preview) for Elite Recruitment Audits
+        self.model = genai.GenerativeModel('gemini-3-flash-preview')
 
     async def generate_company_bio(self, website_url: str) -> str:
         """
@@ -163,7 +163,8 @@ class RecruiterService:
                 return []
 
             # 2. Fetch applications with joined data
-            # Note: We filter by company_id through the jobs table join
+            # Note: We fetch candidate_profiles but skip resume_data here to avoid relationship errors
+            # PostgREST needs direct FKs for sibling joins which job_applications <-> resume_data lacks.
             query = supabase.table("job_applications").select("""
                 id,
                 status,
@@ -171,23 +172,65 @@ class RecruiterService:
                 created_at,
                 job_id,
                 candidate_id,
-                jobs!inner(id, title, status, company_id, skills_required, requirements),
-                candidate_profiles!inner(user_id, full_name, current_role, years_of_experience, skills)
+                jobs!inner(id, title, status, company_id, skills_required, requirements, location, created_at),
+                candidate_profiles!inner(
+                    user_id, full_name, current_role, years_of_experience, skills, 
+                    phone_number, location, gender, birthdate, university, 
+                    qualification_held, graduation_year, referral, bio, profile_photo_url,
+                    resume_path,
+                    users(email)
+                )
             """).eq("jobs.company_id", company_id).order("created_at", desc=True)
             
             res = query.execute()
             apps = res.data or []
 
             if apps:
-                # 3. Fetch Profile Scores separately to avoid join headaches
+                # 3. Fetch Profile Scores & Resume Data separately to avoid join headaches
                 candidate_ids = list(set([a["candidate_id"] for a in apps]))
+                
+                # Fetch Scores
                 scores_res = supabase.table("profile_scores").select("user_id, final_score, skills_score").in_("user_id", candidate_ids).execute()
                 scores_map = {s["user_id"]: s for s in (scores_res.data or [])}
 
+                # Fetch Resume Data (Timeline/Education)
+                resume_res = supabase.table("resume_data").select("user_id, timeline, education, achievements, skills, raw_text").in_("user_id", candidate_ids).execute()
+                resume_map = {r["user_id"]: r for r in (resume_res.data or [])}
+
+                # 3.5 Generate Signed URLs for resumes (Buckets are private by default)
+                signed_urls = {}
+                resume_paths = [a["candidate_profiles"]["resume_path"] for a in apps if a.get("candidate_profiles", {}).get("resume_path")]
+                if resume_paths:
+                    try:
+                        # Fetch signed URLs for all paths in one go
+                        urls_res = supabase.storage.from_("resumes").create_signed_urls(resume_paths, 3600)
+                        for u in (urls_res or []):
+                             if "signedURL" in u:
+                                 signed_urls[u["path"]] = u["signedURL"]
+                    except Exception as e:
+                        print(f"Error generating signed URLs: {str(e)}")
+
                 # 4. Process and categorise by Skill Match
                 for app in apps:
+                    # Flatten email from joined users table
+                    if "candidate_profiles" in app and "users" in app["candidate_profiles"]:
+                        user_data = app["candidate_profiles"]["users"]
+                        if isinstance(user_data, dict):
+                             app["candidate_profiles"]["email"] = user_data.get("email")
+                        elif isinstance(user_data, list) and len(user_data) > 0:
+                             app["candidate_profiles"]["email"] = user_data[0].get("email")
+                        del app["candidate_profiles"]["users"]
+
+                    # Attach Resume Signed URL
+                    r_path = app.get("candidate_profiles", {}).get("resume_path")
+                    if r_path and r_path in signed_urls:
+                         app["candidate_profiles"]["resume_url"] = signed_urls[r_path]
+
                     # Attach scores
                     app["profile_scores"] = scores_map.get(app["candidate_id"])
+                    
+                    # Attach resume data
+                    app["resume_data"] = resume_map.get(app["candidate_id"])
 
                     job_skills = set([s.lower() for s in (app["jobs"].get("skills_required") or [])])
                     cand_skills = set([s.lower() for s in (app["candidate_profiles"].get("skills") or [])])
@@ -215,9 +258,9 @@ class RecruiterService:
 
         try:
             # OWNERSHIP CHECK: Ensure recruiter owns the jobs associated with these applications
-            # We also fetch candidate_id here to potentially unlock chat threads
+            # We also fetch candidate_id and current status for audit trails
             apps_check = supabase.table("job_applications")\
-                .select("id, candidate_id, jobs(recruiter_id)")\
+                .select("id, status, candidate_id, jobs(recruiter_id)")\
                 .in_("id", application_ids)\
                 .execute()
             
@@ -234,6 +277,31 @@ class RecruiterService:
                 .in_("id", application_ids)\
                 .execute()
             
+            # AUDIT TRAIL: Log transitions manually
+            if res.data:
+                from src.services.notification_service import NotificationService
+                for app in apps_check.data:
+                    # Log history using static method
+                    # This ensures the recruiter_id (user_id) is captured correctly
+                    await self.log_history(
+                        application_id=app["id"],
+                        new_status=status,
+                        old_status=app.get("status"),
+                        changed_by=recruiter_id,
+                        reason=feedback
+                    )
+
+                    # Notify Candidate
+                    candidate_id = app.get("candidate_id")
+                    if candidate_id:
+                        NotificationService.create_notification(
+                            user_id=candidate_id,
+                            type="APPLICATION_STATUS_UPDATE",
+                            title=f"Application Update: {status.capitalize()}",
+                            message=f"The status of your application has been updated to '{status}'. Check your dashboard for details.",
+                            metadata={"application_id": app["id"], "new_status": status, "feedback": feedback}
+                        )
+
             # ELITE HUB AUTOMATION: Handle thread activation/deactivation
             if status in ["shortlisted", "invited"] and res.data:
                 from src.services.chat_service import ChatService
@@ -270,6 +338,20 @@ class RecruiterService:
             .order("created_at", desc=False)\
             .execute()
         return res.data
+
+    @staticmethod
+    async def log_history(application_id: str, new_status: str, old_status: Optional[str], changed_by: str, reason: Optional[str] = None):
+        """Manually log a status transition for the audit trail if DB trigger fails/skipped."""
+        try:
+            supabase.table("job_application_status_history").insert({
+                "application_id": application_id,
+                "old_status": old_status,
+                "new_status": new_status,
+                "changed_by": changed_by,
+                "reason": reason
+            }).execute()
+        except Exception as e:
+            print(f"AUDIT TRAIL LOGGING ERROR: {str(e)}")
 
     async def sync_completion_score(self, user_id: str):
         """Helper to sync completion score for recruiter and company profile."""
@@ -344,7 +426,7 @@ class RecruiterService:
 
             # 2. Fetch all assessed candidates
             res = supabase.table("candidate_profiles").select(
-                "user_id, full_name, current_role, experience, years_of_experience, profile_strength, skills, assessment_status"
+                "user_id, full_name, current_role, experience, years_of_experience, profile_strength, skills, assessment_status, profile_photo_url"
             ).eq("assessment_status", "completed").execute()
             
             if not res.data:
@@ -353,15 +435,38 @@ class RecruiterService:
             candidates = res.data
             user_ids = [c["user_id"] for c in candidates]
             
-            # 3. Fetch scores
+            # 3. Fetch User Emails
+            users_res = supabase.table("users").select("id, email").in_("id", user_ids).execute()
+            email_map = {u["id"]: u["email"] for u in users_res.data} if users_res.data else {}
+
+            # 4. Fetch scores
             scores_res = supabase.table("profile_scores").select(
                 "user_id, behavioral_score, psychometric_score"
             ).in_("user_id", user_ids).execute()
             
             scores_map = {s["user_id"]: s for s in scores_res.data} if scores_res.data else {}
             
+            # 5. Handle signing for photos (bulk)
+            paths_to_sign = [c["profile_photo_url"] for c in candidates if c.get("profile_photo_url") and not c["profile_photo_url"].startswith("http")]
+            signed_urls_map = {}
+            if paths_to_sign:
+                try:
+                    signed_res = supabase.storage.from_("avatars").create_signed_urls(paths_to_sign, 3600)
+                    if signed_res:
+                        for item in signed_res:
+                            signed_urls_map[item['path']] = item['signedURL']
+                except:
+                    pass
+
             recommended = []
             for c in candidates:
+                # Email Mapping
+                c["email"] = email_map.get(c["user_id"], "candidate@talentflow.ai")
+
+                # Photo Signing
+                if c.get("profile_photo_url") and c["profile_photo_url"] in signed_urls_map:
+                    c["profile_photo_url"] = signed_urls_map[c["profile_photo_url"]]
+
                 u_scores = scores_map.get(c["user_id"], {})
                 beh_score = u_scores.get("behavioral_score") or 0
                 psy_score = u_scores.get("psychometric_score") or 0
@@ -373,7 +478,7 @@ class RecruiterService:
                 # For now, we calculate a Culture Match score.
                 match_score = int((psy_score * 0.7) + (beh_score * 0.3))
                 
-                # Only recommend if they are above a trust threshold
+                # Only recommend if they are above a trust threshold (Production: 60%)
                 if match_score >= 60:
                     c["culture_match_score"] = match_score
                     recommended.append(c)
@@ -388,34 +493,52 @@ class RecruiterService:
     async def get_candidate_pool(self):
         """Fetch all candidates with limited signals for recruiters."""
         try:
+            # 1. Fetch Profile
             res = supabase.table("candidate_profiles").select(
-                "user_id, full_name, current_role, experience, years_of_experience, profile_strength, identity_verified, assessment_status, skills"
+                "user_id, full_name, current_role, experience, years_of_experience, profile_strength, identity_verified, assessment_status, skills, profile_photo_url, resume_path"
             ).execute()
             
             if not res.data:
                 return []
             
             candidates = res.data
-            
-            # Fetch scores separately to calculate trust signal
             user_ids = [c["user_id"] for c in candidates]
-            scores_res = supabase.table("profile_scores").select("user_id, behavioral_score, psychometric_score").in_("user_id", user_ids).execute()
             
+            # 2. Fetch User Emails
+            users_res = supabase.table("users").select("id, email").in_("id", user_ids).execute()
+            email_map = {u["id"]: u["email"] for u in users_res.data} if users_res.data else {}
+            
+            # 3. Fetch scores for trust signal
+            scores_res = supabase.table("profile_scores").select("user_id, behavioral_score, psychometric_score").in_("user_id", user_ids).execute()
             scores_map = {s["user_id"]: s for s in scores_res.data} if scores_res.data else {}
             
-            # Enrich candidate data with a consolidated Trust Score
+            # 4. Handle signing for photos (bulk)
+            paths_to_sign = [c["profile_photo_url"] for c in candidates if c.get("profile_photo_url") and not c["profile_photo_url"].startswith("http")]
+            signed_urls_map = {}
+            if paths_to_sign:
+                try:
+                    signed_res = supabase.storage.from_("avatars").create_signed_urls(paths_to_sign, 3600)
+                    if signed_res:
+                        for item in signed_res:
+                            signed_urls_map[item['path']] = item['signedURL']
+                except:
+                    pass
+
+            # Consolidated Data Enrichment
             for c in candidates:
+                # Email Mapping
+                c["email"] = email_map.get(c["user_id"], "candidate@talentflow.ai")
+
+                # Photo Signing
+                if c.get("profile_photo_url") and c["profile_photo_url"] in signed_urls_map:
+                    c["profile_photo_url"] = signed_urls_map[c["profile_photo_url"]]
+
                 u_scores = scores_map.get(c["user_id"], {})
                 beh = u_scores.get("behavioral_score") or 0
                 psy = u_scores.get("psychometric_score") or 0
-                
-                # Trust Score calculation (Normalized 0-100)
-                # Weighted: 60% Psychometric, 40% Behavioral
                 c["trust_score"] = int((psy * 0.6) + (beh * 0.4)) if (psy + beh) > 0 else 0
                 
-            # Sort by trust_score to give high priority to high-trust candidates
             candidates.sort(key=lambda x: x["trust_score"], reverse=True)
-                
             return candidates
         except Exception as e:
             print(f"Error fetching candidate pool: {e}")
@@ -431,7 +554,26 @@ class RecruiterService:
             
             candidate = res.data[0]
             
-            # 2. Fetch Scores to calculate consolidated trust signal
+            # 2. Fetch User Email explicitly from users table
+            user_res = supabase.table("users").select("email").eq("id", candidate_id).execute()
+            if user_res.data:
+                candidate["email"] = user_res.data[0].get("email")
+            else:
+                # Fallback if users table mirror is missing
+                candidate["email"] = "candidate@talentflow.ai"
+
+            # 3. Handle Profile Photo signing (if bucket is private)
+            if candidate.get("profile_photo_url") and not candidate["profile_photo_url"].startswith("http"):
+                try:
+                    signed_res = supabase.storage.from_("avatars").create_signed_url(candidate["profile_photo_url"], 3600)
+                    if signed_res and isinstance(signed_res, dict) and "signedURL" in signed_res:
+                        candidate["profile_photo_url"] = signed_res["signedURL"]
+                    elif signed_res and isinstance(signed_res, str):
+                        candidate["profile_photo_url"] = signed_res
+                except:
+                    pass
+
+            # 4. Fetch Scores
             scores_res = supabase.table("profile_scores").select("behavioral_score, psychometric_score, skills_score").eq("user_id", candidate_id).execute()
             
             if scores_res.data:
@@ -444,6 +586,22 @@ class RecruiterService:
                 candidate["trust_score"] = 0
                 candidate["skills_alignment"] = 0
                 
+            # 3. Fetch Resume Data (Timeline/Education)
+            resume_res = supabase.table("resume_data").select("user_id, timeline, education, achievements, skills, raw_text").eq("user_id", candidate_id).execute()
+            if resume_res.data:
+                candidate["resume_data"] = resume_res.data[0]
+            else:
+                candidate["resume_data"] = None
+
+            # 4. Generate Signed URL for resume from resumes bucket
+            if candidate.get("resume_path"):
+                try:
+                    signed_url = supabase.storage.from_("resumes").create_signed_url(candidate["resume_path"], 3600)
+                    if "signedURL" in signed_url:
+                        candidate["resume_url"] = signed_url["signedURL"]
+                except Exception as e:
+                    print(f"Error generating signed URL for candidate {candidate_id}: {e}")
+
             # Ensure raw behavioral and psychometric scores are NOT returned
             if "profile_scores" in candidate: del candidate["profile_scores"]
             
@@ -951,44 +1109,109 @@ class RecruiterService:
                 return None
             raise e
 
-    async def invite_candidate(self, user_id: str, candidate_id: str, job_id: str, message: Optional[str] = None):
-        """Recruiter invites a candidate to a specific job with ownership check."""
-        # 1. Verify recruiter owns this job
-        job_res = supabase.table("jobs").select("recruiter_id, company_id, title").eq("id", job_id).execute()
+    async def delete_job(self, user_id: str, job_id: str):
+        """Delete a job posting with ownership check."""
+        # Verify ownership
+        job_res = supabase.table("jobs").select("recruiter_id").eq("id", job_id).execute()
         if not job_res.data:
             raise Exception("Job not found")
             
         if job_res.data[0]["recruiter_id"] != user_id:
-            raise Exception("Unauthorized: You can only invite candidates to jobs you personally posted.")
+            raise Exception("Unauthorized: You can only delete jobs you personally posted.")
+            
+        res = supabase.table("jobs").delete().eq("id", job_id).execute()
+        return {"status": "success"}
+
+    async def invite_candidate(self, user_id: str, candidate_id: str, job_id: str, message: Optional[str] = None, custom_role_title: Optional[str] = None):
+        """Recruiter invites a candidate to a specific job or a custom unlisted role."""
         
-        job_title = job_res.data[0]["title"]
-        company_id = job_res.data[0]["company_id"]
+        target_job_id = job_id
+        job_title = ""
+        company_id = None
+
+        if job_id == "unlisted" and custom_role_title:
+            # 1. Fetch Recruiter Profile for company_id
+            prof = await self.get_or_create_profile(user_id)
+            company_id = prof.get("company_id")
+            if not company_id:
+                raise Exception("No company linked to profile. Cannot create unlisted role.")
+            
+            # 2. Check if a private 'ghost' job with this title already exists for this company
+            # This prevents duplicates for common custom titles like "Frontend Role"
+            existing_job = supabase.table("jobs").select("id, title").eq("company_id", company_id).eq("title", custom_role_title).eq("status", "paused").execute()
+            
+            if existing_job.data:
+                target_job_id = existing_job.data[0]["id"]
+                job_title = existing_job.data[0]["title"]
+            else:
+                # Create a private/unlisted job post
+                new_job = supabase.table("jobs").insert({
+                    "recruiter_id": user_id,
+                    "company_id": company_id,
+                    "title": custom_role_title,
+                    "status": "active", # Keep active for matching/invites but it won't be in public feed if we had one
+                    "location": "Remote / Flexible",
+                    "experience_level": "mid",
+                    "skills_required": [],
+                    "description": f"Private invitation for {custom_role_title}"
+                }).execute()
+                
+                if not new_job.data:
+                    raise Exception("Failed to create unlisted role container.")
+                
+                target_job_id = new_job.data[0]["id"]
+                job_title = new_job.data[0]["title"]
+        else:
+            # Standard Path: Verify recruiter owns this job
+            job_res = supabase.table("jobs").select("recruiter_id, company_id, title").eq("id", job_id).execute()
+            if not job_res.data:
+                raise Exception("Job not found")
+                
+            if job_res.data[0]["recruiter_id"] != user_id:
+                raise Exception("Unauthorized: You can only invite candidates to jobs you personally posted.")
+            
+            job_title = job_res.data[0]["title"]
+            company_id = job_res.data[0]["company_id"]
+            target_job_id = job_id
         
-        # 2. Check if already applied/invited
-        existing = supabase.table("job_applications").select("id").eq("candidate_id", candidate_id).eq("job_id", job_id).execute()
+        # 3. Check if already applied/invited
+        existing = supabase.table("job_applications").select("id").eq("candidate_id", candidate_id).eq("job_id", target_job_id).execute()
         if existing.data:
             return {"status": "exists", "id": existing.data[0]["id"]}
         
-        # 3. Create 'invited' application
+        # 4. Create 'invited' application
         res = supabase.table("job_applications").insert({
             "candidate_id": candidate_id,
-            "job_id": job_id,
+            "job_id": target_job_id,
             "status": "invited",
             "invitation_message": message
         }).execute()
 
-        # 4. Notify Candidate
+        # 5. Audit Trail
+        if res.data:
+            await self.log_history(
+                application_id=res.data[0]["id"],
+                new_status="invited",
+                old_status=None,
+                changed_by=user_id,
+                reason="Direct Invitation by Recruiter" if not message else f"Invitation: {message}"
+            )
+
+        # 6. Notify Candidate
         from src.services.notification_service import NotificationService
         NotificationService.create_notification(
             user_id=candidate_id,
             type="JOB_INVITATION",
             title=f"New Invitation: {job_title}",
             message=f"A recruiter has invited you to apply for the {job_title} position.",
-            metadata={"job_id": job_id, "message": message}
+            metadata={"job_id": target_job_id, "message": message}
         )
         
-        # 5. Elite Hub: Automatically create/retrieve chat thread and send initiation message
+        # 7. Elite Hub Activation
         from src.services.chat_service import ChatService
+        ChatService.get_or_create_thread(user_id, candidate_id)
+        
+        return {"status": "success", "application_id": res.data[0]["id"]}
         thread = ChatService.get_or_create_thread(user_id, candidate_id)
         if message:
             # We use a raw DB insert if we want to bypass the send_message gate for the INITIAL invite 
@@ -1000,37 +1223,44 @@ class RecruiterService:
         return {"status": "invited", "data": res.data[0] if res.data else None}
 
     async def generate_job_description(self, prompt: str, experience_band: str):
-        """Generate a job description using Gemini AI."""
+        """Generate an elite IT Tech Sales job description using Gemini 3 Flash."""
         ai_prompt = f"""
-        Act as an elite Executive Recruiter and Role Architect. 
-        Your task is to transform a simple request into a high-impact, professional enterprise-grade job description for TalentFlow.
+        Act as an Elite SaaS GTM (Go-To-Market) Architect and Executive Recruiter for TalentFlow.
+        YOUR MISSION: Transform a recruiter's rough notes into a high-conversion, enterprise-grade Job Description (JD).
+        VERTICAL FOCUS: IT Tech Sales (SaaS, Cloud, Cybersecurity, AI Infrastructure).
 
-        USER REQUEST: "{prompt}"
+        USER INPUT: "{prompt}"
         TARGET EXPERIENCE LEVEL: {experience_band}
 
-        INSTRUCTIONS:
-        1. Expand the user's request into a comprehensive, professional narrative.
-        2. Describe the vision, impact, and daily challenges of the role.
-        3. Create 5-7 distinct, high-quality professional requirements based on the {experience_band} seniority level.
-        4. Identify 5-8 specific technical and soft skills required to succeed.
-        5. Provide a realistic salary range based on current global market data for {experience_band} roles if not specified.
-        6. Do NOT simply repeat the user's input; use your expertise to fill in the professional gaps.
-        7. Ensure the tone is ambitious, clear, and corporate yet modern.
+        INSTRUCTIONS & SPECIALIZATION RULES:
+        1. "title": Must be an industry-standard B2B SaaS title (e.g. Enterprise AE, SDR, Regional Sales Director).
+        2. "description": 250 words. Focus on the 'Value-Based Selling' mission, the specific tech vertical, and the role's impact on company ARR/Pipeline.
+        3. "requirements": Professional standards for {experience_band}. Must include specific years of experience and track record metrics (e.g. "Exceeded quota of $1.5M ARR").
+        4. "skills_required": Mix technical (CRM/Salesforce, Cloud concepts) with tactical (MEDDPICC, Challenger Sale, Prospecting).
+        5. "job_type": Categorize strictly as "remote", "hybrid", or "onsite".
+        6. Salary: Provide a realistic global market range for {experience_band} if not specified in input.
+
+        TONE: Professional, Ambitious, and Precise. No generic corporate 'filler' text (like "Rockstar" or "Guru").
 
         Return the result ONLY in this strict JSON format:
         {{
-            "title": "A compelling, clear, and industry-standard Job Title",
-            "description": "A 200-300 word professional narrative about the role's mission and impact",
-            "requirements": ["Professional Requirement 1", "Professional Requirement 2", ...],
-            "skills_required": ["Specific Skill 1", "Specific Skill 2", ...],
+            "title": "A compelling, industry-standard title",
+            "description": "High-impact professional narrative",
+            "requirements": ["Requirement 1", "Requirement 2", ...],
+            "skills_required": ["Skill 1", "Skill 2", ...],
             "job_type": "remote/hybrid/onsite",
             "salary_range": "e.g., $120,000 - $160,000 + Equity"
         }}
         """
         
         try:
-            # Gemma models included as Gemini has 0 quota in this environment
-            models_to_try = ['gemma-3-27b-it', 'gemma-3-4b-it', 'gemini-2.0-flash', 'gemini-1.5-flash']
+            # Prioritize Gemini 3 Flash (Preview) for maximum intelligence and speed
+            models_to_try = [
+                'gemini-3-flash-preview', 
+                'gemma-3-27b-it', 
+                'gemini-2.0-flash', 
+                'gemini-flash-latest'
+            ]
             response = None
             last_error = None
 
@@ -1039,6 +1269,7 @@ class RecruiterService:
                     self.model = genai.GenerativeModel(model_name)
                     response = self.model.generate_content(ai_prompt)
                     if response:
+                        print(f"DEBUG: Job Description generated using {model_name}")
                         break
                 except Exception as e:
                     last_error = e

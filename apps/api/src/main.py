@@ -10,9 +10,11 @@ from src.api.posts import router as posts_router
 from src.api.notifications import router as notifications_router
 from src.api.chat import router as chat_router
 from src.api.interviews import router as interviews_router
+from src.api.career_gps import router as career_gps_router
 import time
 
 app = FastAPI(title="TalentFlow API")
+print(">>> V3 BACKEND ACTIVE - LOCK 403 BYPASS ENABLED <<<")
 
 # Logging middleware for debugging connection issues
 @app.middleware("http")
@@ -45,7 +47,9 @@ app.include_router(posts_router, prefix="/posts")
 app.include_router(notifications_router)
 app.include_router(chat_router)
 app.include_router(interviews_router)
+app.include_router(career_gps_router)
 
 @app.get("/")
-def root():
-    return {"message": "TalentFlow API running"}
+async def root():
+    return {"status": "ok", "service": "TalentFlow API", "version": "1.0.0"}
+ 

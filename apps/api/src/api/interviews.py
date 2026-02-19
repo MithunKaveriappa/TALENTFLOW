@@ -23,7 +23,7 @@ async def propose_interview(
         raise HTTPException(status_code=403, detail="Only recruiters can propose interviews")
     
     try:
-        return await interview_service.propose_interview(user["id"], request)
+        return await interview_service.propose_interview(user["sub"], request)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -37,7 +37,7 @@ async def confirm_interview(
         raise HTTPException(status_code=403, detail="Only candidates can confirm slots")
     
     try:
-        return await interview_service.confirm_slot(user["id"], request.slot_id)
+        return await interview_service.confirm_slot(user["sub"], request.slot_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -50,7 +50,7 @@ async def cancel_interview(
     """Cancel an interview."""
     try:
         return await interview_service.cancel_interview(
-            user["id"], 
+            user["sub"], 
             interview_id, 
             request.reason, 
             user.get("role")
@@ -70,7 +70,7 @@ async def submit_feedback(
     
     try:
         return await interview_service.submit_feedback(
-            user["id"], 
+            user["sub"], 
             interview_id, 
             request.feedback, 
             request.next_status
@@ -81,15 +81,16 @@ async def submit_feedback(
 @router.get("/my", response_model=List[InterviewResponse])
 async def get_my_interviews(user: dict = Depends(get_current_user)):
     """Fetch all interviews for the current user."""
-    user_id = user["id"]
+    user_id = user["sub"]
     role = user.get("role")
     
-    query = supabase.table("interviews").select("*, slots:interview_slots(*)")
+    from src.core.supabase import async_supabase
+    query = async_supabase.table("interviews").select("*, slots:interview_slots(*)")
     
     if role == "recruiter":
         query = query.eq("recruiter_id", user_id)
     else:
         query = query.eq("candidate_id", user_id)
     
-    res = query.order("created_at", desc=True).execute()
+    res = await query.order("created_at", desc=True).execute()
     return res.data

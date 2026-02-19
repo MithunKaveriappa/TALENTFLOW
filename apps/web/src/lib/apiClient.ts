@@ -20,8 +20,13 @@ export const apiClient = {
 
       if (!response.ok) {
         const error = await response.json();
+        const detail =
+          typeof error.detail === "object"
+            ? JSON.stringify(error.detail)
+            : error.detail;
+
         throw new Error(
-          error.detail || `Request failed with status ${response.status}`,
+          detail || `Request failed with status ${response.status}`,
         );
       }
 
@@ -52,8 +57,13 @@ export const apiClient = {
 
       if (!response.ok) {
         const error = await response.json();
+        const detail =
+          typeof error.detail === "object"
+            ? JSON.stringify(error.detail)
+            : error.detail;
+
         throw new Error(
-          error.detail || `Request failed with status ${response.status}`,
+          detail || `Request failed with status ${response.status}`,
         );
       }
 
@@ -80,8 +90,13 @@ export const apiClient = {
 
       if (!response.ok) {
         const error = await response.json();
+        const detail =
+          typeof error.detail === "object"
+            ? JSON.stringify(error.detail)
+            : error.detail;
+
         throw new Error(
-          error.detail || `Request failed with status ${response.status}`,
+          detail || `Request failed with status ${response.status}`,
         );
       }
 

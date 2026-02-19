@@ -55,26 +55,41 @@ class ResumeService:
             except Exception as e:
                 print(f"Groq parsing failed: {str(e)}")
 
-        # 4. Call AI via SDK (using gemma-3-27b-it)
+        # 4. Call High-Fidelity AI Auditor (Gemini 3 Flash)
         if google_key:
             try:
                 genai.configure(api_key=google_key)
-                model = genai.GenerativeModel('gemma-3-27b-it')
+                model = genai.GenerativeModel('gemini-3-flash-preview')
+                
+                # Today's date for gap calculation logic
+                today = "February 19, 2026"
                 
                 prompt = f"""
-                Extract structured metadata from the following resume.
-                Provide the output ONLY as a valid JSON object with the following keys:
-                - current_role: string
-                - years_of_experience: integer
-                - current_company: string
-                - timeline: list of objects with {{role, company, start, end}}
-                - career_gaps: object with {{count, details}}
-                - achievements: list of strings
-                - skills: list of strings
-                - education: object with {{degree, institution, year}}
+                Act as an Elite AI Talent Auditor and Data Architect for TalentFlow.
+                MISSION: Perform a high-fidelity 'Structural Audit' of the following resume text.
+
+                EXTRACTION REQUIREMENTS (JSON ONLY):
+                - location: string (City, Country)
+                - professional_summary: string (2-3 concise sentences)
+                - education_history: list of objects {{institute, degree, year_passing, gpa_score, is_completed (boolean)}}
+                - experience_history: list of objects {{role, company, tenure_years, achievements (list), start_date, end_date}}
+                - projects: list of objects {{title, description, tech_stack (list), link}}
+                - certifications: list of strings (e.g., "Salesforce Certified Administrator")
+                - skills: list of technical and soft skills (Salesforce, MEDDPICC, B2B SaaS, etc.)
+                - core_metadata: {{
+                    "current_role": string,
+                    "total_years_experience": float,
+                    "current_company": string,
+                    "is_fresher": boolean
+                  }}
+
+                CAREER GAP AUDIT LOGIC (Relative to Today: {today}):
+                1. Experienced Candidates: Flag any gap between jobs > 6 months.
+                2. Freshers: Flag if Graduation Year is > 12 months from today with 0 industry experience.
+                3. career_gap_report: object {{ "has_gap": bool, "months_total": int, "details": string }}
 
                 Resume Text:
-                {text[:10000]}
+                {text[:12000]}
                 """
 
                 response = model.generate_content(
@@ -88,16 +103,25 @@ class ResumeService:
                 await ResumeService._store_data(user_id, text, parsed_data)
                 return parsed_data
             except Exception as e:
-                print(f"Gemini SDK parsing failed: {str(e)}")
+                print(f"Gemini High-Fidelity parsing failed: {str(e)}")
 
-        # Final fallback - Mock data for development if keys are missing
+        # Final fallback - Mock High-Fidelity Data
         mock_data = {
-            "current_role": "Account Executive",
-            "years_of_experience": 3,
-            "current_company": "TechCorp",
-            "skills": ["SaaS Sales", "Relationship Management", "Lead Generation"],
-            "timeline": [{"role": "Account Executive", "company": "TechCorp", "start": "2021", "end": "Present"}],
-            "message": "AI keys missing or failed. Using development fallback."
+            "location": "Unknown",
+            "professional_summary": "Resume data summarized.",
+            "education_history": [],
+            "experience_history": [],
+            "projects": [],
+            "certifications": [],
+            "skills": ["Communication"],
+            "core_metadata": {
+                "current_role": "Analyst",
+                "total_years_experience": 0,
+                "current_company": "Unknown",
+                "is_fresher": True
+            },
+            "career_gap_report": {"has_gap": False, "details": "AI keys missing. Using basic fallback."},
+            "status": "partial_success"
         }
         await ResumeService._store_data(user_id, text, mock_data)
         return mock_data
@@ -115,36 +139,57 @@ class ResumeService:
     @staticmethod
     async def _store_data(user_id: str, text: str, parsed_data: dict):
         try:
-            # 1. Update resume_data audit table
+            # 1. Update resume_data audit table (The Forensic Log)
             supabase.table("resume_data").upsert({
                 "user_id": user_id,
-                "raw_text": text[:10000],
-                "timeline": parsed_data.get("timeline"),
-                "career_gaps": parsed_data.get("career_gaps"),
-                "achievements": parsed_data.get("achievements"),
+                "raw_text": text[:12000],
+                "raw_education": parsed_data.get("education_history"),
+                "raw_experience": parsed_data.get("experience_history"),
+                "raw_projects": parsed_data.get("projects"),
                 "skills": parsed_data.get("skills"),
-                "education": parsed_data.get("education")
+                "achievements": parsed_data.get("experience_history", [{}])[0].get("achievements", []) if parsed_data.get("experience_history") else [],
+                "parsed_at": "now()"
             }).execute()
 
-            # 2. Sync core fields to candidate_profiles for immediate use
-            profile_updates = {}
-            if parsed_data.get("current_role"):
-                profile_updates["current_role"] = parsed_data.get("current_role")
-            
-            if parsed_data.get("years_of_experience"):
-                try:
-                    profile_updates["years_of_experience"] = int(parsed_data.get("years_of_experience"))
-                except (ValueError, TypeError):
-                    pass
-            
-            if parsed_data.get("current_company"):
-                profile_updates["current_company_name"] = parsed_data.get("current_company")
-            
-            if parsed_data.get("skills"):
-                profile_updates["skills"] = parsed_data.get("skills")
+            # 2. Sync High-Fidelity fields to candidate_profiles 
+            # (Matches candidate_high_fidelity_schema.sql)
+            core = parsed_data.get("core_metadata", {})
+            profile_updates = {
+                "location": parsed_data.get("location"),
+                "professional_summary": parsed_data.get("professional_summary"),
+                "education_history": parsed_data.get("education_history", []),
+                "experience_history": parsed_data.get("experience_history", []),
+                "projects": parsed_data.get("projects", []),
+                "certifications": parsed_data.get("certifications", []),
+                "career_gap_report": parsed_data.get("career_gap_report", {}),
+                "skills": parsed_data.get("skills", []),
+                "last_resume_parse_at": "now()",
+                "ai_extraction_confidence": 0.95 # Tagging successful Gemini 3 Flash parse
+            }
 
-            if profile_updates:
-                supabase.table("candidate_profiles").update(profile_updates).eq("user_id", user_id).execute()
+            # Map Core Metadata
+            if core.get("current_role"):
+                profile_updates["current_role"] = core.get("current_role")
+            
+            if core.get("total_years_experience") is not None:
+                profile_updates["years_of_experience"] = int(core.get("total_years_experience"))
+            
+            if core.get("current_company"):
+                profile_updates["current_company_name"] = core.get("current_company")
+                
+            # Experience Band Mapping Logic for Assessment Engine
+            years = profile_updates.get("years_of_experience", 0)
+            if core.get("is_fresher") or years < 1:
+                profile_updates["experience"] = "fresher"
+            elif 1 <= years < 4:
+                profile_updates["experience"] = "mid"
+            elif 4 <= years < 8:
+                profile_updates["experience"] = "senior"
+            else:
+                profile_updates["experience"] = "leadership"
+
+            # 3. Final Profile Sync
+            supabase.table("candidate_profiles").update(profile_updates).eq("user_id", user_id).execute()
 
         except Exception as e:
-            print(f"Error storing resume data: {str(e)}")
+            print(f"CRITICAL: High-Fidelity Store failed: {str(e)}")

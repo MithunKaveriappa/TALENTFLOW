@@ -14,7 +14,8 @@ from src.schemas.recruiter import (
     BulkApplicationStatusUpdate,
     JobInviteRequest,
     TeamInviteRequest,
-    TeamMemberUpdate
+    TeamMemberUpdate,
+    RecruiterAccountSettingsUpdate
 )
 from pydantic import BaseModel
 from typing import Dict, Any, List
@@ -146,7 +147,18 @@ async def invite_member(data: TeamInviteRequest, user: dict = Depends(get_curren
         }
         
         supabase.table("team_invitations").insert(invite_data).execute()
-        # TODO: Send invitation email via NotificationService
+        
+        # Notify user if they already exist
+        res = supabase.table("users").select("id").eq("email", data.email).execute()
+        if res.data:
+            from src.services.notification_service import NotificationService
+            NotificationService.create_notification(
+                user_id=res.data[0]["id"],
+                type="TEAM_INVITATION",
+                title="New Team Invite",
+                message=f"You have been invited to join the recruitment team for {prof['companies']['name']}.",
+                metadata={"company_id": company_id, "inviter_id": user_id}
+            )
         
         return {"status": "invited"}
     except Exception as e:
@@ -204,6 +216,55 @@ async def get_stats(user: dict = Depends(get_current_user)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/settings")
+async def get_settings(user: dict = Depends(get_current_user)):
+    user_id = user["sub"]
+    DEFAULT_SETTINGS = {
+        "user_id": user_id,
+        "email_notifications": True,
+        "web_notifications": True,
+        "mobile_notifications": False,
+        "profile_visibility": "public",
+        "language": "en",
+        "timezone": "UTC"
+    }
+    
+    try:
+        res = supabase.table("recruiter_settings").select("*").eq("user_id", user_id).execute()
+        if not res.data:
+            # Initialize if not exists
+            try:
+                res = supabase.table("recruiter_settings").insert(DEFAULT_SETTINGS).execute()
+                return res.data[0]
+            except:
+                # If insert fails, just return defaults (maybe table is missing)
+                return DEFAULT_SETTINGS
+        return res.data[0]
+    except Exception as e:
+        # Table probably doesn't exist yet, return defaults
+        import logging
+        logging.warning(f"Failed to fetch settings for {user_id}: {e}")
+        return DEFAULT_SETTINGS
+
+@router.patch("/settings")
+async def update_settings(data: RecruiterAccountSettingsUpdate, user: dict = Depends(get_current_user)):
+    user_id = user["sub"]
+    update_data = data.model_dump(exclude_unset=True)
+    if not update_data:
+        # Fetch existing to return (or defaults if missing)
+        return await get_settings(user)
+        
+    try:
+        res = supabase.table("recruiter_settings").update(update_data).eq("user_id", user_id).execute()
+        if not res.data:
+             # Try insert (initial setting update)
+             full_data = {**data.model_dump(), "user_id": user_id}
+             res = supabase.table("recruiter_settings").insert(full_data).execute()
+             return {"status": "success", "data": res.data[0]}
+        return {"status": "success", "data": res.data[0]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/candidate-pool")
 async def get_candidate_pool(user: dict = Depends(get_current_user)):
     """Fetch all active candidates for the corporate candidate pool."""
@@ -257,7 +318,13 @@ async def create_job(data: JobCreate, user: dict = Depends(get_current_user)):
 async def invite_candidate(candidate_id: str, request: JobInviteRequest, user: dict = Depends(get_current_user)):
     """Invite a candidate from the pool to a specific job."""
     try:
-        return await recruiter_service.invite_candidate(user["sub"], candidate_id, request.job_id, request.message)
+        return await recruiter_service.invite_candidate(
+            user["sub"], 
+            candidate_id, 
+            request.job_id, 
+            request.message,
+            request.custom_role_title
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -316,6 +383,13 @@ async def update_application_status(data: ApplicationStatusUpdate, user: dict = 
 async def update_job(job_id: str, data: JobUpdate, user: dict = Depends(get_current_user)):
     try:
         return await recruiter_service.update_job(user["sub"], job_id, data.model_dump(exclude_unset=True))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.delete("/jobs/{job_id}")
+async def delete_job(job_id: str, user: dict = Depends(get_current_user)):
+    try:
+        return await recruiter_service.delete_job(user["sub"], job_id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

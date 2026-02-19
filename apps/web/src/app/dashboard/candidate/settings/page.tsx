@@ -1,10 +1,9 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
-import CandidateSidebar from "@/components/CandidateSidebar";
-import { Save, User, Shield, Bell, CheckCircle2, AlertCircle } from "lucide-react";
+import { Save, User, Shield, Bell, CheckCircle2, AlertCircle, Settings } from "lucide-react";
 
 interface ProfileData {
   full_name: string;
@@ -80,23 +79,20 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      <CandidateSidebar assessmentStatus={profile?.assessment_status} />
+    <div className="max-w-4xl mx-auto space-y-12">
+      <header className="mb-10">
+        <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase italic mb-2">
+          Protocol <span className="text-indigo-600">Sync</span>
+        </h1>
+        <p className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
+          <Settings className="h-3 w-3 text-indigo-500" />
+          Manage your high-trust identity and transmission preferences.
+        </p>
+      </header>
 
-      <main className="flex-1 ml-64 p-8 md:p-12 overflow-y-auto">
-        <div className="max-w-4xl mx-auto">
-          <header className="mb-10">
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight uppercase italic mb-2">
-              Account Settings
-            </h1>
-            <p className="text-slate-500 font-medium uppercase tracking-[0.2em] text-[10px]">
-              Manage your high-trust identity and preferences.
-            </p>
-          </header>
-
-          <div className="flex flex-col md:flex-row gap-8">
-            {/* Sidebar Tabs */}
-            <div className="w-full md:w-64 space-y-1">
+      <div className="flex flex-col md:flex-row gap-12">
+        {/* Sidebar Tabs */}
+        <div className="w-full md:w-72 shrink-0 space-y-2">
               <TabButton
                 active={activeTab === "profile"}
                 onClick={() => setActiveTab("profile")}
@@ -247,9 +243,7 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
-      </main>
-    </div>
-  );
+      );
 }
 
 function TabButton({ active, onClick, icon, label, disabled = false }: {

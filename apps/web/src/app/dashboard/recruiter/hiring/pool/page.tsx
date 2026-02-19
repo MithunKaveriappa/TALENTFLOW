@@ -4,7 +4,23 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
 import { useRouter } from "next/navigation";
+import {
+  Search,
+  Filter,
+  LogOut,
+  ChevronRight,
+  CheckCircle2,
+  User,
+  Users,
+  MapPin,
+  Briefcase,
+  Star,
+  Plus,
+} from "lucide-react";
 import LockedView from "@/components/dashboard/LockedView";
+import CandidateProfileModal from "@/components/CandidateProfileModal";
+import JobInviteModal from "@/components/JobInviteModal";
+import { toast } from "sonner";
 
 interface Candidate {
   user_id: string;
@@ -17,6 +33,8 @@ interface Candidate {
   trust_score: number;
   assessment_status: string;
   skills: string[];
+  profile_photo_url?: string;
+  resume_path?: string;
 }
 
 interface RecruiterProfile {
@@ -33,6 +51,26 @@ export default function CandidatePoolPage() {
   const [error, setError] = useState<string | null>(null);
   const [recruiterProfile, setRecruiterProfile] =
     useState<RecruiterProfile | null>(null);
+  const [jobs, setJobs] = useState<any[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isFetchingProfile, setIsFetchingProfile] = useState(false);
+  const [filterExperience, setFilterExperience] = useState<string>("all");
+  const [profileModal, setProfileModal] = useState<{
+    isOpen: boolean;
+    candidate: Candidate | null;
+    initialTab?: string;
+  }>({
+    isOpen: false,
+    candidate: null,
+    initialTab: "resume",
+  });
+  const [inviteModal, setInviteModal] = useState<{
+    isOpen: boolean;
+    candidate: Candidate | null;
+  }>({
+    isOpen: false,
+    candidate: null,
+  });
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -48,20 +86,18 @@ export default function CandidatePoolPage() {
         router.replace("/login");
         return;
       }
-      const [poolData, profileData] = await Promise.all([
+      const [poolData, profileData, jobsData] = await Promise.all([
         apiClient.get("/recruiter/candidate-pool", session.access_token),
         apiClient.get("/recruiter/profile", session.access_token),
+        apiClient.get("/recruiter/jobs", session.access_token),
       ]);
       setCandidates(poolData || []);
       setRecruiterProfile(profileData);
+      setJobs(jobsData || []);
       setError(null);
     } catch (err: unknown) {
       console.error("Failed to fetch candidate pool:", err);
-      const errorMessage =
-        err instanceof Error
-          ? err.message
-          : "Failed to sync with TalentFlow servers";
-      setError(errorMessage);
+      setError("Failed to sync with TalentFlow servers");
     } finally {
       setLoading(false);
     }
@@ -70,15 +106,12 @@ export default function CandidatePoolPage() {
   useEffect(() => {
     fetchPool();
 
-    // Enable Real-time updates via Supabase Channel
     const channel = supabase
       .channel("candidate_pool_changes")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "candidate_profiles" },
-        () => {
-          fetchPool(); // Re-fetch when any candidate profile updates
-        },
+        () => fetchPool(),
       )
       .subscribe();
 
@@ -87,17 +120,99 @@ export default function CandidatePoolPage() {
     };
   }, [fetchPool]);
 
+  const handleInviteCandidate = async (
+    jobId: string,
+    message: string,
+    customTitle?: string,
+  ) => {
+    if (!inviteModal.candidate) return;
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return;
+
+      await apiClient.post(
+        `/recruiter/candidate/${inviteModal.candidate.user_id}/invite`,
+        {
+          job_id: jobId,
+          message: message,
+          custom_role_title: customTitle,
+        },
+        session.access_token,
+      );
+
+      toast.success(`Elite Invite sent to ${inviteModal.candidate.full_name}`);
+      setInviteModal({ isOpen: false, candidate: null });
+    } catch (err: any) {
+      console.error("Failed to invite candidate:", err);
+      toast.error(
+        err.message || "Candidate already applied or invited to this job",
+      );
+    }
+  };
+
+  const handleViewProfile = async (
+    candidate: Candidate,
+    tab: string = "resume",
+  ) => {
+    setIsFetchingProfile(true);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const fullCandidate = await apiClient.get(
+        `/recruiter/candidate/${candidate.user_id}`,
+        session.access_token,
+      );
+
+      setProfileModal({
+        isOpen: true,
+        candidate: { ...candidate, ...fullCandidate },
+        initialTab: tab,
+      });
+    } catch (err) {
+      console.error("Failed to fetch full candidate details:", err);
+      toast.error("Deep Link Error: Could not hydrate profile data");
+    } finally {
+      setIsFetchingProfile(false);
+    }
+  };
+
+  const filteredCandidates = candidates.filter((c) => {
+    const matchesSearch =
+      (c.full_name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (c.current_role || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.skills?.some((s) =>
+        (s || "").toLowerCase().includes(searchTerm.toLowerCase()),
+      );
+
+    const matchesFilter =
+      filterExperience === "all" || c.experience === filterExperience;
+    return matchesSearch && matchesFilter;
+  });
+
   const bands = {
-    fresher: candidates.filter((c) => c.experience === "fresher"),
-    mid: candidates.filter((c) => c.experience === "mid"),
-    senior: candidates.filter((c) => c.experience === "senior"),
-    leadership: candidates.filter((c) => c.experience === "leadership"),
+    leadership: filteredCandidates.filter((c) => c.experience === "leadership"),
+    senior: filteredCandidates.filter((c) => c.experience === "senior"),
+    mid: filteredCandidates.filter((c) => c.experience === "mid"),
+    fresher: filteredCandidates.filter((c) => c.experience === "fresher"),
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50/50">
+        <div className="flex flex-col items-center gap-6">
+          <div className="h-16 w-16 rounded-3xl bg-white border border-slate-200 flex items-center justify-center shadow-xl">
+            <div className="h-8 w-8 rounded-full border-4 border-slate-900 border-t-transparent animate-spin" />
+          </div>
+          <p className="text-slate-400 font-black text-[10px] uppercase tracking-[0.4em]">
+            Establishing Secure Link...
+          </p>
+        </div>
       </div>
     );
   }
@@ -105,204 +220,265 @@ export default function CandidatePoolPage() {
   const isLocked = (recruiterProfile?.companies?.profile_score ?? 0) === 0;
 
   return (
-    <div className="p-6 md:p-12">
+    <div className="max-w-7xl mx-auto">
       {isLocked ? (
         <LockedView featureName="Candidate Pool" />
       ) : (
         <>
-          {error ? (
-            <div className="min-h-[70vh] flex items-center justify-center">
-              <div className="text-center p-8 bg-white rounded-3xl border border-red-100 shadow-xl max-w-sm">
-                <div className="h-16 w-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                  <svg
-                    className="h-8 w-8 text-red-500"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                    />
-                  </svg>
-                </div>
-                <h2 className="text-lg font-bold text-slate-900 mb-2 uppercase tracking-tight">
-                  Sync Offline
-                </h2>
-                <p className="text-slate-500 text-sm mb-6 leading-relaxed">
-                  {error.includes("Server disconnected")
-                    ? "The Identity Server is currently unreachable. Please check your connection or try again in a few minutes."
-                    : error}
-                </p>
-                <button
-                  onClick={fetchPool}
-                  className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-indigo-600 transition-all"
-                >
-                  Retry Sync
-                </button>
-              </div>
+          <header className="mb-12 flex justify-between items-end">
+            <div>
+              <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase italic flex items-center gap-4">
+                Candidate Pool
+                <div className="h-3 w-3 rounded-full bg-emerald-500 animate-pulse" />
+              </h1>
+              <p className="text-slate-400 text-[11px] font-black uppercase tracking-[0.4em] mt-3">
+                Verified High-Signal Talent Ecosystem
+              </p>
             </div>
-          ) : (
-            <>
-              <header className="mb-12 flex justify-between items-end">
-                <div>
-                  <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase italic">
-                    Candidate Pool
-                  </h1>
-                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.3em] mt-3">
-                    Real-time synchronized top-tier talent
-                  </p>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-slate-100 shadow-sm">
-                    <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                      Live Pool
-                    </span>
-                  </div>
-                  <button
-                    onClick={handleLogout}
-                    className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-red-500 hover:bg-red-50 hover:border-red-100 transition-all shadow-sm active:scale-95"
-                  >
-                    Logout
-                  </button>
-                </div>
-              </header>
 
-              <div className="space-y-16">
-                <PoolSection title="Leadership" candidates={bands.leadership} />
-                <PoolSection title="Senior" candidates={bands.senior} />
-                <PoolSection title="Mid-Level" candidates={bands.mid} />
-                <PoolSection title="Freshers" candidates={bands.fresher} />
+            <div className="flex items-center gap-4">
+              <div className="relative group">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                <input
+                  type="text"
+                  placeholder="Search name, role, skills..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="bg-white border border-slate-200 pl-12 pr-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-900 placeholder:text-slate-300 outline-none focus:border-indigo-500 shadow-sm transition-all w-64"
+                />
               </div>
-            </>
-          )}
+
+              <div className="relative group">
+                <button className="flex items-center gap-3 px-5 py-3 bg-white border border-slate-200 rounded-2xl shadow-sm text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-all">
+                  <Filter className="w-4 h-4" />
+                  {filterExperience === "all" ? "Experience" : filterExperience}
+                </button>
+                <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-slate-100 rounded-2xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-30 p-2">
+                  {["all", "fresher", "mid", "senior", "leadership"].map(
+                    (band) => (
+                      <button
+                        key={band}
+                        onClick={() => setFilterExperience(band)}
+                        className={`w-full text-left px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors ${
+                          filterExperience === band
+                            ? "bg-indigo-50 text-indigo-600"
+                            : "text-slate-500 hover:bg-slate-50"
+                        }`}
+                      >
+                        {band}
+                      </button>
+                    ),
+                  )}
+                </div>
+              </div>
+
+              <button
+                onClick={handleLogout}
+                className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all shadow-sm active:scale-95"
+                title="Logout"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
+          </header>
+
+          <div className="space-y-16">
+            {Object.entries(bands).map(
+              ([key, list]) =>
+                list.length > 0 && (
+                  <div key={key} className="space-y-8">
+                    <div className="flex items-center gap-6">
+                      <h2 className="text-2xl font-black uppercase italic tracking-tighter text-indigo-600">
+                        {key === "fresher"
+                          ? "Freshers"
+                          : key === "mid"
+                            ? "Mid-Level"
+                            : key === "senior"
+                              ? "Senior Talent"
+                              : "Executive Leadership"}
+                      </h2>
+                      <div className="h-px flex-1 bg-linear-to-r from-slate-200 to-transparent" />
+                      <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                        {list.length} Records found
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                      {list.map((candidate) => (
+                        <CandidateCard
+                          key={candidate.user_id}
+                          candidate={candidate}
+                          onViewProfile={() =>
+                            handleViewProfile(candidate, "resume")
+                          }
+                          onViewResume={() =>
+                            handleViewProfile(
+                              candidate,
+                              candidate.resume_path
+                                ? "original_resume"
+                                : "resume",
+                            )
+                          }
+                          onInvite={() =>
+                            setInviteModal({ isOpen: true, candidate })
+                          }
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ),
+            )}
+          </div>
         </>
+      )}
+
+      {profileModal.isOpen && profileModal.candidate && (
+        <CandidateProfileModal
+          isOpen={profileModal.isOpen}
+          onClose={() => setProfileModal({ ...profileModal, isOpen: false })}
+          candidate={profileModal.candidate as any}
+          resumeData={(profileModal.candidate as any).resume_data}
+          jobTitle="TalentFlow Ecosystem Discovery"
+          appliedDate={new Date().toISOString()}
+          score={profileModal.candidate.trust_score}
+          status="Talent Pool"
+          initialTab={profileModal.initialTab}
+          isDiscovery={true}
+        />
+      )}
+
+      {isFetchingProfile && (
+        <div className="fixed inset-0 z-100 bg-slate-900/10 backdrop-blur-[2px] flex items-center justify-center animate-in fade-in duration-300">
+          <div className="bg-white/80 p-6 rounded-4xl shadow-2xl border border-white flex flex-col items-center gap-4">
+            <div className="h-12 w-12 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-200">
+              <div className="h-6 w-6 border-4 border-white border-t-transparent rounded-full animate-spin" />
+            </div>
+            <p className="text-[10px] font-black text-slate-900 uppercase tracking-[0.3em] animate-pulse">
+              Hydrating Profile...
+            </p>
+          </div>
+        </div>
+      )}
+
+      {inviteModal.isOpen && inviteModal.candidate && (
+        <JobInviteModal
+          onClose={() => setInviteModal({ isOpen: false, candidate: null })}
+          candidateName={inviteModal.candidate.full_name}
+          jobs={jobs}
+          onInvite={handleInviteCandidate}
+        />
       )}
     </div>
   );
 }
 
-function PoolSection({
-  title,
-  candidates,
+function CandidateCard({
+  candidate,
+  onViewProfile,
+  onViewResume,
+  onInvite,
 }: {
-  title: string;
-  candidates: Candidate[];
+  candidate: Candidate;
+  onViewProfile: () => void;
+  onViewResume: () => void;
+  onInvite: () => void;
 }) {
-  if (candidates.length === 0) return null;
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <h2 className="text-xl font-black text-slate-900 uppercase italic tracking-tight">
-          {title}
-        </h2>
-        <div className="h-px flex-1 bg-slate-100" />
-        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-          {candidates.length} Matches
-        </span>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {candidates.map((c) => (
-          <CandidateCard key={c.user_id} candidate={c} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function CandidateCard({ candidate }: { candidate: Candidate }) {
-  const router = useRouter();
-  return (
-    <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-xs hover:shadow-xl hover:shadow-slate-200/50 transition-all duration-300 group relative overflow-hidden">
-      {/* Small Floating Trust Badge - Top Left */}
-      <div className="absolute top-3 left-3 z-10">
-        <div className="bg-slate-900 text-white px-2 py-1 rounded-lg shadow-2xl border border-white/10 group-hover:bg-indigo-600 transition-colors duration-300">
-          <div className="flex flex-col items-center">
-            <span className="text-[6px] font-black text-slate-400 uppercase tracking-tighter leading-none mb-0.5">
-              Trust
-            </span>
-            <span className="text-[11px] font-black italic tracking-tighter leading-none">
-              {candidate.trust_score}%
-            </span>
+    <div className="bg-white rounded-4xl border border-slate-100 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/10 transition-all duration-500 group relative flex flex-col p-5 h-full">
+      <div className="flex items-start justify-between mb-4">
+        <div className="relative">
+          <div className="h-14 w-14 rounded-2xl border border-slate-50 bg-slate-100 overflow-hidden shadow-inner group-hover:border-indigo-100 transition-colors flex items-center justify-center">
+            {candidate.profile_photo_url ? (
+              <img
+                src={candidate.profile_photo_url}
+                alt={candidate.full_name}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <User className="h-6 w-6 text-slate-300" />
+            )}
           </div>
-        </div>
-      </div>
-
-      <div className="flex justify-between items-start mb-4">
-        <div className="h-12 w-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-300 border border-slate-100 group-hover:scale-110 transition-transform duration-500">
-          <svg
-            className="h-6 w-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-            />
-          </svg>
-        </div>
-        <div className="text-right">
-          <div
-            className={`text-[9px] font-black px-2 py-1 rounded-md uppercase tracking-wider ${
-              candidate.profile_strength === "Elite"
-                ? "bg-amber-50 text-amber-600"
-                : candidate.profile_strength === "Strong"
-                  ? "bg-indigo-50 text-indigo-600"
-                  : "bg-slate-50 text-slate-500"
-            }`}
-          >
-            {candidate.profile_strength}
-          </div>
-          {candidate.identity_verified && (
-            <div className="mt-1 flex items-center justify-end gap-1 text-emerald-500">
-              <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.64.304 1.25.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" />
-              </svg>
-              <span className="text-[7px] font-black uppercase tracking-widest">
-                Verified
-              </span>
+          <div className="absolute -bottom-0.5 -right-0.5 bg-white p-0.5 rounded-full shadow-md">
+            <div
+              className={`h-3.5 w-3.5 rounded-full flex items-center justify-center ${candidate.identity_verified ? "bg-emerald-500" : "bg-slate-200"}`}
+            >
+              <CheckCircle2 className="h-2 w-2 text-white" />
             </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col items-end gap-1.5">
+          <div className="px-2 py-0.5 bg-indigo-50 text-[7px] font-black text-indigo-500 uppercase tracking-tighter rounded-md italic shrink-0">
+            Elite Talent
+          </div>
+          <button
+            onClick={onViewProfile}
+            className="text-[8px] font-black text-slate-400 hover:text-indigo-600 transition-colors flex items-center gap-1 group/btn uppercase tracking-widest shrink-0"
+          >
+            Profile{" "}
+            <ChevronRight className="w-2.5 h-2.5 group-hover/btn:translate-x-0.5 transition-transform" />
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 space-y-1 mb-4 flex flex-col justify-center">
+        <h3 className="text-base font-black text-slate-900 tracking-tight leading-none group-hover:text-indigo-600 transition-colors truncate">
+          {candidate.full_name}
+        </h3>
+        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider truncate mb-1">
+          {candidate.current_role}
+        </p>
+      </div>
+
+      <div className="bg-slate-50 rounded-2xl p-3 mb-4 border border-slate-100/50">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none">
+            Context
+          </span>
+          <span className="text-[8px] font-black text-indigo-600 uppercase italic tracking-tighter leading-none">
+            {candidate.years_of_experience} Years In-Market
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {candidate.skills?.slice(0, 2).map((skill) => (
+            <span
+              key={skill}
+              className="px-1.5 py-0.5 bg-white border border-slate-100 rounded-md text-[7px] font-bold text-slate-600 uppercase tracking-tighter truncate max-w-20"
+            >
+              {skill}
+            </span>
+          ))}
+          {candidate.skills?.length > 2 && (
+            <span className="px-1.5 py-0.5 bg-indigo-50/50 text-indigo-400 rounded-md text-[7px] font-black uppercase tracking-widest">
+              +{candidate.skills.length - 2}
+            </span>
           )}
         </div>
       </div>
 
-      <h3 className="text-base font-black text-slate-900 leading-tight mb-0.5">
-        {candidate.full_name}
-      </h3>
-      <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-4">
-        {candidate.current_role}
-      </p>
-
-      <div className="flex flex-wrap gap-1 mb-6">
-        {candidate.skills?.slice(0, 3)?.map((s) => (
-          <span
-            key={s}
-            className="px-2 py-1 bg-white border border-slate-100 rounded-lg text-[8px] font-bold text-slate-500 uppercase tracking-tighter"
-          >
-            {s}
+      <div className="flex items-center gap-1.5 mt-auto">
+        <button
+          onClick={onViewResume}
+          className="flex-1 py-3 bg-slate-900 text-white rounded-xl text-[8px] font-black uppercase tracking-[0.2em] hover:bg-slate-800 transition-all shadow-md active:scale-95 whitespace-nowrap"
+        >
+          View Profile
+        </button>
+        <button
+          onClick={onInvite}
+          className="h-9 w-9 bg-indigo-600 text-white rounded-xl flex items-center justify-center hover:bg-indigo-700 transition-all shadow-md active:scale-90 group/invite shrink-0"
+          title="Direct Invitation"
+        >
+          <Plus className="w-4 h-4 group-hover/invite:rotate-90 transition-transform" />
+        </button>
+        <div className="h-9 w-9 rounded-xl bg-orange-50 border border-orange-100 flex flex-col items-center justify-center shadow-sm shrink-0">
+          <span className="text-[5px] font-black text-orange-400 leading-none scale-75">
+            SIGNAL
           </span>
-        ))}
+          <span className="text-[10px] font-black text-orange-600 italic tracking-tighter leading-none">
+            {candidate.trust_score}%
+          </span>
+        </div>
       </div>
-
-      <button
-        onClick={() =>
-          router.push(`/dashboard/recruiter/intelligence/search/${candidate.user_id}`)
-        }
-        className="w-full py-2.5 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase tracking-[0.2em] hover:bg-indigo-600 transition-all duration-300 shadow-lg shadow-slate-200"
-      >
-        View Profile
-      </button>
-
-      {/* Trust Gradient */}
-      <div className="absolute top-0 right-0 w-24 h-24 bg-linear-to-bl from-indigo-500/5 to-transparent pointer-events-none" />
     </div>
   );
 }

@@ -3,9 +3,35 @@
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import {
+  LayoutDashboard,
+  Briefcase,
+  MessageSquare,
+  Settings,
+  Bell,
+  Compass,
+  LogOut,
+  ShieldCheck,
+  User,
+  Radio,
+} from "lucide-react";
 
 interface CandidateSidebarProps {
   assessmentStatus?: string;
+  profileScore?: number;
+}
+
+interface SidebarItem {
+  label: string;
+  href: string;
+  icon: React.ReactNode;
+  locked?: boolean;
+  description?: string;
+}
+
+interface SidebarGroup {
+  label: string;
+  items: SidebarItem[];
 }
 
 export default function CandidateSidebar({
@@ -14,117 +40,185 @@ export default function CandidateSidebar({
   const router = useRouter();
   const pathname = usePathname();
 
+  // Basic verification check
+  const isVerified = assessmentStatus === "completed";
+
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.replace("/login");
+    await supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session) {
+        await supabase.auth.signOut();
+      }
+      router.replace("/login");
+    });
   };
 
+  const groups: SidebarGroup[] = [
+    {
+      label: "Signal Center",
+      items: [
+        {
+          label: "Dashboard",
+          href: "/dashboard/candidate",
+          icon: <LayoutDashboard className="h-4 w-4" />,
+        },
+        {
+          label: "Notifications",
+          href: "/dashboard/candidate/notifications",
+          icon: <Bell className="h-4 w-4" />,
+        },
+        {
+          label: "Messages",
+          href: "/dashboard/candidate/messages",
+          icon: <MessageSquare className="h-4 w-4" />,
+          locked: !isVerified,
+        },
+      ],
+    },
+    {
+      label: "Career Discovery",
+      items: [
+        {
+          label: "Job Board",
+          href: "/dashboard/candidate/jobs",
+          icon: <Compass className="h-4 w-4" />,
+          description: "Global role inventory",
+          locked: !isVerified,
+        },
+        {
+          label: "Applications",
+          href: "/dashboard/candidate/applications",
+          icon: <Briefcase className="h-4 w-4" />,
+          description: "Active hiring pipelines",
+        },
+        {
+          label: "Career GPS",
+          href: "/dashboard/candidate/gps",
+          icon: <Compass className="h-4 w-4 text-indigo-400" />,
+          description: "Professional pathing",
+        },
+      ],
+    },
+    {
+      label: "Professional Node",
+      items: [
+        {
+          label: "Community Feed",
+          href: "/dashboard/candidate/community",
+          icon: <Radio className="h-4 w-4" />,
+        },
+        {
+          label: "Elite Profile",
+          href: "/dashboard/candidate/profile",
+          icon: <User className="h-4 w-4" />,
+          description: "Public identity status",
+        },
+      ],
+    },
+    {
+      label: "Management",
+      items: [
+        {
+          label: "Account Settings",
+          href: "/dashboard/candidate/settings",
+          icon: <Settings className="h-4 w-4" />,
+        },
+      ],
+    },
+  ];
+
   return (
-    <aside className="w-64 bg-white border-r border-slate-200 flex flex-col fixed h-full z-30">
-      <div className="p-8 border-b border-slate-50">
+    <aside className="w-64 bg-[#0f172a] border-r border-slate-800 flex flex-col fixed h-full z-30 transition-all duration-300 shadow-2xl">
+      <div className="p-8">
         <div
-          className="flex items-center gap-3 cursor-pointer"
+          className="flex items-center gap-3 cursor-pointer group"
           onClick={() => router.push("/dashboard/candidate")}
         >
-          <div className="h-10 w-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-100">
-            <div className="h-5 w-5 rounded bg-white rotate-45" />
+          <div className="h-9 w-9 rounded-lg bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-transform duration-300">
+            <div className="h-4 w-4 rounded-sm bg-white rotate-45 group-hover:rotate-0 transition-transform duration-500" />
           </div>
-          <span className="font-black text-slate-900 tracking-tighter uppercase text-lg">
-            TalentFlow
+          <span className="font-bold text-white tracking-tight text-xl">
+            Talent<span className="text-indigo-400">Flow</span>
           </span>
         </div>
       </div>
 
-      <nav className="flex-1 p-6 space-y-1 overflow-y-auto custom-scrollbar">
-        <SidebarLink
-          label="Dashboard"
-          href="/dashboard/candidate"
-          active={pathname === "/dashboard/candidate"}
-        />
-        <SidebarLink
-          label="Job Board"
-          href="/dashboard/candidate/jobs"
-          active={pathname === "/dashboard/candidate/jobs"}
-        />
-        <SidebarLink
-          label="Applications"
-          href="/dashboard/candidate/applications"
-          active={pathname === "/dashboard/candidate/applications"}
-        />
-        <SidebarLink
-          label="Feed"
-          href="/dashboard/candidate/community"
-          active={pathname === "/dashboard/candidate/community"}
-        />
-        <SidebarLink
-          label="Profile"
-          href="/dashboard/candidate/profile"
-          active={pathname === "/dashboard/candidate/profile"}
-        />
-        <SidebarLink
-          label="Notifications"
-          href="/dashboard/candidate/notifications"
-          active={pathname === "/dashboard/candidate/notifications"}
-        />
-        <SidebarLink
-          label="Messages"
-          href="/dashboard/candidate/messages"
-          active={pathname === "/dashboard/candidate/messages"}
-        />
-        <SidebarLink
-          label="Settings"
-          href="/dashboard/candidate/settings"
-          active={pathname === "/dashboard/candidate/settings"}
-        />
+      <nav className="flex-1 px-4 space-y-6 overflow-y-auto scrollbar-hide hover:scrollbar-default transition-all duration-300">
+        <style jsx global>{`
+          .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+          }
+          .scrollbar-hide {
+            -ms-overflow-style: none; /* IE and Edge */
+            scrollbar-width: none; /* Firefox */
+          }
+          .hover\:scrollbar-default:hover::-webkit-scrollbar {
+            display: block;
+            width: 4px;
+          }
+          .hover\:scrollbar-default:hover::-webkit-scrollbar-track {
+            background: transparent;
+          }
+          .hover\:scrollbar-default:hover::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 10px;
+          }
+        `}</style>
+        {groups.map((group, idx) => (
+          <div key={idx} className="space-y-2">
+            <h3 className="px-4 text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">
+              {group.label}
+            </h3>
+            <div className="space-y-1">
+              {group.items.map((item, itemIdx) => (
+                <SidebarLink
+                  key={itemIdx}
+                  label={item.label}
+                  href={item.href}
+                  icon={item.icon}
+                  active={pathname === item.href}
+                  locked={item.locked}
+                  description={item.description}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
       </nav>
 
-      <div className="p-4 border-t border-slate-50 space-y-3">
+      <div className="p-4 mt-auto border-t border-slate-800/50 space-y-3">
         {assessmentStatus && (
-          <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
-            <div className="flex items-center gap-2 mb-1.5">
-              <div
-                className={`h-1.5 w-1.5 rounded-full ${assessmentStatus === "completed" ? "bg-emerald-500" : "bg-amber-500 animate-pulse"}`}
+          <div className="bg-slate-900/50 rounded-2xl p-4 border border-slate-800/50 backdrop-blur-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <ShieldCheck
+                className={`h-4 w-4 ${assessmentStatus === "completed" ? "text-emerald-400" : "text-amber-400"}`}
               />
-              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">
+              <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">
                 Verification Hub
               </span>
             </div>
-            <p className="text-[9px] text-slate-400 font-medium leading-tight">
-              Status:{" "}
-              {assessmentStatus.charAt(0).toUpperCase() +
-                assessmentStatus.slice(1)}
-            </p>
-            {assessmentStatus !== "completed" && (
-              <button
-                onClick={() => router.push("/onboarding/candidate")}
-                className="mt-2 w-full py-1.5 bg-amber-600 text-white text-[9px] font-bold uppercase tracking-widest rounded-lg hover:bg-amber-700 transition-colors"
-              >
-                Complete Now
-              </button>
-            )}
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-slate-500 font-medium">
+                {assessmentStatus.charAt(0).toUpperCase() +
+                  assessmentStatus.slice(1)}
+              </span>
+              {assessmentStatus !== "completed" && (
+                <button
+                  onClick={() => router.push("/onboarding/candidate")}
+                  className="px-2 py-1 bg-amber-500/10 text-amber-500 text-[10px] font-bold rounded-md hover:bg-amber-500/20 transition-colors"
+                >
+                  Verify
+                </button>
+              )}
+            </div>
           </div>
         )}
 
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-4 py-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all group border border-transparent hover:border-red-100"
+          className="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-rose-400 hover:bg-rose-500/5 rounded-xl transition-all group font-medium"
         >
-          <svg
-            className="h-4 w-4 transition-transform group-hover:scale-110"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M17 16l4-4 m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-            />
-          </svg>
-          <span className="text-xs font-black uppercase tracking-widest">
-            Logout
-          </span>
+          <LogOut className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+          <span className="text-sm">Logout</span>
         </button>
       </div>
     </aside>
@@ -134,26 +228,74 @@ export default function CandidateSidebar({
 function SidebarLink({
   label,
   href,
+  icon,
   active = false,
+  locked = false,
+  description,
 }: {
   label: string;
   href: string;
+  icon: React.ReactNode;
   active?: boolean;
+  locked?: boolean;
+  description?: string;
 }) {
+  if (locked) {
+    return (
+      <div
+        className="flex items-center justify-between px-4 py-3 rounded-xl opacity-40 cursor-not-allowed group scale-95 origin-left"
+        title="Complete assessment to unlock this signal"
+      >
+        <div className="flex items-center gap-3">
+          <div className="text-slate-500">{icon}</div>
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-slate-500">{label}</span>
+            {description && (
+              <span className="text-[10px] text-slate-700 font-bold line-clamp-1">
+                LOCKED
+              </span>
+            )}
+          </div>
+        </div>
+        <ShieldCheck className="h-3 w-3 text-slate-600" />
+      </div>
+    );
+  }
+
   return (
     <Link href={href}>
       <div
         className={`
-        flex items-center gap-3 px-4 py-3 rounded-xl transition-all
-        ${active ? "bg-indigo-50 text-indigo-600 font-bold" : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"}
+        flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group
+        ${
+          active
+            ? "bg-indigo-600/10 text-indigo-400 shadow-[inset_0_0_10px_rgba(79,70,229,0.05)]"
+            : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
+        }
       `}
       >
         <div
-          className={`h-1.5 w-1.5 rounded-full ${active ? "bg-indigo-600" : "bg-transparent"}`}
-        />
-        <span className="text-xs font-bold uppercase tracking-widest">
-          {label}
-        </span>
+          className={`transition-colors duration-200 ${active ? "text-indigo-400" : "text-slate-500 group-hover:text-slate-300"}`}
+        >
+          {icon}
+        </div>
+        <div className="flex flex-col">
+          <span
+            className={`text-sm font-medium transition-colors duration-200 leading-tight ${active ? "text-indigo-300" : "text-slate-400"}`}
+          >
+            {label}
+          </span>
+          {description && (
+            <span
+              className={`text-[9px] font-bold uppercase tracking-tight transition-colors duration-200 leading-tight ${active ? "text-indigo-400/70" : "text-slate-600 group-hover:text-slate-500"}`}
+            >
+              {description}
+            </span>
+          )}
+        </div>
+        {active && (
+          <div className="ml-auto w-1 h-3 bg-indigo-400 rounded-full shadow-[0_0_8px_rgba(129,140,248,0.5)]" />
+        )}
       </div>
     </Link>
   );

@@ -7,6 +7,7 @@ class CandidateProfileUpdate(BaseModel):
     phone_number: Optional[str] = None
     profile_photo_url: Optional[str] = None
     bio: Optional[str] = None
+    experience: Optional[str] = None
     current_role: Optional[str] = Field(None, alias="current_role")
     years_of_experience: Optional[int] = None
     primary_industry_focus: Optional[str] = None
@@ -27,7 +28,16 @@ class CandidateProfileUpdate(BaseModel):
     career_interests: Optional[List[str]] = None
     learning_interests: Optional[List[str]] = None
     job_type: Optional[str] = None
+    gender: Optional[str] = None
+    birthdate: Optional[str] = None
+    university: Optional[str] = None
+    qualification_held: Optional[str] = None
+    graduation_year: Optional[int] = None
+    referral: Optional[str] = None
     identity_verified: Optional[bool] = None
+    education_history: Optional[List[Dict[str, Any]]] = None
+    experience_history: Optional[List[Dict[str, Any]]] = None
+    career_gap_report: Optional[Dict[str, Any]] = None
 
     class Config:
         populate_by_name = True

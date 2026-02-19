@@ -11,8 +11,8 @@ from src.core.config import GOOGLE_API_KEY
 class AssessmentService:
     def __init__(self):
         genai.configure(api_key=GOOGLE_API_KEY)
-        # Using gemma-3-27b-it as gemini models have 0 quota in this region/project
-        self.model = genai.GenerativeModel('gemma-3-27b-it')
+        # Upgraded to Gemini 3 Flash (Preview) for Elite Performance & Reliability
+        self.model = genai.GenerativeModel('gemini-3-flash-preview')
 
     async def get_or_create_session(self, user_id: str):
         # 1. Fetch profile to get experience band
@@ -315,29 +315,41 @@ class AssessmentService:
         rubric = q_metadata.get('evaluation_rubric')
         rubric_instruction = f"Evaluation Rubric: {rubric}" if rubric else "No specific rubric provided. Use the STAR (Situation, Task, Action, Result) framework to identify logical depth and evidence."
 
-        # Bias-aware system prompt focusing on intent, logic, and evidence
+        # Elite AI Auditor Prompt Engineering (Feb 2026)
         prompt = f"""
+        Act as a Lead Behavioral Psychologist and Senior GTM Strategy Consultant for TalentFlow.
+        YOUR TASK: Conduct a rigorous, unbiased audit of a candidate's response to an IT Tech Sales assessment.
+
+        CONTEXT:
         Category: {category}
         Question: {q_metadata.get('text', 'Professional question')}
         Candidate Answer: {answer}
         
         {rubric_instruction}
         
-        System Instruction:
-        Evaluate this answer on a scale of 0 to 6 based on professional depth, logic, and evidence.
+        EVALUATION FRAMEWORK (0-6 SCALE):
+        - 6 (ELITE): Explicit evidence of STAR framework. Metrics-driven results. Deep strategic ownership.
+        - 4 (SOLID): Clear logical path. Specific examples provided. Demonstrates core competency.
+        - 2 (WEAK): Generic 'filler' content. No specific evidence. Passive language.
+        - 0 (NONE): Non-responsive or logical failure.
+
+        NEUTRALITY & BIAS GUARDRAILS:
+        1. SIGNAL OVER SYNTAX: Ignore non-standard grammar, regional idioms, or non-native phrasing. Focus on 'Commercial Logic'.
+        2. STAR GATE: If a candidate fails to mention a Result (even if the Action was good), cap the score at 3.
+        3. EVIDENCE ONLY: Score ONLY on provided text. Do not infer professional background.
         
-        Neutrality Guardrails:
-        1. Ignore non-standard grammar, regional idioms, or non-native phrasing.
-        2. Focus on the core 'Signal' and 'Intent' rather than linguistic polish.
-        3. Do not penalize for brevity if the response is technically accurate or demonstrates ownership.
-        4. Look for specific logic, evidence, or specific examples provided.
-        
-        Return ONLY a JSON object: {{"score": 4, "reasoning": "short explanation of the signal detected"}}
+        Return ONLY a JSON object: {{"score": 4, "reasoning": "Succinct 1-sentence audit trail", "framework_used": "STAR-detected/General-Logic"}}
         """
         try:
             res = await asyncio.wait_for(self.model.generate_content_async(prompt), timeout=18.0)
-            data = json.loads(res.text.replace('```json', '').replace('```', '').replace('json', '').strip())
-            return data.get("score", 0), {"reasoning": data.get("reasoning", ""), "evaluator": "AI_GRADED_UNBIASED"}
+            # Robust JSON cleaning
+            text = res.text.strip().replace('```json', '').replace('```', '').replace('json', '').strip()
+            data = json.loads(text)
+            return data.get("score", 0), {
+                "reasoning": data.get("reasoning", ""), 
+                "framework": data.get("framework_used", "N/A"),
+                "evaluator": "AI_AUDITOR_GEMINI_3"
+            }
         except asyncio.TimeoutError:
             print("DEBUG: AI Evaluation timed out.")
             return 3, {"reasoning": "Fallback score due to AI timeout (18s exceeded)", "evaluator": "FALLBACK"}

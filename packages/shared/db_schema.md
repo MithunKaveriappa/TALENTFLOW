@@ -68,13 +68,29 @@ Updated: February 14, 2026 (Verified against Supabase live database)
 
 **application_status:**
 - `recommended`
-- `applied`
+- `applied` 
 - `invited`
-- `shortlisted`
+- `shortlisted` 
 - `interview_scheduled`
-- `rejected`
-- `offered`
+- `rejected` 
+- `offered` 
 - `closed`
+
+**interview_status:**
+- `pending_confirmation`
+- `scheduled`
+- `cancelled`
+- `completed`
+
+**interview_format:**
+- `virtual`
+- `onsite`
+
+**report_status:**
+- `pending`
+- `under_review`
+- `resolved`
+- `dismissed`
 
 ## Tables
 
@@ -122,6 +138,26 @@ Updated: February 14, 2026 (Verified against Supabase live database)
 - `identity_verified` (boolean)
 - `terms_accepted` (boolean)
 - `account_status` (account_status)
+- `gender` (text)
+- `birthdate` (date)
+- `university` (text)
+- `qualification_held` (text)
+- `graduation_year` (integer)
+- `referral` (text)
+- `resume_url` (text)
+- `resume_path` (text)
+- `target_role` (text)
+- `long_term_goal` (text)
+- `education_history` (jsonb)
+- `experience_history` (jsonb)
+- `projects` (jsonb)
+- `certifications` (text[])
+- `career_gap_report` (text)
+- `professional_summary` (text)
+- `gpa_score` (numeric)
+- `graduation_status` (text)
+- `last_resume_parse_at` (timestamp)
+- `ai_extraction_confidence` (numeric)
 - `created_at` (timestamp with time zone)
 - `updated_at` (timestamp with time zone)
 
@@ -141,6 +177,17 @@ Updated: February 14, 2026 (Verified against Supabase live database)
 - `assessment_status` (assessment_status)
 - `terms_accepted` (boolean)
 - `account_status` (account_status)
+- `created_at` (timestamp with time zone)
+- `updated_at` (timestamp with time zone)
+
+### `recruiter_settings`
+- `user_id` (uuid, Primary Key, Foreign Key -> recruiter_profiles.user_id)
+- `email_notifications` (boolean)
+- `web_notifications` (boolean)
+- `mobile_notifications` (boolean)
+- `profile_visibility` (text)
+- `language` (text)
+- `timezone` (text)
 - `created_at` (timestamp with time zone)
 - `updated_at` (timestamp with time zone)
 
@@ -237,6 +284,9 @@ Updated: February 14, 2026 (Verified against Supabase live database)
 - `achievements` (text[])
 - `skills` (text[])
 - `education` (jsonb)
+- `raw_education` (text)
+- `raw_experience` (text)
+- `raw_projects` (text)
 - `parsed_at` (timestamp with time zone)
 
 ### `profile_scores`
@@ -293,6 +343,11 @@ Updated: February 14, 2026 (Verified against Supabase live database)
 - `type` (text)
 - `created_at` (timestamp with time zone)
 - `updated_at` (timestamp with time zone)
+
+### `user_pinned_posts`
+- `user_id` (uuid, Primary Key, Foreign Key -> users.id)
+- `post_id` (uuid, Primary Key, Foreign Key -> posts.id)
+- `pinned_at` (timestamp with time zone)
 
 ### `notifications`
 - `id` (uuid, Primary Key)
@@ -376,6 +431,26 @@ Updated: February 14, 2026 (Verified against Supabase live database)
 - `admin_notes` (text)
 - `created_at` (timestamp with time zone)
 
+### `career_gps`
+- `id` (uuid, Primary Key)
+- `candidate_id` (uuid, Foreign Key -> users.id)
+- `target_role` (text)
+- `current_status` (text)
+- `created_at` (timestamp with time zone)
+- `updated_at` (timestamp with time zone)
+
+### `career_milestones`
+- `id` (uuid, Primary Key)
+- `gps_id` (uuid, Foreign Key -> career_gps.id)
+- `step_order` (integer)
+- `title` (text)
+- `description` (text)
+- `skills_to_acquire` (text[])
+- `learning_actions` (jsonb)
+- `status` (text)
+- `completed_at` (timestamp with time zone)
+- `created_at` (timestamp with time zone)
+
 ### `job_views`
 - `id` (uuid, Primary Key)
 - `job_id` (uuid, Foreign Key -> jobs.id)
@@ -402,14 +477,23 @@ Updated: February 14, 2026 (Verified against Supabase live database)
 ### `documents`
 - **Purpose**: Identity documents, Aadhaar, etc.
 
+### `id-proofs`
+- **Purpose**: Sensitive ID verification documents.
+
 ### `avatars`
 - **Purpose**: User profile photos.
+
+### `profile_photos`
+- **Purpose**: Dedicated bucket for candidate and recruiter profile pictures.
 
 ### `company-logos`
 - **Purpose**: Company brand logos.
 
 ### `company-assets`
 - **Purpose**: Company photos, videos and office assets.
+
+### `community-media`
+- **Purpose**: Media uploaded in community posts.
 
 ## Row Level Security (RLS) Policies
 
@@ -460,3 +544,21 @@ Updated: February 14, 2026 (Verified against Supabase live database)
 ### `assessment_responses` & `assessment_sessions`
 - **Candidate**: Can manage their own specific session and responses.
 - **AI Audit**: Restricted access for system processes.
+
+## Trigger & Function Catalog
+
+### Profile Management
+- **`initialize_recruiter_settings`**: Automatically creates an entry in `recruiter_settings` when a new `recruiter_profile` is created.
+- **`update_updated_at_column`**: Standard trigger function to keep `updated_at` timestamps accurate across all tables.
+
+### Application Lifecycle
+- **`validate_application_status_transition`**: Ensures that job applications only move through valid status flows (e.g., cannot move from `rejected` to `shortlisted`).
+- **`log_application_status_change`**: Automatically records state changes into `job_application_status_history` for auditing purposes.
+
+## Global Indexing Strategy
+
+- **`idx_candidate_skills`**: GIN index on `candidate_profiles(skills)` for fast hobby/skill-based discovery.
+- **`idx_chat_messages_thread`**: Hash/B-tree index on `chat_messages(thread_id)` to speed up message retrieval.
+- **`idx_interviews_lookup`**: Indexes on `job_id`, `candidate_id`, and `application_id` to optimize interview scheduling dashboards.
+- **`idx_jobs_company`**: B-tree index on `jobs(company_id)` for lightning-fast listings of open roles per company.
+- **`idx_application_tracking`**: B-tree index on `job_applications(job_id)` and `job_applications(candidate_id)`.

@@ -59,8 +59,19 @@ class InterviewService:
         
         supabase.table("interview_slots").insert(slots_data).execute()
 
-        # 4. Notify Candidate (Placeholder for Notification Service)
-        # TODO: Integrate with NotificationService
+        # 4. Notify Candidate
+        from src.services.notification_service import NotificationService
+        NotificationService.create_notification(
+            user_id=app["candidate_id"],
+            type="INTERVIEW_PROPOSED",
+            title="Interview Invitation",
+            message=f"A recruiter has proposed an interview for {app['jobs']['title']}. Please select a time slot.",
+            metadata={
+                "interview_id": interview["id"],
+                "application_id": request.application_id,
+                "job_title": app["jobs"]["title"]
+            }
+        )
         
         return interview
 
@@ -97,6 +108,19 @@ class InterviewService:
             "updated_at": datetime.now().isoformat()
         }).eq("id", slot["interviews"]["application_id"]).execute()
 
+        # 5. Notify Recruiter
+        from src.services.notification_service import NotificationService
+        NotificationService.create_notification(
+            user_id=slot["interviews"]["recruiter_id"],
+            type="INTERVIEW_CONFIRMED",
+            title="Interview Slot Confirmed",
+            message=f"A candidate has confirmed a slot for your interview proposal on {slot['start_time']}.",
+            metadata={
+                "interview_id": interview_id,
+                "application_id": slot["interviews"]["application_id"]
+            }
+        )
+
         return {"status": "success", "interview_id": interview_id}
 
     @staticmethod
@@ -130,6 +154,20 @@ class InterviewService:
             "status": "shortlisted",
             "updated_at": datetime.now().isoformat()
         }).eq("id", interview["application_id"]).execute()
+
+        # 5. Notify the other party
+        from src.services.notification_service import NotificationService
+        target_id = interview["candidate_id"] if role == "recruiter" else interview["recruiter_id"]
+        NotificationService.create_notification(
+            user_id=target_id,
+            type="INTERVIEW_CANCELLED",
+            title=f"Interview Cancelled: {interview['round_name']}",
+            message=f"The {role} has cancelled the scheduled interview. Reason: {reason}",
+            metadata={
+                "interview_id": interview_id,
+                "application_id": interview["application_id"]
+            }
+        )
 
         return {"status": "cancelled"}
 

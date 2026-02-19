@@ -4,21 +4,21 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
 import { useRouter } from "next/navigation";
-import { 
-  Plus, 
-  Sparkles, 
-  Briefcase, 
-  Target, 
-  Layers, 
-  MapPin, 
-  Users, 
-  DollarSign, 
-  Zap, 
+import {
+  Plus,
+  Sparkles,
+  Briefcase,
+  Target,
+  Layers,
+  MapPin,
+  Users,
+  DollarSign,
+  Zap,
   ArrowLeft,
   Globe,
   X,
   Send,
-  Workflow
+  Workflow,
 } from "lucide-react";
 import LockedView from "@/components/dashboard/LockedView";
 
@@ -49,9 +49,14 @@ export default function NewJobPage() {
   useEffect(() => {
     async function checkAccess() {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
         if (!session) return;
-        const profile = await apiClient.get("/recruiter/profile", session.access_token);
+        const profile = await apiClient.get(
+          "/recruiter/profile",
+          session.access_token,
+        );
         if ((profile?.companies?.profile_score ?? 0) === 0) {
           setIsLocked(true);
         }
@@ -149,13 +154,13 @@ export default function NewJobPage() {
           <button
             onClick={() => setShowAiAssistant(!showAiAssistant)}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-              showAiAssistant 
+              showAiAssistant
                 ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200"
                 : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-100"
             }`}
           >
-             <Sparkles className="w-3.5 h-3.5" />
-             AI Architect
+            <Sparkles className="w-3.5 h-3.5" />
+            AI Architect
           </button>
           <div className="h-4 w-px bg-slate-200" />
           <button
@@ -163,7 +168,13 @@ export default function NewJobPage() {
             disabled={loading}
             className="flex items-center gap-2 bg-slate-900 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-md active:scale-95 disabled:opacity-50"
           >
-            {loading ? "Publishing..." : <><Send className="w-3.5 h-3.5" /> Publish</>}
+            {loading ? (
+              "Publishing..."
+            ) : (
+              <>
+                <Send className="w-3.5 h-3.5" /> Publish
+              </>
+            )}
           </button>
         </div>
       </header>
@@ -173,40 +184,43 @@ export default function NewJobPage() {
         <div className="fixed inset-x-0 top-16 z-30 animate-in slide-in-from-top duration-300">
           <div className="max-w-4xl mx-auto p-4">
             <div className="bg-indigo-600 rounded-2xl shadow-2xl p-6 border border-indigo-400 relative overflow-hidden">
-               <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
-                 <Sparkles className="w-32 h-32 text-white" />
-               </div>
-               <div className="relative z-10">
-                 <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h2 className="text-white font-black text-lg uppercase tracking-tight flex items-center gap-2">
-                        Smart Role Architect
-                      </h2>
-                      <p className="text-indigo-100 text-[10px] font-bold uppercase tracking-widest opacity-80 mt-1">
-                        Describe the mission, AI will handle the details
-                      </p>
-                    </div>
-                    <button onClick={() => setShowAiAssistant(false)} className="text-white/60 hover:text-white transition-colors">
-                      <X className="w-5 h-5" />
-                    </button>
-                 </div>
-                 
-                 <div className="flex gap-4">
-                    <textarea
-                      value={aiPrompt}
-                      onChange={(e) => setAiPrompt(e.target.value)}
-                      placeholder="e.g. Senior Frontend Engineer for our DeFi platform. Expertise in React and Web3..."
-                      className="flex-1 bg-indigo-700/50 border border-indigo-400/50 rounded-xl p-4 text-white placeholder:text-indigo-300/50 text-sm font-medium focus:ring-2 focus:ring-white/20 outline-none resize-none h-24"
-                    />
-                    <button 
-                      onClick={handleAIGenerate}
-                      disabled={aiLoading || !aiPrompt}
-                      className="bg-white text-indigo-600 px-8 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all active:scale-95 disabled:opacity-50 shadow-xl self-end h-16"
-                    >
-                      {aiLoading ? "Thinking..." : "Generate ✨"}
-                    </button>
-                 </div>
-               </div>
+              <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
+                <Sparkles className="w-32 h-32 text-white" />
+              </div>
+              <div className="relative z-10">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h2 className="text-white font-black text-lg uppercase tracking-tight flex items-center gap-2">
+                      Smart Role Architect
+                    </h2>
+                    <p className="text-indigo-100 text-[10px] font-bold uppercase tracking-widest opacity-80 mt-1">
+                      Describe the mission, AI will handle the details
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowAiAssistant(false)}
+                    className="text-white/60 hover:text-white transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="flex gap-4">
+                  <textarea
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    placeholder="e.g. Senior Frontend Engineer for our DeFi platform. Expertise in React and Web3..."
+                    className="flex-1 bg-indigo-700/50 border border-indigo-400/50 rounded-xl p-4 text-white placeholder:text-indigo-300/50 text-sm font-medium focus:ring-2 focus:ring-white/20 outline-none resize-none h-24"
+                  />
+                  <button
+                    onClick={handleAIGenerate}
+                    disabled={aiLoading || !aiPrompt}
+                    className="bg-white text-indigo-600 px-8 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all active:scale-95 disabled:opacity-50 shadow-xl self-end h-16"
+                  >
+                    {aiLoading ? "Thinking..." : "Generate ✨"}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -215,7 +229,6 @@ export default function NewJobPage() {
       {/* Main Content */}
       <main className="p-8 max-w-4xl mx-auto w-full pb-20">
         <form onSubmit={handleCreateJob} className="space-y-8">
-          
           {/* Section: Role Identity */}
           <Section title="Role Architecture" icon={Briefcase}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -223,7 +236,9 @@ export default function NewJobPage() {
                 <input
                   required
                   value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, title: e.target.value })
+                  }
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-bold focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
                   placeholder="e.g. Lead Software Architect"
                 />
@@ -231,7 +246,12 @@ export default function NewJobPage() {
               <Field label="Experience Band" icon={Layers}>
                 <select
                   value={formData.experience_band}
-                  onChange={(e) => setFormData({ ...formData, experience_band: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      experience_band: e.target.value,
+                    })
+                  }
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-bold focus:ring-2 focus:ring-indigo-500 transition-all outline-none appearance-none cursor-pointer"
                 >
                   <option value="fresher">Fresher (0-2y)</option>
@@ -243,7 +263,9 @@ export default function NewJobPage() {
               <Field label="Engagement Type" icon={Workflow}>
                 <select
                   value={formData.job_type}
-                  onChange={(e) => setFormData({ ...formData, job_type: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, job_type: e.target.value })
+                  }
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-bold focus:ring-2 focus:ring-indigo-500 transition-all outline-none appearance-none cursor-pointer"
                 >
                   <option value="onsite">On-site</option>
@@ -256,16 +278,18 @@ export default function NewJobPage() {
 
           {/* Section: Mission & Details */}
           <Section title="Mission & Impact" icon={Zap}>
-             <Field label="Description" icon={Zap} fullWidth>
-                <textarea
-                  required
-                  rows={6}
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-all outline-none resize-none"
-                  placeholder="Describe the mission and daily impact of this role..."
-                />
-             </Field>
+            <Field label="Description" icon={Zap} fullWidth>
+              <textarea
+                required
+                rows={6}
+                value={formData.description}
+                onChange={(e) =>
+                  setFormData({ ...formData, description: e.target.value })
+                }
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-all outline-none resize-none"
+                placeholder="Describe the mission and daily impact of this role..."
+              />
+            </Field>
           </Section>
 
           {/* Section: Requirements & Skills */}
@@ -278,7 +302,7 @@ export default function NewJobPage() {
                   onChange={(e) =>
                     setFormData({
                       ...formData,
-                      requirements: e.target.value.split("\n").filter(Boolean)
+                      requirements: e.target.value.split("\n").filter(Boolean),
                     })
                   }
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-all outline-none resize-none"
@@ -291,7 +315,10 @@ export default function NewJobPage() {
                   onChange={(e) =>
                     setFormData({
                       ...formData,
-                      skills_required: e.target.value.split(",").map(s => s.trim()).filter(Boolean)
+                      skills_required: e.target.value
+                        .split(",")
+                        .map((s) => s.trim())
+                        .filter(Boolean),
                     })
                   }
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
@@ -307,7 +334,9 @@ export default function NewJobPage() {
               <Field label="Location" icon={MapPin}>
                 <input
                   value={formData.location}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, location: e.target.value })
+                  }
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
                   placeholder="City, Country"
                 />
@@ -317,14 +346,21 @@ export default function NewJobPage() {
                   type="number"
                   min="1"
                   value={formData.number_of_positions}
-                  onChange={(e) => setFormData({ ...formData, number_of_positions: parseInt(e.target.value) || 1 })}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      number_of_positions: parseInt(e.target.value) || 1,
+                    })
+                  }
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
                 />
               </Field>
               <Field label="Salary Range" icon={DollarSign}>
                 <input
                   value={formData.salary_range}
-                  onChange={(e) => setFormData({ ...formData, salary_range: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, salary_range: e.target.value })
+                  }
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
                   placeholder="e.g. $120k - $160k"
                 />
@@ -381,4 +417,3 @@ function Field({
     </div>
   );
 }
-

@@ -1,17 +1,18 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import CandidateSidebar from "@/components/CandidateSidebar";
 import { TermsModal } from "@/components/TermsModal";
-import { 
-  CheckCircle2, 
-  Video, 
-  ArrowRight,
-  Target
+import {
+  CheckCircle2,
+  Video,
+  Target,
+  Briefcase,
+  Zap,
+  ShieldCheck,
 } from "lucide-react";
 
 interface LatestApplication {
@@ -22,7 +23,7 @@ interface LatestApplication {
     companies?: {
       name: string;
       logo_url?: string;
-    }
+    };
   };
   interviews?: Array<{
     meeting_link?: string;
@@ -68,11 +69,6 @@ export default function CandidateDashboard() {
   const [loading, setLoading] = useState(true);
   const [showTerms, setShowTerms] = useState(false);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.replace("/login");
-  };
-
   useEffect(() => {
     async function loadData() {
       try {
@@ -87,7 +83,10 @@ export default function CandidateDashboard() {
         const [resultsData, statsData, appData] = await Promise.all([
           apiClient.get("/assessment/results", authSession.access_token),
           apiClient.get("/candidate/stats", authSession.access_token),
-          apiClient.get("/candidate/latest-application", authSession.access_token),
+          apiClient.get(
+            "/candidate/latest-application",
+            authSession.access_token,
+          ),
         ]);
 
         setResults(resultsData);
@@ -123,433 +122,423 @@ export default function CandidateDashboard() {
     !stats?.terms_accepted;
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      <CandidateSidebar assessmentStatus={stats?.assessment_status} />
-
-      <main className="flex-1 ml-64 p-6 md:p-12 overflow-y-auto">
-        <div className="max-w-7xl mx-auto">
-          {isLocked ? (
-            <div className="max-w-4xl mx-auto py-12">
-            <header className="mb-12">
-              <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase italic mb-2">
-                Command Center Locked
+    <div className="max-w-6xl mx-auto space-y-10">
+      {isLocked ? (
+        <div className="max-w-4xl mx-auto py-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
+          <header className="mb-12">
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase italic">
+                Command <span className="text-indigo-600">Locked</span>
               </h1>
-              <p className="text-slate-500 font-medium uppercase tracking-[0.2em] text-[10px]">
-                Complete all synchronization signals to unlock transmission.
-              </p>
-            </header>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Step 1: Assessment */}
-              <LockStepCard
-                title="Performance Assessment"
-                description="Verify your behavioral and technical signals via our AI evaluation."
-                status={
-                  stats?.assessment_status === "completed"
-                    ? "verified"
-                    : "incomplete"
-                }
-                actionLabel="Initialize Assessment"
-                onAction={() => router.push("/assessment/candidate")}
-              />
-
-              {/* Step 2: Identity */}
-              <LockStepCard
-                title="Identity Verification"
-                description="Secure your profile by uploading a valid government-issued ID."
-                status={stats?.identity_verified ? "verified" : "incomplete"}
-                actionLabel="Verify Identity"
-                onAction={() => router.push("/onboarding/candidate?target=AWAITING_ID")}
-              />
-
-              {/* Step 3: Terms & Consent */}
-              <LockStepCard
-                title="Legal Synchronization"
-                description="Accept the platform terms and data privacy consent forms."
-                status={stats?.terms_accepted ? "verified" : "incomplete"}
-                actionLabel="Accept Terms"
-                onAction={() =>
-                  router.push("/onboarding/candidate?target=AWAITING_TC")
-                }
-                secondaryActionLabel="Read Policy"
-                onSecondaryAction={() => setShowTerms(true)}
-              />
+              <div className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-amber-200">
+                Awaiting Sync
+              </div>
             </div>
+            <p className="text-slate-500 font-bold uppercase tracking-[0.3em] text-[10px] flex items-center gap-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+              Complete all synchronization signals to unlock transmission.
+            </p>
+          </header>
 
-            <div className="mt-12 bg-indigo-50 border border-indigo-100 p-8 rounded-4xl flex items-center gap-6">
-              <div className="h-12 w-12 bg-indigo-600 rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-indigo-200">
-                <svg
-                  className="h-6 w-6 text-white"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-              <div>
-                <h4 className="font-black text-indigo-900 uppercase tracking-tight text-sm mb-1">
-                  Why is my dashboard locked?
-                </h4>
-                <p className="text-indigo-700/70 text-xs font-medium leading-relaxed">
-                  To maintain a high-trust hiring ecosystem, we require all
-                  candidates to verify their identity and complete a baseline
-                  performance evaluation before matching with recruiters.
-                </p>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* Step 1: Assessment */}
+            <LockStepCard
+              title="Performance Assessment"
+              description="Verify your behavioral and technical signals via our AI evaluation."
+              status={
+                stats?.assessment_status === "completed"
+                  ? "verified"
+                  : "incomplete"
+              }
+              actionLabel="Initialize Assessment"
+              onAction={() => router.push("/assessment/candidate")}
+            />
+
+            {/* Step 2: Identity */}
+            <LockStepCard
+              title="Identity Verification"
+              description="Secure your profile by uploading a valid government-issued ID."
+              status={stats?.identity_verified ? "verified" : "incomplete"}
+              actionLabel="Verify Identity"
+              onAction={() =>
+                router.push("/onboarding/candidate?target=AWAITING_ID")
+              }
+            />
+
+            {/* Step 3: Terms & Consent */}
+            <LockStepCard
+              title="Legal Synchronization"
+              description="Accept the platform terms and data privacy consent forms."
+              status={stats?.terms_accepted ? "verified" : "incomplete"}
+              actionLabel="Accept Terms"
+              onAction={() =>
+                router.push("/onboarding/candidate?target=AWAITING_TC")
+              }
+              secondaryActionLabel="Read Policy"
+              onSecondaryAction={() => setShowTerms(true)}
+            />
+          </div>
+
+          <div className="mt-12 bg-white border border-slate-200 p-8 rounded-[2.5rem] flex items-center gap-6 shadow-sm">
+            <div className="h-12 w-12 bg-indigo-600 rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-indigo-200">
+              <Target className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h4 className="font-black text-slate-900 uppercase tracking-tight text-sm mb-1 italic text-wrap wrap-break-word">
+                Why is my dashboard locked?
+              </h4>
+              <p className="text-slate-500 text-xs font-medium leading-relaxed">
+                To maintain a high-trust hiring ecosystem, we require all
+                candidates to verify their identity and complete a baseline
+                performance evaluation before matching with recruiters.
+              </p>
             </div>
           </div>
-        ) : (
-          <div className="max-w-5xl mx-auto space-y-12">
-            <header className="flex justify-between items-end">
-              <div>
-                <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none uppercase italic">
-                  Command Center
+        </div>
+      ) : (
+        <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+          <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="space-y-1">
+              <div className="flex items-center gap-3">
+                <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase italic">
+                  Candidate <span className="text-indigo-600">Command</span>
                 </h1>
-                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.3em] mt-2">
-                  Session: Live Transmission
-                </p>
+                <div className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-black uppercase tracking-widest rounded-md border border-indigo-200">
+                  Live
+                </div>
               </div>
-              <div className="flex items-end gap-8">
-                <div className="text-right hidden sm:block">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    Profile Strength
-                  </span>
-                  <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
-                    <div
-                      className={`h-1.5 w-1.5 rounded-full ${
-                        stats?.profile_strength === "Elite"
-                          ? "bg-purple-500"
-                          : stats?.profile_strength === "Strong"
-                            ? "bg-emerald-500"
-                            : stats?.profile_strength === "Moderate"
-                              ? "bg-indigo-500"
-                              : "bg-slate-400"
-                      }`}
-                    />
-                    {stats?.profile_strength?.toUpperCase() || "LOW"}
-                  </div>
+              <p className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
+                Session Protocol: Active Transmission &bull; High-Airiness View
+              </p>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-right hidden sm:block">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
+                  System Status
+                </span>
+                <div className="flex items-center gap-2 text-emerald-600 font-bold text-xs bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100">
+                  <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                  OPERATIONAL
                 </div>
-                <button
-                  onClick={handleLogout}
-                  className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-red-500 hover:bg-red-50 hover:border-red-100 transition-all shadow-sm active:scale-95"
-                >
-                  Logout
-                </button>
               </div>
-            </header>
+            </div>
+          </header>
 
-            {/* Application Roadmap (Status-Specific) */}
-            {latestApp ? (
-              <section className="bg-white rounded-5xl border border-slate-200 p-10 shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-8">
-                  <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                    latestApp.status === 'recommended' ? 'bg-blue-50 text-blue-600' :
-                    latestApp.status === 'shortlisted' ? 'bg-emerald-50 text-emerald-600' :
-                    'bg-slate-50 text-slate-500'
-                  }`}>
-                    {latestApp.status.replace('_', ' ')}
-                  </span>
-                </div>
+          {/* Stat Row */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <StatCard
+              label="Active Missions"
+              value={stats?.applications_count || 0}
+              icon={<Briefcase className="h-5 w-5" />}
+              trend="Real-time"
+            />
+            <StatCard
+              label="Shortlist Hits"
+              value={stats?.shortlisted_count || 0}
+              icon={<Target className="h-5 w-5" />}
+              color="text-emerald-500"
+              trend="+12% vs avg"
+            />
+            <StatCard
+              label="Network Invites"
+              value={stats?.invites_received || 0}
+              icon={<Zap className="h-5 w-5" />}
+              color="text-indigo-500"
+              trend="Priority"
+            />
+            <StatCard
+              label="Presence Score"
+              value={stats?.completion_score || 0}
+              unit="%"
+              icon={<ShieldCheck className="h-5 w-5" />}
+              trend="Verified"
+            />
+          </div>
 
-                <div className="flex flex-col md:flex-row gap-10 items-start">
-                  <div className="h-20 w-20 rounded-3xl bg-slate-50 border border-slate-100 flex items-center justify-center text-3xl shrink-0 overflow-hidden relative">
-                    {latestApp.jobs?.companies?.logo_url ? (
-                        <Image 
-                          src={latestApp.jobs.companies.logo_url} 
-                          alt={latestApp.jobs.companies.name || "Company Logo"}
-                          fill
-                          className="object-contain p-4" 
-                        />
-                    ) : (
-                        <span className="text-slate-300">🏢</span>
-                    )}
+          {/* Main Performance Signal Card */}
+          <div className="bg-slate-900 rounded-[3rem] p-10 md:p-14 text-white shadow-2xl relative overflow-hidden group border border-white/5">
+            <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-600/10 rounded-full blur-[100px] -mr-48 -mt-48 group-hover:bg-indigo-600/20 transition-all duration-1000" />
+
+            <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+              <div className="space-y-8">
+                <div className="space-y-3">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full border border-white/10">
+                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-indigo-400">
+                      Aggregate Talent Signal
+                    </span>
                   </div>
-                  <div className="flex-1">
-                    <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-2">
-                       {latestApp.status === 'interview_scheduled' ? 'Action Required: Interview Protocol' : 
-                        latestApp.status === 'shortlisted' ? 'Transmission Success: Shortlisted' :
-                        'Application Synchronized'}
-                    </h2>
-                    <p className="text-slate-500 font-medium mb-6">
-                        {latestApp.jobs?.title} at <span className="text-slate-900 font-bold">{latestApp.jobs?.companies?.name}</span>
-                    </p>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <StatusStep 
-                            label="Applied" 
-                            active={['applied', 'recommended', 'shortlisted', 'invited', 'interview_scheduled', 'offered'].includes(latestApp.status)} 
-                            done={['shortlisted', 'invited', 'interview_scheduled', 'offered'].includes(latestApp.status)}
-                        />
-                        <StatusStep 
-                            label="Shortlisted" 
-                            active={['shortlisted', 'invited', 'interview_scheduled', 'offered'].includes(latestApp.status)} 
-                            done={['interview_scheduled', 'offered'].includes(latestApp.status)}
-                        />
-                        <StatusStep 
-                            label="Interview" 
-                            active={['interview_scheduled', 'offered'].includes(latestApp.status)} 
-                            done={['offered'].includes(latestApp.status)}
-                        />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Conditional Call to Action */}
-                {latestApp.status === 'interview_scheduled' && (
-                  <div className="mt-10 p-6 bg-blue-600 rounded-3xl text-white flex flex-col md:flex-row items-center gap-6 shadow-xl shadow-blue-200 animate-in fade-in slide-in-from-bottom-4">
-                    <div className="h-12 w-12 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
-                      <Video className="h-6 w-6" />
-                    </div>
-                    <div className="flex-1 text-center md:text-left">
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 mb-1">Upcoming Virtual Sync</p>
-                      <h4 className="text-lg font-bold">Jitsu Meeting Link is Active</h4>
-                    </div>
-                    {latestApp.interviews?.[0]?.meeting_link && (
-                        <a 
-                            href={latestApp.interviews[0].meeting_link} 
-                            target="_blank"
-                            className="bg-white text-blue-600 px-8 py-3 rounded-xl font-black uppercase tracking-widest text-sm hover:scale-105 transition-all shadow-lg flex items-center gap-2"
-                        >
-                            Enter Room
-                            <ArrowRight className="h-4 w-4" />
-                        </a>
-                    )}
-                  </div>
-                )}
-              </section>
-            ) : (
-              <section className="bg-slate-900 rounded-[2.5rem] p-12 text-white overflow-hidden relative shadow-2xl">
-                <div className="relative z-10">
-                    <h2 className="text-3xl font-black tracking-tight mb-4 uppercase italic">No Active Missions</h2>
-                    <p className="text-blue-300/80 max-w-md font-medium text-sm leading-relaxed">Your profile signals are live, but you haven&apos;t applied to any roles yet. Start exploring calibrated matches in the pool.</p>
-                    <button 
-                        onClick={() => router.push('/dashboard/candidate/community')}
-                        className="mt-8 bg-blue-600 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-sm shadow-xl shadow-blue-500/20 hover:bg-blue-500 transition-all active:scale-95 flex items-center gap-2"
-                    >
-                        Explore Elite Pool
-                        <Target className="h-4 w-4" />
-                    </button>
-                </div>
-                <div className="absolute top-0 right-0 -mr-20 -mt-20 h-80 w-80 bg-blue-600/20 blur-[100px] rounded-full" />
-              </section>
-            )}
-
-            {/* Global Score Card */}
-            <div className="bg-slate-900 rounded-[2.5rem] p-10 md:p-16 text-white shadow-2xl relative overflow-hidden">
-              <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-12">
-                <div className="space-y-6 text-center md:text-left">
-                  <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em]">
-                    Aggregate Talent Score
-                  </span>
-                  <div className="space-y-1">
-                    <h2 className="text-7xl md:text-9xl font-black tracking-tighter">
-                      {results?.overall_score || 0}
-                    </h2>
-                    <p className="text-slate-400 font-bold uppercase tracking-widest text-sm">
-                      Percentile Score / 100
-                    </p>
-                  </div>
-                  <p className="text-slate-300 max-w-sm text-sm leading-relaxed font-medium">
-                    Your profile indicates{" "}
-                    <span className="text-indigo-400 font-bold">
-                      {(results?.overall_score ?? 0) >= 70
-                        ? "High-Fit"
-                        : (results?.overall_score ?? 0) >= 40
-                          ? "Moderate-Fit"
-                          : "Emerging-Fit"}
-                    </span>{" "}
-                    for Technical Sales roles. Profile shared with 12 top-tier
-                    companies.
+                  <h2 className="text-5xl md:text-7xl font-black tracking-tighter leading-none">
+                    Performance{" "}
+                    <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-400 to-purple-400">
+                      Nexus
+                    </span>
+                  </h2>
+                  <p className="text-slate-400 font-medium text-lg leading-relaxed max-w-md opacity-80">
+                    Your combined technical and behavioral signals place you in
+                    the{" "}
+                    <span className="text-indigo-400 font-bold">Top 5%</span> of
+                    local sales talent.
                   </p>
                 </div>
 
-                <div className="relative">
-                  <div className="h-48 w-48 md:h-64 md:w-64 rounded-full border-[1.5rem] border-slate-800 flex items-center justify-center">
-                    <div className="text-center">
-                      <svg
-                        className="h-12 w-12 md:h-16 md:w-16 text-indigo-500 mx-auto mb-2"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-                        />
-                      </svg>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">
-                        Trust Matrix
-                      </span>
+                <div className="flex items-center gap-6">
+                  <div className="text-center">
+                    <div className="text-4xl font-black text-white">
+                      {results?.overall_score || 0}
+                    </div>
+                    <div className="text-[9px] font-black uppercase tracking-widest text-slate-500 text-wrap wrap-break-word">
+                      Score
                     </div>
                   </div>
-                  {/* SVG Progress Circle */}
-                  <svg
-                    className="absolute inset-0 h-full w-full -rotate-90 scale-102"
-                    viewBox="0 0 100 100"
-                  >
-                    <circle
-                      cx="50"
-                      cy="50"
-                      r="42"
-                      fill="transparent"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      strokeDasharray="264"
-                      strokeDashoffset={
-                        264 - (264 * (results?.overall_score || 0)) / 100
-                      }
-                      strokeLinecap="round"
-                      className="text-indigo-500 transition-all duration-2000 ease-out"
-                    />
-                  </svg>
-                </div>
-              </div>
-
-              {/* Decorative Mesh */}
-              <div className="absolute top-0 right-0 w-1/2 h-full opacity-10 pointer-events-none">
-                <div className="absolute inset-0 bg-linear-to-l from-indigo-500 to-transparent" />
-                <div className="grid grid-cols-10 gap-1 h-full w-full">
-                  {[...Array(100)].map((_, i) => (
-                    <div
-                      key={i}
-                      className="border-[0.5px] border-white/20 h-full w-full"
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Signal Calibration Alerts */}
-            {(scores.behavioral === 0 || scores.psychometric === 0) && (
-              <div className="bg-amber-50 border border-amber-200 rounded-4xl p-8 flex items-center justify-between gap-6">
-                <div className="flex items-center gap-6">
-                  <div className="h-14 w-14 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-600 shrink-0">
-                    <Target className="h-7 w-7" />
-                  </div>
-                  <div>
-                    <h4 className="text-amber-900 font-black uppercase tracking-tight italic">DNA Calibration Required</h4>
-                    <p className="text-amber-700/80 text-sm font-medium">To unlock chat and increase marketplace visibility, complete your mandatory assessments.</p>
+                  <div className="h-10 w-px bg-white/10" />
+                  <div className="text-center">
+                    <div className="text-4xl font-black text-white">Elite</div>
+                    <div className="text-[9px] font-black uppercase tracking-widest text-slate-500 text-wrap wrap-break-word">
+                      Standing
+                    </div>
                   </div>
                 </div>
-                <button 
-                  onClick={() => router.push('/dashboard/candidate/assessment')}
-                  className="bg-amber-900 text-white px-8 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-black transition-all active:scale-95 shrink-0"
-                >
-                  Start Now
-                </button>
               </div>
-            )}
 
-            {/* Signal Breakdown */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <ScoreTile label="Technical Skill" score={scores.skill} />
-              <ScoreTile label="Behavioral" score={scores.behavioral} />
-              <ScoreTile label="Resume Signal" score={scores.resume} />
-              <ScoreTile label="Psychometric" score={scores.psychometric} />
-            </div>
-
-            {/* Engagement Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <StatCard
-                label="Apps"
-                value={stats?.applications_count || 0}
-                icon={
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                  />
-                }
-              />
-              <StatCard
-                label="Shortlisted"
-                value={stats?.shortlisted_count || 0}
-                color="text-emerald-500"
-                icon={
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
-                }
-              />
-              <StatCard
-                label="Invites"
-                value={stats?.invites_received || 0}
-                color="text-indigo-500"
-                icon={
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                  />
-                }
-              />
-              <StatCard
-                label="Saved"
-                value={stats?.saved_jobs_count || 0}
-                icon={
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
-                  />
-                }
-              />
-              <StatCard
-                label="Posts"
-                value={stats?.posts_count || 0}
-                icon={
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                  />
-                }
-              />
-            </div>
-
-            <div className="bg-white rounded-[2.5rem] p-10 border border-slate-200/60 shadow-sm overflow-hidden relative">
-              <div className="relative z-10">
-                <h3 className="text-xl font-black text-slate-900 mb-8 flex items-center gap-3 italic text-wrap wrap-break-word">
-                  <span className="h-1 w-8 bg-indigo-600 rounded-full shrink-0" />
-                  EXPERT SIGNALS & LLM FEEDBACK
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                  <FeedbackItem
-                    title="Structural Integrity"
-                    desc="Logical flow in responses is above benchmark. Candidate treats sales scenarios as strategic operations rather than simple transactions."
-                    status="Elite"
-                  />
-                  <FeedbackItem
-                    title="Adaptive Quotient"
-                    desc="High degree of flexibility shown when handling complex customer objections in the AI-generated skill scenarios."
-                    status="Superior"
-                  />
+              <div className="flex justify-center lg:justify-end">
+                <div className="relative h-56 w-56 md:h-64 md:w-64 group/shield">
+                  <div className="absolute inset-0 bg-indigo-600/20 rounded-full blur-3xl group-hover/shield:bg-indigo-500/30 transition-all duration-700" />
+                  <div className="absolute inset-0 rounded-full border border-white/5 flex items-center justify-center backdrop-blur-sm z-10 overflow-hidden">
+                    <div className="absolute inset-0 bg-indigo-500/10 opacity-50" />
+                    <div className="text-center z-20">
+                      <Target className="h-16 w-16 text-indigo-400 mx-auto mb-2 drop-shadow-2xl" />
+                      <span className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-300">
+                        Verified Presence
+                      </span>
+                    </div>
+                    {/* Progress Ring */}
+                    <svg
+                      className="absolute inset-0 h-full w-full -rotate-90"
+                      viewBox="0 0 100 100"
+                    >
+                      <circle
+                        cx="50"
+                        cy="50"
+                        r="48"
+                        fill="transparent"
+                        stroke="rgba(255,255,255,0.05)"
+                        strokeWidth="4"
+                      />
+                      <circle
+                        cx="50"
+                        cy="50"
+                        r="48"
+                        fill="transparent"
+                        stroke="url(#indigoGradientDashboard)"
+                        strokeWidth="4"
+                        strokeDasharray="301.5"
+                        strokeDashoffset={
+                          301.5 - (301.5 * (results?.overall_score || 0)) / 100
+                        }
+                        strokeLinecap="round"
+                        className="transition-all duration-2000 ease-out"
+                      />
+                      <defs>
+                        <linearGradient
+                          id="indigoGradientDashboard"
+                          x1="0%"
+                          y1="0%"
+                          x2="100%"
+                          y2="0%"
+                        >
+                          <stop offset="0%" stopColor="#818cf8" />
+                          <stop offset="100%" stopColor="#6366f1" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                  </div>
                 </div>
-              </div>
-              {/* Background branding */}
-              <div className="absolute -bottom-10 -right-10 text-[120px] font-black text-slate-50 select-none">
-                TF
               </div>
             </div>
           </div>
-        )}
+
+          {/* Discovery & Calibration Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+            {/* Active Application or CTA */}
+            <div className="lg:col-span-2">
+              <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-3">
+                <span className="h-px w-8 bg-slate-200" />
+                Operational Roadmap
+              </h3>
+
+              {latestApp ? (
+                <div className="bg-white rounded-[2.5rem] border border-slate-200 p-8 shadow-sm relative overflow-hidden group hover:shadow-xl transition-all duration-500">
+                  <div className="flex flex-col md:flex-row gap-8 items-start">
+                    <div className="h-20 w-20 rounded-3xl bg-slate-50 border border-slate-100 flex items-center justify-center text-3xl shrink-0 overflow-hidden shadow-inner">
+                      {latestApp.jobs?.companies?.logo_url ? (
+                        <Image
+                          src={latestApp.jobs.companies.logo_url}
+                          alt={latestApp.jobs.companies.name || "Company Logo"}
+                          fill
+                          className="object-contain p-4 group-hover:scale-110 transition-transform"
+                        />
+                      ) : (
+                        <span className="text-slate-300">🏢</span>
+                      )}
+                    </div>
+                    <div className="flex-1 space-y-4">
+                      <div>
+                        <div className="flex items-center gap-3 mb-1">
+                          <h4 className="text-2xl font-black text-slate-900 tracking-tight italic">
+                            {latestApp.jobs?.title}
+                          </h4>
+                          <span
+                            className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                              latestApp.status === "recommended"
+                                ? "bg-blue-50 text-blue-600 border border-blue-100"
+                                : latestApp.status === "shortlisted"
+                                  ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
+                                  : "bg-slate-50 text-slate-500 border border-slate-100"
+                            }`}
+                          >
+                            {latestApp.status.replace("_", " ")}
+                          </span>
+                        </div>
+                        <p className="text-slate-500 font-bold uppercase tracking-tight text-xs">
+                          {latestApp.jobs?.companies?.name} &bull; Pipeline
+                          Active
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4">
+                        <StatusStep label="Applied" active={true} done={true} />
+                        <StatusStep
+                          label="Shortlist"
+                          active={[
+                            "shortlisted",
+                            "invited",
+                            "interview_scheduled",
+                            "offered",
+                          ].includes(latestApp.status)}
+                          done={["interview_scheduled", "offered"].includes(
+                            latestApp.status,
+                          )}
+                        />
+                        <StatusStep
+                          label="Interview"
+                          active={["interview_scheduled", "offered"].includes(
+                            latestApp.status,
+                          )}
+                          done={["offered"].includes(latestApp.status)}
+                        />
+                      </div>
+
+                      {latestApp.status === "interview_scheduled" && (
+                        <button
+                          onClick={() =>
+                            latestApp.interviews?.[0]?.meeting_link &&
+                            window.open(
+                              latestApp.interviews[0].meeting_link,
+                              "_blank",
+                            )
+                          }
+                          className="w-full mt-4 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
+                        >
+                          <Video className="h-4 w-4" />
+                          Enter Interview Protocol
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white rounded-[2.5rem] p-10 border-2 border-dashed border-slate-200 text-center space-y-6 hover:border-indigo-300 transition-colors group">
+                  <div className="h-16 w-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto group-hover:bg-indigo-50 transition-colors">
+                    <Briefcase className="h-8 w-8 text-slate-300 group-hover:text-indigo-400" />
+                  </div>
+                  <div className="space-y-2">
+                    <h4 className="text-lg font-black text-slate-900 uppercase italic">
+                      Role Inventory Empty
+                    </h4>
+                    <p className="text-slate-500 text-xs font-medium max-w-xs mx-auto">
+                      Your signals are live, but no active applications
+                      detected. Start a new mission.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() =>
+                      router.push("/dashboard/candidate/community")
+                    }
+                    className="bg-slate-900 text-white px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600 transition-all active:scale-95 shadow-xl shadow-slate-200"
+                  >
+                    Explore Opportunities
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Score Breakdown */}
+            <div className="space-y-6">
+              <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6 flex items-center gap-3">
+                <span className="h-px w-8 bg-slate-200" />
+                Signal Calibration
+              </h3>
+              <div className="grid grid-cols-1 gap-4">
+                <ScoreTile
+                  label="Technical Proficiency"
+                  score={scores.skill}
+                  icon={<Briefcase className="h-4 w-4" />}
+                />
+                <ScoreTile
+                  label="Behavioral Dynamic"
+                  score={scores.behavioral}
+                  icon={<Target className="h-4 w-4" />}
+                />
+                <ScoreTile
+                  label="Psychometric Depth"
+                  score={scores.psychometric}
+                  icon={<Zap className="h-4 w-4" />}
+                />
+                <ScoreTile
+                  label="Integrity Check"
+                  score={scores.resume}
+                  icon={<ShieldCheck className="h-4 w-4" />}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* LLM Feedback Section */}
+          <div className="bg-white rounded-[3rem] p-10 md:p-14 border border-slate-200/60 shadow-xl shadow-slate-200/50 overflow-hidden relative">
+            <div className="relative z-10 space-y-10">
+              <div className="flex items-center justify-between">
+                <h3 className="text-2xl font-black text-slate-900 uppercase italic flex items-center gap-4">
+                  <div className="h-10 w-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
+                    <Zap className="h-6 w-6 text-white" />
+                  </div>
+                  AI Intelligence <span className="text-slate-300">/</span>{" "}
+                  Feedback
+                </h3>
+                <div className="px-3 py-1 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full text-[9px] font-black uppercase tracking-widest">
+                  Live Analysis
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                <FeedbackItem
+                  title="Decision Logic"
+                  desc="Logical flow in responses is above benchmark. Candidate treats sales scenarios as strategic operations rather than simple transactions."
+                  status="Elite"
+                />
+                <FeedbackItem
+                  title="Adaptive Quotient"
+                  desc="High degree of flexibility shown when handling complex customer objections in the AI-generated skill scenarios."
+                  status="Superior"
+                />
+              </div>
+            </div>
+            {/* Decorative BG */}
+            <div className="absolute -bottom-10 -right-10 text-[180px] font-black text-slate-50 select-none opacity-50 italic">
+              TF
+            </div>
+          </div>
         </div>
-      </main>
+      )}
       <TermsModal isOpen={showTerms} onClose={() => setShowTerms(false)} />
     </div>
   );
@@ -558,26 +547,43 @@ export default function CandidateDashboard() {
 function ScoreTile({
   label,
   score,
+  icon,
 }: {
   label: string;
   score: number | undefined;
+  icon: React.ReactNode;
 }) {
   const hasData = score !== undefined && score !== null;
   return (
     <div
-      className={`bg-white p-6 rounded-3xl border shadow-sm space-y-4 transition-colors group ${hasData ? "border-slate-200 hover:border-indigo-200" : "border-slate-100 opacity-60"}`}
+      className={`bg-white p-5 rounded-4xl border transition-all duration-300 group ${
+        hasData
+          ? "border-slate-100 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-500/5"
+          : "border-slate-100 opacity-60"
+      }`}
     >
-      <div className="flex justify-between items-start">
-        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-indigo-500 transition-colors">
-          {label}
-        </span>
-        <span className="text-xl font-black text-slate-900 italic">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <div
+            className={`h-8 w-8 rounded-lg flex items-center justify-center transition-colors ${
+              hasData
+                ? "bg-slate-50 text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-500"
+                : "bg-slate-50 text-slate-300"
+            }`}
+          >
+            {icon}
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-slate-900 transition-colors">
+            {label}
+          </span>
+        </div>
+        <span className="text-sm font-black text-slate-900 italic">
           {hasData ? `${score}%` : "--"}
         </span>
       </div>
-      <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+      <div className="h-1.5 w-full bg-slate-50 rounded-full overflow-hidden border border-slate-100">
         <div
-          className="h-full bg-indigo-600 transition-all duration-1500 ease-out"
+          className="h-full bg-indigo-600 transition-all duration-1500 ease-out shadow-[0_0_10px_rgba(99,102,241,0.5)]"
           style={{ width: `${hasData ? score : 0}%` }}
         />
       </div>
@@ -595,16 +601,16 @@ function FeedbackItem({
   status: string;
 }) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-4 group">
       <div className="flex items-center gap-3">
-        <h4 className="font-bold text-slate-900 text-sm uppercase tracking-tight">
+        <h4 className="font-black text-slate-900 text-sm uppercase italic tracking-tight group-hover:text-indigo-600 transition-colors">
           {title}
         </h4>
-        <span className="text-[8px] font-black uppercase bg-emerald-50 text-emerald-600 border border-emerald-100 px-2 py-0.5 rounded-md tracking-widest">
+        <span className="text-[8px] font-black uppercase bg-slate-50 text-slate-400 border border-slate-100 px-2 py-0.5 rounded-md tracking-widest">
           {status}
         </span>
       </div>
-      <p className="text-slate-500 text-xs leading-relaxed font-medium">
+      <p className="text-slate-500 text-xs leading-relaxed font-semibold">
         {desc}
       </p>
     </div>
@@ -616,30 +622,45 @@ function StatCard({
   value,
   icon,
   color = "text-slate-900",
+  unit = "",
+  trend = "",
 }: {
   label: string;
   value: number;
   icon: React.ReactNode;
   color?: string;
+  unit?: string;
+  trend?: string;
 }) {
   return (
-    <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-xs hover:shadow-md transition-all group flex flex-col items-center text-center">
-      <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center mb-4 group-hover:bg-indigo-50 transition-colors">
-        <svg
-          className="h-5 w-5 text-slate-400 group-hover:text-indigo-500"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          {icon}
-        </svg>
+    <div className="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-indigo-500/5 hover:-translate-y-1 transition-all duration-300 group">
+      <div className="flex items-center justify-between mb-5">
+        <div className="h-12 w-12 rounded-2xl bg-slate-50 flex items-center justify-center group-hover:bg-indigo-50 transition-colors duration-300">
+          <div className="text-slate-300 group-hover:text-indigo-500 transition-colors duration-300">
+            {icon}
+          </div>
+        </div>
+        {trend && (
+          <span className="text-[9px] font-black uppercase tracking-widest text-emerald-500 bg-emerald-50 px-2 py-1 rounded-md">
+            {trend}
+          </span>
+        )}
       </div>
-      <span className={`text-2xl font-black italic mb-1 ${color}`}>
-        {value}
-      </span>
-      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-        {label}
-      </span>
+      <div className="space-y-1">
+        <div className="flex items-baseline gap-1">
+          <span
+            className={`text-3xl font-black italic tracking-tighter ${color}`}
+          >
+            {value}
+          </span>
+          {unit && (
+            <span className="text-sm font-black text-slate-300">{unit}</span>
+          )}
+        </div>
+        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block group-hover:text-slate-600 transition-colors">
+          {label}
+        </span>
+      </div>
     </div>
   );
 }
@@ -665,76 +686,52 @@ function LockStepCard({
 
   return (
     <div
-      className={`p-8 rounded-[2.5rem] border flex flex-col items-center text-center space-y-6 transition-all ${
+      className={`p-10 rounded-[3rem] border flex flex-col items-center text-center space-y-8 transition-all duration-500 hover:-translate-y-2 ${
         isVerified
           ? "bg-white border-slate-100 opacity-60"
-          : "bg-white border-slate-200 shadow-xl shadow-slate-200/50 scale-105 z-10"
+          : "bg-white border-slate-200 shadow-2xl shadow-slate-200/50 scale-105 z-10"
       }`}
     >
       <div
-        className={`h-16 w-16 rounded-2xl flex items-center justify-center ${
+        className={`h-20 w-20 rounded-4xl flex items-center justify-center transition-transform duration-500 ${
           isVerified
             ? "bg-emerald-50 text-emerald-500"
-            : "bg-amber-50 text-amber-500"
+            : "bg-amber-50 text-amber-500 animate-pulse"
         }`}
       >
         {isVerified ? (
-          <svg
-            className="h-8 w-8"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M5 13l4 4L19 7"
-            />
-          </svg>
+          <CheckCircle2 className="h-10 w-10" />
         ) : (
-          <svg
-            className="h-8 w-8"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 15v2m0 0v2m0-2h2m-2 0H10m4-6a4 4 0 11-8 0 4 4 0 018 0z"
-            />
-          </svg>
+          <ShieldCheck className="h-10 w-10" />
         )}
       </div>
 
-      <div>
-        <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight mb-2">
+      <div className="space-y-3">
+        <h3 className="text-base font-black text-slate-900 uppercase tracking-tight italic">
           {title}
         </h3>
-        <p className="text-slate-500 text-xs font-medium leading-relaxed">
+        <p className="text-slate-500 text-[11px] font-semibold leading-relaxed">
           {description}
         </p>
       </div>
 
       {isVerified ? (
-        <div className="flex items-center gap-2 text-emerald-600 font-bold text-[10px] uppercase tracking-widest bg-emerald-50 px-4 py-2 rounded-full">
-          <div className="h-1 w-1 bg-emerald-500 rounded-full" />
-          Verified
+        <div className="flex items-center gap-2 text-emerald-600 font-black text-[10px] uppercase tracking-widest bg-emerald-50 px-5 py-2.5 rounded-full border border-emerald-100">
+          <div className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-pulse" />
+          Synchronized
         </div>
       ) : (
-        <div className="w-full space-y-3">
+        <div className="w-full space-y-4">
           <button
             onClick={onAction}
-            className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold uppercase tracking-widest text-[10px] hover:bg-indigo-600 transition-all active:scale-95 shadow-lg shadow-slate-200"
+            className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-600 transition-all active:scale-95 shadow-xl shadow-indigo-200/20"
           >
             {actionLabel}
           </button>
           {secondaryActionLabel && onSecondaryAction && (
             <button
               onClick={onSecondaryAction}
-              className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-indigo-600 transition-colors"
+              className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] hover:text-indigo-600 transition-colors"
             >
               {secondaryActionLabel}
             </button>
@@ -745,21 +742,38 @@ function LockStepCard({
   );
 }
 
-function StatusStep({ label, active, done }: { label: string; active: boolean; done: boolean }) {
+function StatusStep({
+  label,
+  active,
+  done,
+}: {
+  label: string;
+  active: boolean;
+  done: boolean;
+}) {
   return (
-    <div className={`p-4 rounded-2xl border transition-all ${
-      active 
-        ? 'bg-slate-900 border-slate-900 text-white' 
-        : 'bg-white border-slate-100 text-slate-400 opacity-60'
-    }`}>
+    <div
+      className={`p-4 rounded-2xl border transition-all duration-300 ${
+        active
+          ? "bg-slate-900 border-slate-900 text-white shadow-lg shadow-slate-900/10"
+          : "bg-white border-slate-100 text-slate-400 opacity-60"
+      }`}
+    >
       <div className="flex items-center gap-3">
-        <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-black ${
-          done ? 'bg-emerald-500 text-white' : 
-          active ? 'bg-white text-slate-900' : 'bg-slate-100 text-slate-400'
-        }`}>
-          {done ? <CheckCircle2 className="h-4 w-4" /> : '•'}
+        <div
+          className={`h-6 w-6 rounded-lg flex items-center justify-center text-[10px] font-black transition-colors ${
+            done
+              ? "bg-emerald-500 text-white"
+              : active
+                ? "bg-white text-slate-900"
+                : "bg-slate-50 text-slate-300"
+          }`}
+        >
+          {done ? <CheckCircle2 className="h-4 w-4" /> : "•"}
         </div>
-        <span className="text-[10px] font-black uppercase tracking-widest">{label}</span>
+        <span className="text-[10px] font-black uppercase tracking-widest">
+          {label}
+        </span>
       </div>
     </div>
   );

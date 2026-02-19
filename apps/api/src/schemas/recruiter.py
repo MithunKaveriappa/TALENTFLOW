@@ -30,6 +30,14 @@ class TeamInviteRequest(BaseModel):
 class TeamMemberUpdate(BaseModel):
     is_admin: bool
 
+class RecruiterAccountSettingsUpdate(BaseModel):
+    email_notifications: Optional[bool] = None
+    web_notifications: Optional[bool] = None
+    mobile_notifications: Optional[bool] = None
+    profile_visibility: Optional[str] = None
+    language: Optional[str] = None
+    timezone: Optional[str] = None
+
 class RecruiterStats(BaseModel):
     active_jobs_count: int
     total_hires_count: int
@@ -106,6 +114,7 @@ class ApplicationStatusUpdate(BaseModel):
 class JobInviteRequest(BaseModel):
     job_id: str
     message: Optional[str] = None
+    custom_role_title: Optional[str] = None
 
 class BulkApplicationStatusUpdate(BaseModel):
     application_ids: List[str]

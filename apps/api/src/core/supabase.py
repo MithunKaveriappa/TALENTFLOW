@@ -12,7 +12,7 @@ supabase = create_client(
 )
 
 # Async Client (Better for high-concurrency loops)
-async_supabase: AsyncClient = create_async_client(
+async_supabase: AsyncClient = AsyncClient(
     SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY,
     options=ClientOptions(

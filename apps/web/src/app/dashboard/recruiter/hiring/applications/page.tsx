@@ -16,12 +16,23 @@ import {
   Target,
   Zap,
   Clock,
+  Calendar,
+  Award,
+  Download,
+  Eye,
+  SlidersHorizontal,
+  ChevronRight,
+  MapPin,
+  Phone,
+  Mail,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
 import RecruiterSidebar from "@/components/RecruiterSidebar";
 import RejectionModal from "@/components/RejectionModal";
 import ApplicationHistoryModal from "@/components/ApplicationHistoryModal";
+import InterviewScheduler from "@/components/InterviewScheduler";
+import CandidateProfileModal from "@/components/CandidateProfileModal";
 
 interface Application {
   id: string;
@@ -34,13 +45,34 @@ interface Application {
     id: string;
     title: string;
     status: string;
+    location: string | null;
+    created_at: string;
   };
   candidate_profiles: {
     user_id: string;
     full_name: string;
     current_role: string | null;
     years_of_experience: number | null;
+    phone_number: string | null;
+    location: string | null;
+    gender: string | null;
+    birthdate: string | null;
+    university: string | null;
+    qualification_held: string | null;
+    graduation_year: number | null;
+    referral: string | null;
+    bio: string | null;
+    profile_photo_url: string | null;
+    email?: string | null;
+    resume_path?: string | null;
+    resume_url?: string | null;
   };
+  resume_data?: {
+    timeline: any;
+    education: any;
+    achievements: string[];
+    skills: string[];
+  } | null;
   profile_scores?: {
     final_score: number;
   } | null;
@@ -62,12 +94,46 @@ export default function ApplicationsPipelinePage() {
   const [loading, setLoading] = useState(true);
   const [selectedApps, setSelectedApps] = useState<string[]>([]);
   const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
-  const [historyModal, setHistoryModal] = useState<{ isOpen: boolean; appId: string; name: string }>({
+  const [isInterviewModalOpen, setIsInterviewModalOpen] = useState(false);
+  const [activeApplicationId, setActiveApplicationId] = useState<string | null>(
+    null,
+  );
+  const [historyModal, setHistoryModal] = useState<{
+    isOpen: boolean;
+    appId: string;
+    name: string;
+  }>({
     isOpen: false,
     appId: "",
     name: "",
   });
+  const [profileModal, setProfileModal] = useState<{
+    isOpen: boolean;
+    candidate: any | null;
+    resumeData: any | null;
+    jobTitle: string;
+    appliedDate: string;
+    score: number;
+    status: string;
+    initialTab?: string;
+    applicationId?: string;
+  }>({
+    isOpen: false,
+    candidate: null,
+    resumeData: null,
+    jobTitle: "",
+    appliedDate: "",
+    score: 0,
+    status: "",
+    initialTab: "resume",
+    applicationId: undefined,
+  });
   const [expandedJobs, setExpandedJobs] = useState<Record<string, boolean>>({});
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [sortOrder, setSortOrder] = useState<
+    "newest" | "name-asc" | "score-desc"
+  >("newest");
 
   const fetchApplications = useCallback(async () => {
     try {
@@ -80,15 +146,17 @@ export default function ApplicationsPipelinePage() {
       }
       const [data, profileData] = await Promise.all([
         apiClient.get("/recruiter/applications/pipeline", session.access_token),
-        apiClient.get("/recruiter/profile", session.access_token)
+        apiClient.get("/recruiter/profile", session.access_token),
       ]);
-      setApplications(data || []);
+
+      const appsData = data || [];
+      setApplications(appsData);
       setProfile(profileData);
-      
+
       // Initialize expanded state for all jobs
-      const jobs = Array.from(new Set((data || []).map((a: any) => a.job_id)));
+      const jobs = Array.from(new Set(appsData.map((a: any) => a.job_id)));
       const expanded: Record<string, boolean> = {};
-      jobs.forEach((id: any) => expanded[id] = true);
+      jobs.forEach((id: any) => (expanded[id] = true));
       setExpandedJobs(expanded);
     } catch (err) {
       console.error("Failed to fetch applications:", err);
@@ -101,6 +169,43 @@ export default function ApplicationsPipelinePage() {
     fetchApplications();
   }, [fetchApplications]);
 
+  const exportToCSV = () => {
+    if (filteredApplications.length === 0) return;
+
+    const headers = [
+      "Role",
+      "Location",
+      "Candidate",
+      "Contact",
+      "Applied Date",
+      "Stage",
+      "Score",
+    ];
+    const rows = filteredApplications.map((app) => [
+      app.jobs?.title || "N/A",
+      app.jobs?.location || "Remote",
+      app.candidate_profiles?.full_name || "Unknown",
+      app.candidate_profiles?.phone_number || "Hidden",
+      new Date(app.created_at).toLocaleDateString(),
+      app.status.toUpperCase(),
+      app.profile_scores?.final_score || 0,
+    ]);
+
+    const csvContent = [headers, ...rows].map((e) => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `TalentFlow_Candidates_${new Date().toISOString().split("T")[0]}.csv`,
+    );
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const toggleSelect = (id: string) => {
     setSelectedApps((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
@@ -108,11 +213,12 @@ export default function ApplicationsPipelinePage() {
   };
 
   const toggleJobExpansion = (jobId: string) => {
-    setExpandedJobs(prev => ({ ...prev, [jobId]: !prev[jobId] }));
+    setExpandedJobs((prev) => ({ ...prev, [jobId]: !prev[jobId] }));
   };
 
   const handleBulkStatusChange = async (status: string, feedback?: string) => {
-    if (selectedApps.length === 0) return;
+    const targets = activeApplicationId ? [activeApplicationId] : selectedApps;
+    if (targets.length === 0) return;
 
     try {
       const {
@@ -123,7 +229,7 @@ export default function ApplicationsPipelinePage() {
       await apiClient.post(
         "/recruiter/applications/bulk-status",
         {
-          application_ids: selectedApps,
+          application_ids: targets,
           status,
           feedback,
         },
@@ -132,33 +238,71 @@ export default function ApplicationsPipelinePage() {
 
       setIsRejectionModalOpen(false);
       setSelectedApps([]);
+      setActiveApplicationId(null);
       fetchApplications();
     } catch (err) {
       console.error("Failed to update statuses:", err);
     }
   };
 
+  // Filter application list based on search and status
+  const filteredApplications = applications.filter((app) => {
+    const nameMatch = (app.candidate_profiles?.full_name || "")
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
+    const roleMatch = (app.candidate_profiles?.current_role || "")
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
+    const jobMatch = (app.jobs?.title || "")
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
+    const statusMatch = filterStatus === "all" || app.status === filterStatus;
+
+    return (nameMatch || roleMatch || jobMatch) && statusMatch;
+  });
+
+  // Apply Sorting
+  const sortedApplications = [...filteredApplications].sort((a, b) => {
+    if (sortOrder === "newest")
+      return (
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+    if (sortOrder === "name-asc")
+      return (a.candidate_profiles?.full_name || "").localeCompare(
+        b.candidate_profiles?.full_name || "",
+      );
+    if (sortOrder === "score-desc")
+      return (
+        (b.profile_scores?.final_score || 0) -
+        (a.profile_scores?.final_score || 0)
+      );
+    return 0;
+  });
+
   // Grouping logic
-  const groupedApps: GroupedApplications = applications.reduce((acc, app) => {
-    const jobId = app.job_id;
-    if (!acc[jobId]) {
-      acc[jobId] = {
-        jobTitle: app.jobs.title,
-        jobStatus: app.jobs.status,
-        applications: [],
-      };
-    }
-    acc[jobId].applications.push(app);
-    return acc;
-  }, {} as GroupedApplications);
+  const groupedApps: GroupedApplications = sortedApplications.reduce(
+    (acc, app) => {
+      const jobId = app.job_id;
+      if (!acc[jobId]) {
+        acc[jobId] = {
+          jobTitle: app.jobs.title,
+          jobStatus: app.jobs.status,
+          applications: [],
+        };
+      }
+      acc[jobId].applications.push(app);
+      return acc;
+    },
+    {} as GroupedApplications,
+  );
 
   // Sorting within groups by Skill Match first, then Match Score
-  Object.values(groupedApps).forEach(group => {
+  Object.values(groupedApps).forEach((group) => {
     group.applications.sort((a: any, b: any) => {
       // Priority 1: Skill Match
       if (a.is_skill_match && !b.is_skill_match) return -1;
       if (!a.is_skill_match && b.is_skill_match) return 1;
-      
+
       // Priority 2: Match Score
       const scoreA = a.profile_scores?.final_score || 0;
       const scoreB = b.profile_scores?.final_score || 0;
@@ -184,9 +328,9 @@ export default function ApplicationsPipelinePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/30">
-      {/* Top Navigation Bar */}
-      <header className="bg-white/80 border-b border-slate-200 h-16 flex items-center justify-between px-8 sticky top-0 z-20 w-full backdrop-blur-md text-black">
+    <div className="flex flex-col">
+      {/* Top Navigation Bar - Now integrated without redundancy */}
+      <header className="bg-white/80 border-b border-slate-200 h-16 flex items-center justify-between px-8 sticky top-0 z-20 backdrop-blur-md text-black">
         <div className="flex items-center gap-4">
           <div className="flex items-center space-x-2 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-200">
             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
@@ -197,11 +341,13 @@ export default function ApplicationsPipelinePage() {
         </div>
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 rounded-xl border border-slate-200 shadow-sm cursor-pointer group hover:bg-white hover:border-slate-300 transition-all">
-            <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-[10px] text-white font-black shadow-lg">
+            <div className="w-8 h-8 bg-indigo-900 rounded-lg flex items-center justify-center text-[10px] text-white font-black shadow-lg">
               {profile?.full_name?.[0] || "R"}
             </div>
             <div className="flex flex-col">
-              <span className="text-[10px] font-black uppercase tracking-tighter text-slate-400">Recruiter</span>
+              <span className="text-[10px] font-black uppercase tracking-tighter text-slate-400">
+                Recruiter
+              </span>
               <span className="text-xs font-bold text-slate-900">
                 {profile?.full_name}
               </span>
@@ -210,204 +356,459 @@ export default function ApplicationsPipelinePage() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto p-8">
-        {/* Header Section */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-8">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-slate-900 text-white rounded-xl shadow-lg">
-                  <Users className="w-5 h-5" />
-                </div>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Candidate Tracking</span>
+      <main className="w-full mx-auto py-8">
+        {/* Top: Current Openings Section */}
+        <div className="mb-10">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-black text-slate-900 tracking-tight">
+              Current Openings{" "}
+              <span className="text-slate-300 ml-2">
+                ({Object.keys(groupedApps).length})
+              </span>
+            </h2>
+            <button className="text-[10px] font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-widest flex items-center gap-2 group">
+              See all{" "}
+              <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {Object.entries(groupedApps)
+              .slice(0, 4)
+              .map(([jobId, group]) => {
+                const totalApps = group.applications.length;
+                const today = new Date().toISOString().split("T")[0];
+                const todayApps = group.applications.filter((a) =>
+                  a.created_at.startsWith(today),
+                ).length;
+
+                // Calculate days left (fallback: 30 days from creation)
+                const createdAt = new Date(
+                  group.applications[0]?.jobs.created_at || Date.now(),
+                );
+                const deadline = new Date(
+                  createdAt.getTime() + 30 * 24 * 60 * 60 * 1000,
+                );
+                const daysLeft = Math.ceil(
+                  (deadline.getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+                );
+
+                return (
+                  <div
+                    key={jobId}
+                    className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all group/card cursor-pointer"
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-100 group-hover/card:rotate-6 transition-transform">
+                        <Briefcase className="w-4 h-4" />
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <span
+                          className={`text-[8px] font-black uppercase tracking-widest ${daysLeft < 5 ? "text-rose-500" : "text-slate-300"}`}
+                        >
+                          {daysLeft > 0 ? `${daysLeft}d left` : "Expired"}
+                        </span>
+                        <MoreVertical className="w-3 h-3 text-slate-200" />
+                      </div>
+                    </div>
+
+                    <h3 className="text-[12px] font-black text-slate-900 mb-1 group-hover/card:text-indigo-600 transition-colors uppercase italic tracking-tighter truncate">
+                      {group.jobTitle}
+                    </h3>
+                    <div className="flex items-center gap-2 text-slate-400 mb-4">
+                      <MapPin className="w-2.5 h-2.5" />
+                      <span className="text-[8px] font-black uppercase tracking-widest truncate">
+                        {group.applications[0]?.jobs.location || "Remote"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-end justify-between">
+                      <div>
+                        <span className="text-xl font-black text-slate-900 leading-none">
+                          {totalApps}
+                        </span>
+                        <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest ml-1">
+                          Apps
+                        </span>
+                      </div>
+                      <div
+                        className={`px-1.5 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest border ${
+                          todayApps > 0
+                            ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                            : "bg-slate-50 text-slate-400 border-slate-100"
+                        }`}
+                      >
+                        +{todayApps} today
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+
+        {/* Bottom: Candidates Section */}
+        <div className="bg-white rounded-4xl border border-slate-100 shadow-sm">
+          <div className="p-8 pb-4">
+            <h2 className="text-xl font-black text-slate-900 mb-6 tracking-tight">
+              Candidates
+            </h2>
+
+            <div className="flex flex-wrap items-center gap-3 mb-6">
+              <div className="flex-1 relative min-w-62.5">
+                <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                <input
+                  type="text"
+                  placeholder="Search name, role..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-100 pl-12 pr-4 py-3.5 rounded-xl text-[10px] font-bold text-slate-900 placeholder:text-slate-300 outline-none focus:bg-white focus:border-indigo-500 transition-all"
+                />
               </div>
-              <h1 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic">
-                Acquisition <span className="text-indigo-600">Pipeline</span>
-              </h1>
+
+              <div className="flex items-center gap-2">
+                <div className="relative group">
+                  <button className="flex items-center gap-2 px-4 py-3.5 bg-white border border-slate-100 rounded-xl text-slate-600 hover:bg-slate-50 transition-all">
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">
+                      {filterStatus === "all"
+                        ? "Filter"
+                        : filterStatus.replace("_", " ")}
+                    </span>
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </button>
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-slate-100 rounded-2xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-30 p-2">
+                    {[
+                      "all",
+                      "applied",
+                      "shortlisted",
+                      "interview_scheduled",
+                      "offered",
+                      "rejected",
+                      "closed",
+                    ].map((status) => (
+                      <button
+                        key={status}
+                        onClick={() => setFilterStatus(status)}
+                        className={`w-full text-left px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors ${
+                          filterStatus === status
+                            ? "bg-indigo-50 text-indigo-600"
+                            : "text-slate-500 hover:bg-slate-50"
+                        }`}
+                      >
+                        {status === "all"
+                          ? "All Stages"
+                          : status === "interview_scheduled"
+                            ? "Interview"
+                            : status === "closed"
+                              ? "Hired"
+                              : status}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="relative group">
+                  <button className="flex items-center gap-2 px-4 py-3.5 bg-white border border-slate-100 rounded-xl text-slate-600 hover:bg-slate-50 transition-all">
+                    <span className="text-[10px] font-black uppercase tracking-widest">
+                      {sortOrder === "newest"
+                        ? "Sort: Newest"
+                        : sortOrder === "name-asc"
+                          ? "A-Z"
+                          : "Top Score"}
+                    </span>
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </button>
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-slate-100 rounded-2xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-30 p-2">
+                    {[
+                      { l: "Newest", v: "newest" },
+                      { l: "A-Z", v: "name-asc" },
+                      { l: "Top Score", v: "score-desc" },
+                    ].map((s) => (
+                      <button
+                        key={s.v}
+                        onClick={() => setSortOrder(s.v as any)}
+                        className={`w-full text-left px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors ${
+                          sortOrder === s.v
+                            ? "bg-indigo-50 text-indigo-600"
+                            : "text-slate-500 hover:bg-slate-50"
+                        }`}
+                      >
+                        {s.l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="h-8 w-px bg-slate-100 mx-1" />
+                <button
+                  onClick={exportToCSV}
+                  className="flex items-center gap-2 px-5 py-3.5 bg-white border border-slate-100 rounded-xl text-slate-900 font-extrabold hover:bg-slate-50 transition-all shadow-sm active:scale-95"
+                >
+                  <Download className="w-3.5 h-3.5" strokeWidth={3} />
+                  <span className="text-[10px] font-black uppercase tracking-widest">
+                    Export
+                  </span>
+                </button>
+              </div>
             </div>
 
             {selectedApps.length > 0 && (
-              <div className="flex items-center gap-3 animate-in fade-in slide-in-from-right-4 duration-500 bg-white p-2 ml-auto rounded-2xl border border-slate-200 shadow-[0_20px_40px_-15px_rgba(15,23,42,0.1)]">
-                <div className="px-6">
-                  <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest leading-none">
-                    {selectedApps.length} Selected
-                  </span>
-                </div>
+              <div className="flex items-center gap-3 bg-indigo-50 p-3 rounded-xl border border-indigo-100 mb-6">
+                <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest px-3 border-r border-indigo-200">
+                  {selectedApps.length} Selected
+                </span>
                 <button
-                  disabled={!applications.filter(a => selectedApps.includes(a.id)).every(a => a.status === 'applied')}
+                  disabled={
+                    !applications
+                      .filter((a) => selectedApps.includes(a.id))
+                      .every((a) => a.status === "applied")
+                  }
                   onClick={() => handleBulkStatusChange("shortlisted")}
-                  className="bg-indigo-600 text-white font-black py-3 px-8 rounded-xl shadow-lg shadow-indigo-200 hover:bg-black transition-all flex items-center gap-2 disabled:opacity-20 uppercase text-[9px] tracking-widest"
+                  className="bg-indigo-600 text-white font-black py-2 px-4 rounded-lg hover:bg-slate-900 transition-all flex items-center gap-2 disabled:opacity-30 uppercase text-[8px] tracking-widest active:scale-95"
                 >
-                  <CheckCircle2 className="h-4 w-4" />
+                  <CheckCircle2 className="h-3 w-3" strokeWidth={3} />
                   Shortlist
                 </button>
                 <button
                   onClick={() => setIsRejectionModalOpen(true)}
-                  className="bg-red-50 text-red-600 font-black py-3 px-8 rounded-xl hover:bg-red-600 hover:text-white transition-all flex items-center gap-2 uppercase text-[9px] tracking-widest"
+                  className="bg-red-50 text-red-600 font-black py-2 px-4 rounded-lg hover:bg-red-600 hover:text-white transition-all flex items-center gap-2 uppercase text-[8px] tracking-widest active:scale-95 border border-red-100"
                 >
-                  <XCircle className="h-4 w-4" />
+                  <XCircle className="h-3 w-3" strokeWidth={3} />
                   Reject
                 </button>
               </div>
             )}
-        </div>
-
-        {/* Action Bar */}
-        <div className="flex flex-col md:flex-row gap-4 mb-10">
-          <div className="flex-1 relative group">
-            <Search className="absolute left-6 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-slate-900 transition-colors" />
-            <input
-              type="text"
-              placeholder="SEARCH CANDIDATES, SKILLS, OR ROLES..."
-              className="w-full pl-15 pr-6 py-5 bg-white border border-slate-200 rounded-3xl text-[11px] font-bold text-slate-900 uppercase tracking-[0.2em] placeholder:text-slate-200 focus:ring-8 focus:ring-slate-50 outline-none transition-all shadow-sm"
-            />
           </div>
-          <button className="px-10 py-5 bg-white border border-slate-200 rounded-3xl text-slate-900 font-black text-[10px] uppercase tracking-widest hover:border-slate-900 transition-all flex items-center gap-4 shadow-sm group">
-            <Filter className="h-4 w-4 group-hover:rotate-180 transition-transform duration-500" />
-            Filters
-          </button>
-        </div>
 
-        {/* Pipeline Groups */}
-        {Object.keys(groupedApps).length === 0 ? (
-          <div className="bg-white rounded-4xl p-24 text-center border border-slate-100 shadow-sm">
-            <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Users className="h-8 w-8 text-slate-300" />
-            </div>
-            <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">No candidates yet</h3>
-            <p className="text-slate-400 text-sm font-medium mb-8 max-w-sm mx-auto">
-              The pipeline is waiting. Try boosting your job visibility or sourcing candidates directly.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {Object.entries(groupedApps).map(([jobId, group]) => (
-              <div key={jobId} className="bg-white rounded-5xl shadow-sm border border-slate-200 overflow-hidden transition-all hover:shadow-[0_40px_80px_-15px_rgba(15,23,42,0.1)] mb-8">
-                {/* Job Header */}
-                <div 
-                  onClick={() => toggleJobExpansion(jobId)}
-                  className="p-10 bg-slate-50/50 cursor-pointer flex items-center justify-between group border-b border-slate-100"
-                >
-                  <div className="flex items-center gap-8">
-                    <div className="w-16 h-16 bg-white rounded-4xl shadow-sm flex items-center justify-center border border-slate-200 group-hover:bg-slate-900 transition-all duration-500 group-hover:rotate-6">
-                      <Briefcase className="h-7 w-7 text-slate-900 group-hover:text-white transition-colors" />
-                    </div>
-                    <div>
-                      <h2 className="text-2xl font-black text-slate-900 tracking-tighter uppercase italic">
-                        {group.jobTitle}
-                      </h2>
-                      <div className="flex items-center gap-6 mt-2">
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-                          {group.applications.length} APPLICANTS
+          <div className="overflow-x-auto min-h-87.5">
+            <table className="w-full text-left border-collapse min-w-212.5">
+              <thead>
+                <tr className="bg-slate-50 border-y border-slate-100">
+                  <th className="px-4 py-3 w-10">
+                    <div className="h-4 w-4 rounded border-2 border-slate-200" />
+                  </th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                    Role
+                  </th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                    Location
+                  </th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                    Candidate
+                  </th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                    Contact
+                  </th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                    Applied
+                  </th>
+                  <th className="px-4 py-3 text-[9px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
+                    Stage
+                  </th>
+                  <th className="px-4 py-3 w-12 text-right"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {sortedApplications.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={8}
+                      className="py-24 text-center text-slate-300 font-black uppercase text-[10px] tracking-widest"
+                    >
+                      No matching records found
+                    </td>
+                  </tr>
+                ) : (
+                  sortedApplications.map((app, idx) => (
+                    <tr
+                      key={app.id}
+                      className="group hover:bg-slate-50/50 transition-colors"
+                    >
+                      <td className="px-4 py-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedApps.includes(app.id)}
+                          onChange={() => toggleSelect(app.id)}
+                          className="h-4 w-4 rounded border-2 border-slate-200 text-indigo-600 transition-all cursor-pointer accent-indigo-600"
+                        />
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className="text-[10px] font-black text-indigo-600 uppercase italic tracking-tighter truncate max-w-30 block">
+                          {app.jobs?.title || "Role"}
                         </span>
-                        <div className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${group.jobStatus === 'active' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>
-                          {group.jobStatus}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className={`p-4 rounded-2xl transition-all ${expandedJobs[jobId] ? 'bg-slate-900 text-white shadow-xl shadow-slate-200' : 'bg-white text-slate-300 border border-slate-100'}`}>
-                    {expandedJobs[jobId] ? <ChevronUp className="h-6 w-6" /> : <ChevronDown className="h-6 w-6" />}
-                  </div>
-                </div>
-
-                {/* Applicants List */}
-                {expandedJobs[jobId] && (
-                  <div className="divide-y divide-slate-100 bg-white">
-                    {group.applications.map((app) => (
-                      <div key={app.id} className={`p-8 hover:bg-slate-50/40 transition-all flex items-center justify-between group/row border-b border-slate-50 relative ${app.is_skill_match ? 'overflow-hidden' : ''}`}>
-                        {app.is_skill_match && (
-                          <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-600 shadow-[0_0_20px_rgba(79,70,229,0.5)]" />
-                        )}
-                        <div className="flex items-center gap-8 relative z-10">
-                            <div className="relative">
-                              <input
-                                type="checkbox"
-                                checked={selectedApps.includes(app.id)}
-                                onChange={() => toggleSelect(app.id)}
-                                className="h-6 w-6 rounded-[10px] border-2 border-slate-200 text-slate-900 focus:ring-slate-900/10 transition-all cursor-pointer accent-slate-900"
-                              />
-                            </div>
-                            
-                            <div className="flex items-center gap-6">
-                              <div className="h-16 w-16 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center justify-center text-xl font-black text-slate-900 group-hover/row:scale-110 transition-transform duration-500">
-                                {(app.candidate_profiles?.full_name || "?").charAt(0)}
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-3 mb-1.5">
-                                  <h4 className="font-black text-slate-900 text-lg tracking-tighter uppercase italic">
-                                    {app.candidate_profiles?.full_name || "Anonymous Candidate"}
-                                  </h4>
-                                  <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-md tracking-widest ${
-                                    app.status === 'applied' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' :
-                                    app.status === 'shortlisted' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                                    'bg-slate-100 text-slate-500 border border-slate-200'
-                                  }`}>
-                                    {app.status}
-                                  </span>
-                                  {app.is_skill_match && (
-                                    <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-md tracking-widest bg-slate-900 text-white shadow-xl flex items-center gap-1.5">
-                                      <Zap className="h-3 w-3" />
-                                      Elite Match
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                  {app.candidate_profiles?.current_role || "Role Undisclosed"}
-                                  <div className="w-1 h-1 rounded-full bg-slate-200" />
-                                  {app.candidate_profiles?.years_of_experience || 0} Years Exp.
-                                </div>
-                              </div>
-                            </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest truncate max-w-20 block">
+                          {app.jobs?.location || "Remote"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-2">
+                          <div className="h-8 w-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-black text-[10px] uppercase shadow-sm shrink-0">
+                            {app.candidate_profiles?.full_name?.charAt(0) ||
+                              "?"}
                           </div>
-
-                          <div className="flex items-center gap-12">
-                            <div className="text-right">
-                              <div className="flex items-center gap-2 justify-end mb-1">
-                                <Target className="h-3 w-3 text-indigo-600" />
-                                <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Aptitude Score</span>
-                              </div>
-                              <div className="text-2xl font-black text-slate-900 tracking-tighter">
-                                {app.profile_scores?.final_score || 0}%
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 opacity-0 group-hover/row:opacity-100 transition-all translate-x-4 group-hover/row:translate-x-0">
-                              <button
-                                onClick={() => setHistoryModal({ 
-                                  isOpen: true, 
-                                  appId: app.id, 
-                                  name: app.candidate_profiles?.full_name || "Candidate"
-                                })}
-                                className="p-3 hover:bg-white rounded-xl transition-all border border-transparent hover:border-slate-200 hover:shadow-xl text-slate-400 hover:text-slate-900"
-                                title="Audit Trail"
-                              >
-                                <Clock className="h-5 w-5" />
+                          <div className="flex flex-col min-w-0">
+                            <div className="flex items-center gap-1">
+                              <button className="text-[11px] font-black text-slate-900 tracking-tight hover:text-indigo-600 transition-colors truncate">
+                                {app.candidate_profiles?.full_name}
                               </button>
-                              <button
-                                onClick={() => router.push(`/dashboard/recruiter/intelligence/search/${app.candidate_id}`)}
-                                className="p-3 hover:bg-slate-900 rounded-xl transition-all border border-transparent hover:border-slate-800 shadow-sm text-slate-400 hover:text-white"
-                                title="Candidate Intel"
-                              >
-                                <ExternalLink className="h-5 w-5" />
-                              </button>
+                              {app.is_skill_match && (
+                                <Zap className="w-2 h-2 text-indigo-600 fill-indigo-600 shrink-0" />
+                              )}
                             </div>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </main>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className="text-[9px] font-black text-slate-600 tracking-widest whitespace-nowrap">
+                          {app.candidate_profiles?.phone_number || "Hidden"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">
+                          {new Date(app.created_at).toLocaleDateString(
+                            "en-US",
+                            { month: "short", day: "numeric" },
+                          )}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span
+                          className={`px-3 py-1 rounded-md text-[8px] font-black uppercase tracking-widest border whitespace-nowrap block text-center ${
+                            app.status === "closed"
+                              ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                              : app.status === "applied"
+                                ? "bg-slate-50 text-slate-400 border-slate-100"
+                                : app.status === "shortlisted"
+                                  ? "bg-amber-50 text-amber-600 border-amber-100"
+                                  : app.status === "interview_scheduled"
+                                    ? "bg-cyan-50 text-cyan-600 border-cyan-100"
+                                    : app.status === "offered"
+                                      ? "bg-rose-50 text-rose-600 border-rose-100"
+                                      : app.status === "rejected"
+                                        ? "bg-red-50 text-red-600 border-red-100"
+                                        : "bg-slate-50 text-slate-400 border-slate-100"
+                          }`}
+                        >
+                          {app.status === "closed"
+                            ? "Hired"
+                            : app.status === "interview_scheduled"
+                              ? "Interview"
+                              : app.status.replace("_", " ")}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {["shortlisted", "applied"].includes(app.status) && (
+                            <button
+                              onClick={() => {
+                                setActiveApplicationId(app.id);
+                                setIsInterviewModalOpen(true);
+                              }}
+                              className="p-2 bg-white border border-slate-100 rounded-lg text-slate-400 hover:text-indigo-600 hover:border-indigo-100 shadow-sm"
+                              title="Schedule"
+                            >
+                              <Calendar className="h-4 w-4" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              setHistoryModal({
+                                isOpen: true,
+                                appId: app.id,
+                                name:
+                                  app.candidate_profiles?.full_name ||
+                                  "Candidate",
+                              });
+                            }}
+                            className="p-2 bg-white border border-slate-100 rounded-lg text-slate-400 hover:text-slate-900 shadow-sm"
+                            title="History"
+                          >
+                            <Clock className="h-4 w-4" />
+                          </button>
+
+                          <div className="relative group/menu">
+                            <button className="p-2 bg-white border border-slate-100 rounded-lg text-slate-400 hover:text-slate-900 shadow-sm">
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
+                            <div
+                              className={`absolute right-0 ${idx >= sortedApplications.length - 2 && idx > 0 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right"} w-48 bg-white border border-slate-100 rounded-2xl shadow-xl opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all z-40 p-2`}
+                            >
+                              <button
+                                onClick={() =>
+                                  setProfileModal({
+                                    isOpen: true,
+                                    candidate: app.candidate_profiles,
+                                    resumeData: app.resume_data,
+                                    jobTitle: app.jobs.title,
+                                    appliedDate: app.created_at,
+                                    score: app.profile_scores?.final_score || 0,
+                                    status: app.status,
+                                    initialTab: "application",
+                                    applicationId: app.id,
+                                  })
+                                }
+                                className="w-full text-left px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 hover:text-indigo-600 transition-colors flex items-center gap-2"
+                              >
+                                <Users className="w-3 h-3" /> View Profile
+                              </button>
+                              <button
+                                onClick={() =>
+                                  setProfileModal({
+                                    isOpen: true,
+                                    candidate: app.candidate_profiles,
+                                    resumeData: app.resume_data,
+                                    jobTitle: app.jobs.title,
+                                    appliedDate: app.created_at,
+                                    score: app.profile_scores?.final_score || 0,
+                                    status: app.status,
+                                    initialTab: app.candidate_profiles
+                                      .resume_path
+                                      ? "original_resume"
+                                      : "resume",
+                                    applicationId: app.id,
+                                  })
+                                }
+                                className="w-full text-left px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-colors flex items-center gap-2"
+                              >
+                                <Eye className="w-3 h-3" /> View Resume
+                              </button>
+                              {app.status !== "rejected" && (
+                                <>
+                                  <div className="h-px bg-slate-50 my-1 mx-2" />
+                                  <button
+                                    onClick={() => {
+                                      setActiveApplicationId(app.id);
+                                      setIsRejectionModalOpen(true);
+                                    }}
+                                    className="w-full text-left px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2"
+                                  >
+                                    <XCircle className="w-3 h-3" /> Reject
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
 
       <RejectionModal
         isOpen={isRejectionModalOpen}
-        onClose={() => setIsRejectionModalOpen(false)}
+        onClose={() => {
+          setIsRejectionModalOpen(false);
+          setActiveApplicationId(null);
+        }}
         onConfirm={(reason) => handleBulkStatusChange("rejected", reason)}
-        count={selectedApps.length}
+        count={activeApplicationId ? 1 : selectedApps.length}
       />
 
       <ApplicationHistoryModal
@@ -416,6 +817,40 @@ export default function ApplicationsPipelinePage() {
         applicationId={historyModal.appId}
         candidateName={historyModal.name}
       />
+
+      {isInterviewModalOpen && activeApplicationId && (
+        <InterviewScheduler
+          candidateName={
+            applications.find((a) => a.id === activeApplicationId)
+              ?.candidate_profiles.full_name || "Candidate"
+          }
+          onClose={() => {
+            setIsInterviewModalOpen(false);
+            setActiveApplicationId(null);
+          }}
+          applicationId={activeApplicationId}
+          onSuccess={() => {
+            setIsInterviewModalOpen(false);
+            setActiveApplicationId(null);
+            fetchApplications();
+          }}
+        />
+      )}
+
+      {profileModal.isOpen && profileModal.candidate && (
+        <CandidateProfileModal
+          isOpen={profileModal.isOpen}
+          onClose={() => setProfileModal({ ...profileModal, isOpen: false })}
+          candidate={profileModal.candidate}
+          resumeData={profileModal.resumeData}
+          jobTitle={profileModal.jobTitle}
+          appliedDate={profileModal.appliedDate}
+          score={profileModal.score}
+          status={profileModal.status}
+          initialTab={profileModal.initialTab}
+          applicationId={profileModal.applicationId}
+        />
+      )}
     </div>
   );
 }

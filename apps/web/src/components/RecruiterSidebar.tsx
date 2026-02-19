@@ -3,21 +3,21 @@
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { 
-  LayoutDashboard, 
-  Briefcase, 
-  Users, 
-  Search, 
-  MessageSquare, 
-  Settings, 
-  UsersRound, 
-  Compass, 
-  Zap, 
-  Globe, 
+import {
+  LayoutDashboard,
+  Briefcase,
+  Users,
+  MessageSquare,
+  Settings,
+  Bell,
+  UsersRound,
+  Compass,
+  Zap,
+  Globe,
   LogOut,
   ShieldCheck,
   Building2,
-  FileText
+  FileText,
 } from "lucide-react";
 
 interface RecruiterSidebarProps {
@@ -60,68 +60,119 @@ export default function RecruiterSidebar({
       label: "Overview",
       icon: <LayoutDashboard className="h-4 w-4" />,
       items: [
-        { label: "Dashboard", href: "/dashboard/recruiter", icon: <LayoutDashboard className="h-4 w-4" /> },
-        { label: "Messages", href: "/dashboard/recruiter/messages", icon: <MessageSquare className="h-4 w-4" />, locked: isLocked },
-      ]
+        {
+          label: "Dashboard",
+          href: "/dashboard/recruiter",
+          icon: <LayoutDashboard className="h-4 w-4" />,
+        },
+        {
+          label: "Notifications",
+          href: "/dashboard/recruiter/account/notifications",
+          icon: <Bell className="h-4 w-4" />,
+        },
+        {
+          label: "Messages",
+          href: "/dashboard/recruiter/messages",
+          icon: <MessageSquare className="h-4 w-4" />,
+          locked: isLocked,
+        },
+      ],
     },
     {
       label: "Hiring Hub",
       icon: <Briefcase className="h-4 w-4" />,
       items: [
-        { 
-          label: "Post a Job", 
-          href: "/dashboard/recruiter/hiring/jobs/new", 
-          icon: <Zap className="h-4 w-4" />, 
+        {
+          label: "Post a Job",
+          href: "/dashboard/recruiter/hiring/jobs/new",
+          icon: <Zap className="h-4 w-4" />,
           locked: isLocked,
-          description: "Strategic role creation with AI alignment"
+          description: "Strategic role creation with AI alignment",
         },
-        { 
-          label: "Jobs Posted", 
-          href: "/dashboard/recruiter/hiring/jobs", 
+        {
+          label: "Jobs Posted",
+          href: "/dashboard/recruiter/hiring/jobs",
           icon: <Briefcase className="h-4 w-4" />,
-          description: "Management interface for active, paused, and archived roles"
+          description:
+            "Management interface for active, paused, and archived roles",
         },
-        { 
-          label: "Applied", 
-          href: "/dashboard/recruiter/hiring/applications", 
+        {
+          label: "Applied",
+          href: "/dashboard/recruiter/hiring/applications",
           icon: <FileText className="h-4 w-4" />,
-          description: "An end-to-end tracking system for candidates"
+          description: "An end-to-end tracking system for candidates",
         },
-      ]
+      ],
     },
     {
       label: "Talent Hub",
       icon: <Users className="h-4 w-4" />,
       items: [
-        { 
-          label: "Candidate Pool", 
-          href: "/dashboard/recruiter/hiring/pool", 
-          icon: <UsersRound className="h-4 w-4" />, 
+        {
+          label: "Candidate Pool",
+          href: "/dashboard/recruiter/hiring/pool",
+          icon: <UsersRound className="h-4 w-4" />,
           locked: isLocked,
-          description: "Access to the global database of verified talent"
+          description: "Access to the global database of verified talent",
         },
-        { label: "Recommended", href: "/dashboard/recruiter/intelligence/recommendations", icon: <Zap className="h-4 w-4" />, locked: isLocked },
-        { label: "Search", href: "/dashboard/recruiter/intelligence/search", icon: <Search className="h-4 w-4" />, locked: isLocked },
-        { label: "Career GPS", href: "/dashboard/recruiter/intelligence/gps", icon: <Compass className="h-4 w-4" />, locked: isLocked },
-      ]
+        {
+          label: "Recommended",
+          href: "/dashboard/recruiter/intelligence/recommendations",
+          icon: <Zap className="h-4 w-4" />,
+          locked: isLocked,
+        },
+        {
+          label: "Career GPS",
+          href: "/dashboard/recruiter/intelligence/gps",
+          icon: <Compass className="h-4 w-4" />,
+          locked: isLocked,
+        },
+      ],
     },
     {
       label: "Organization",
       icon: <Building2 className="h-4 w-4" />,
       items: [
-        { label: "Employer Branding", href: "/dashboard/recruiter/organization/branding", icon: <Globe className="h-4 w-4" /> },
-        { label: "Feed", href: "/dashboard/recruiter/organization/community", icon: <Users className="h-4 w-4" /> },
-        teamRole === "admin" ? { label: "Team", href: "/dashboard/recruiter/organization/team", icon: <UsersRound className="h-4 w-4" /> } : null,
-      ].filter(Boolean) as { label: string; href: string; icon: React.ReactNode; locked?: boolean }[]
+        {
+          label: "Employer Branding",
+          href: "/dashboard/recruiter/organization/branding",
+          icon: <Globe className="h-4 w-4" />,
+        },
+        {
+          label: "Feed",
+          href: "/dashboard/recruiter/organization/community",
+          icon: <Users className="h-4 w-4" />,
+        },
+        teamRole === "admin"
+          ? {
+              label: "Team",
+              href: "/dashboard/recruiter/organization/team",
+              icon: <UsersRound className="h-4 w-4" />,
+            }
+          : null,
+      ].filter(Boolean) as {
+        label: string;
+        href: string;
+        icon: React.ReactNode;
+        locked?: boolean;
+      }[],
     },
     {
       label: "Account",
       icon: <Settings className="h-4 w-4" />,
       items: [
-        { label: "Profile", href: "/dashboard/recruiter/account/profile", icon: <Users className="h-4 w-4" /> },
-        { label: "Settings", href: "/dashboard/recruiter/account/settings", icon: <Settings className="h-4 w-4" /> },
-      ]
-    }
+        {
+          label: "Profile",
+          href: "/dashboard/recruiter/account/profile",
+          icon: <Users className="h-4 w-4" />,
+        },
+        {
+          label: "Settings",
+          href: "/dashboard/recruiter/account/settings",
+          icon: <Settings className="h-4 w-4" />,
+        },
+      ],
+    },
   ];
 
   return (
@@ -187,14 +238,17 @@ export default function RecruiterSidebar({
         {assessmentStatus && (
           <div className="bg-slate-900/50 rounded-2xl p-4 border border-slate-800/50 backdrop-blur-sm">
             <div className="flex items-center gap-2 mb-2">
-              <ShieldCheck className={`h-4 w-4 ${assessmentStatus === "completed" ? "text-emerald-400" : "text-amber-400"}`} />
+              <ShieldCheck
+                className={`h-4 w-4 ${assessmentStatus === "completed" ? "text-emerald-400" : "text-amber-400"}`}
+              />
               <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">
                 Verification Hub
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-[11px] text-slate-500 font-medium">
-                {assessmentStatus.charAt(0).toUpperCase() + assessmentStatus.slice(1)}
+                {assessmentStatus.charAt(0).toUpperCase() +
+                  assessmentStatus.slice(1)}
               </span>
               {assessmentStatus !== "completed" && (
                 <button
@@ -244,9 +298,7 @@ function SidebarLink({
         <div className="flex items-center gap-3">
           <div className="text-slate-500">{icon}</div>
           <div className="flex flex-col">
-            <span className="text-sm font-medium text-slate-500">
-              {label}
-            </span>
+            <span className="text-sm font-medium text-slate-500">{label}</span>
             {description && (
               <span className="text-[10px] text-slate-600 line-clamp-1">
                 {description}
@@ -264,20 +316,28 @@ function SidebarLink({
       <div
         className={`
         flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group
-        ${active 
-          ? "bg-indigo-600/10 text-indigo-400 shadow-sm" 
-          : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"}
+        ${
+          active
+            ? "bg-indigo-600/10 text-indigo-400 shadow-sm"
+            : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
+        }
       `}
       >
-        <div className={`transition-colors duration-200 ${active ? "text-indigo-400" : "text-slate-500 group-hover:text-slate-300"}`}>
+        <div
+          className={`transition-colors duration-200 ${active ? "text-indigo-400" : "text-slate-500 group-hover:text-slate-300"}`}
+        >
           {icon}
         </div>
         <div className="flex flex-col">
-          <span className={`text-sm font-medium transition-colors duration-200`}>
+          <span
+            className={`text-sm font-medium transition-colors duration-200`}
+          >
             {label}
           </span>
           {description && (
-            <span className={`text-[10px] leading-tight transition-colors duration-200 ${active ? "text-indigo-400/70" : "text-slate-500 group-hover:text-slate-400"}`}>
+            <span
+              className={`text-[10px] leading-tight transition-colors duration-200 ${active ? "text-indigo-400/70" : "text-slate-500 group-hover:text-slate-400"}`}
+            >
               {description}
             </span>
           )}
