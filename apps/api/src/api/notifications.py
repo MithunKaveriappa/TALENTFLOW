@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from src.core.dependencies import get_current_user
-from src.core.supabase import supabase
+from src.core.supabase import async_supabase as supabase
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
@@ -17,11 +17,11 @@ class NotificationResponse(BaseModel):
     is_read: bool
     created_at: datetime
 
-@router.get("/", response_model=List[NotificationResponse])
-def get_notifications(user: dict = Depends(get_current_user)):
+@router.get("", response_model=List[NotificationResponse])
+async def get_notifications(user: dict = Depends(get_current_user)):
     user_id = user["sub"]
     try:
-        res = supabase.table("notifications")\
+        res = await supabase.table("notifications")\
             .select("*")\
             .eq("user_id", user_id)\
             .order("created_at", desc=True)\
@@ -32,10 +32,10 @@ def get_notifications(user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.patch("/{notification_id}/read")
-def mark_as_read(notification_id: str, user: dict = Depends(get_current_user)):
+async def mark_as_read(notification_id: str, user: dict = Depends(get_current_user)):
     user_id = user["sub"]
     try:
-        supabase.table("notifications")\
+        await supabase.table("notifications")\
             .update({"is_read": True})\
             .eq("id", notification_id)\
             .eq("user_id", user_id)\
@@ -45,10 +45,10 @@ def mark_as_read(notification_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.patch("/read-all")
-def mark_all_as_read(user: dict = Depends(get_current_user)):
+async def mark_all_as_read(user: dict = Depends(get_current_user)):
     user_id = user["sub"]
     try:
-        supabase.table("notifications")\
+        await supabase.table("notifications")\
             .update({"is_read": True})\
             .eq("user_id", user_id)\
             .eq("is_read", False)\

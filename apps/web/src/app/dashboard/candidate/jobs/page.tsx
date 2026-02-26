@@ -117,10 +117,10 @@ export default function CandidateJobsPage() {
               Live Feed
             </div>
           </div>
-          <p className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
+          <div className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] flex items-center gap-2">
             <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
             Elite roles currently matching the TalentFlow ecosystem.
-          </p>
+          </div>
         </div>
 
         <div className="flex items-center gap-4">

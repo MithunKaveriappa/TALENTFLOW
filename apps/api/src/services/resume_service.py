@@ -20,49 +20,83 @@ class ResumeService:
         try:
             reader = PdfReader(io.BytesIO(file_res))
             text = ""
-            for page in reader.pages:
-                text += page.extract_text() + "\n"
+            for i, page in enumerate(reader.pages):
+                page_text = page.extract_text() or ""
+                text += page_text + "\n"
+                print(f"DEBUG: Page {i+1} extracted {len(page_text)} chars")
+            
+            text = text.strip()
+            print(f"DEBUG: TOTAL EXTRACTED: {len(text)} characters")
+            
+            if len(text) < 50:
+                print("WARNING: Very little text extracted. Is the PDF scanned/image-based?")
         except Exception as e:
-            print(f"Error extracting text: {str(e)}")
-            return {"skills": [], "timeline": [], "error": "PDF text extraction failed"}
+            print(f"CRITICAL PDF ERROR: {str(e)}")
+            return {"skills": [], "timeline": [], "error": f"PDF extraction failed: {str(e)}"}
 
         # Store raw text early so we have it even if AI fails
         await ResumeService._store_initial_text(user_id, text)
 
-        # 3. Call Groq if available (preferred)
+        # 3. Call Groq or OpenRouter if available (for redundancy)
         groq_key = os.getenv("GROQ_API_KEY")
-        if groq_key and len(groq_key) > 5:
+        openrouter_key = os.getenv("OPENROUTER_API_KEY")
+        
+        # Prefer Groq -> OpenRouter -> Gemini (Direct)
+        if (groq_key and len(groq_key) > 5) or (openrouter_key and len(openrouter_key) > 5):
             try:
-                from groq import Groq
-                client = Groq(api_key=groq_key)
-                completion = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "You are a resume parser. Output ONLY valid JSON."
-                        },
-                        {
-                            "role": "user",
-                            "content": f"Extract structured data from this resume. Keys: current_role (string), years_of_experience (integer), current_company (string), timeline (list of objects with role, company, start, end), career_gaps (count, details), achievements (list of strings), skills (list of strings), education (degree, institution, year). Resume: {text[:10000]}"
+                if groq_key:
+                    from groq import Groq
+                    client = Groq(api_key=groq_key)
+                    model_choice = "llama-3.3-70b-versatile"
+                else:
+                    client = httpx.AsyncClient(timeout=30.0) # We'll use direct HTTP for OpenRouter
+                    model_choice = "meta-llama/llama-3.3-70b-instruct"
+
+                prompt_content = f"Extract structured data from this resume. Keys: location, professional_summary, current_role, years_of_experience, current_company, timeline (list with role, company, start, end), achievements (list), skills (list), education (degree, institution, year). Resume: {text[:10000]}"
+                
+                if groq_key:
+                    completion = client.chat.completions.create(
+                        model=model_choice,
+                        messages=[
+                            {"role": "system", "content": "You are a resume parser. Output ONLY valid JSON."},
+                            {"role": "user", "content": prompt_content}
+                        ],
+                        response_format={"type": "json_object"}
+                    )
+                    parsed_data = json.loads(completion.choices[0].message.content)
+                else:
+                    # OpenRouter Call
+                    response = await client.post(
+                        "https://openrouter.ai/api/v1/chat/completions",
+                        headers={"Authorization": f"Bearer {openrouter_key}"},
+                        json={
+                            "model": model_choice,
+                            "messages": [{"role": "user", "content": f"{prompt_content}. Output ONLY valid JSON."}]
                         }
-                    ],
-                    response_format={"type": "json_object"}
-                )
-                parsed_data = json.loads(completion.choices[0].message.content)
+                    )
+                    res_json = response.json()
+                    content = res_json['choices'][0]['message']['content']
+                    # Clean markdown if any
+                    content = content.replace("```json", "").replace("```", "").strip()
+                    parsed_data = json.loads(content)
+                
                 await ResumeService._store_data(user_id, text, parsed_data)
                 return parsed_data
             except Exception as e:
-                print(f"Groq parsing failed: {str(e)}")
+                print(f"Third-party parsing failed (Groq/OpenRouter): {str(e)}")
 
         # 4. Call High-Fidelity AI Auditor (Gemini 3 Flash)
         if google_key:
             try:
                 genai.configure(api_key=google_key)
-                model = genai.GenerativeModel('gemini-3-flash-preview')
+                # Ensure model fallback if 'gemini-3-flash-preview' fails
+                try:
+                    model = genai.GenerativeModel('gemini-1.5-flash')
+                except:
+                    model = genai.GenerativeModel('gemini-pro')
                 
                 # Today's date for gap calculation logic
-                today = "February 19, 2026"
+                today = "February 24, 2026"
                 
                 prompt = f"""
                 Act as an Elite AI Talent Auditor and Data Architect for TalentFlow.
@@ -167,19 +201,30 @@ class ResumeService:
                 "ai_extraction_confidence": 0.95 # Tagging successful Gemini 3 Flash parse
             }
 
-            # Map Core Metadata
+            # Map Core Metadata with safe parsing
             if core.get("current_role"):
                 profile_updates["current_role"] = core.get("current_role")
+            elif parsed_data.get("current_role"):
+                profile_updates["current_role"] = parsed_data.get("current_role")
             
-            if core.get("total_years_experience") is not None:
-                profile_updates["years_of_experience"] = int(core.get("total_years_experience"))
+            # Robust years extraction
+            yoe = core.get("total_years_experience") or parsed_data.get("years_of_experience")
+            if yoe is not None:
+                try:
+                    # Handle "3", "3.5", 3, 3.5
+                    profile_updates["years_of_experience"] = int(float(str(yoe)))
+                except (ValueError, TypeError):
+                    profile_updates["years_of_experience"] = 0
             
             if core.get("current_company"):
                 profile_updates["current_company_name"] = core.get("current_company")
+            elif parsed_data.get("current_company"):
+                 profile_updates["current_company_name"] = parsed_data.get("current_company")
                 
             # Experience Band Mapping Logic for Assessment Engine
             years = profile_updates.get("years_of_experience", 0)
-            if core.get("is_fresher") or years < 1:
+            is_fresher = core.get("is_fresher", False)
+            if is_fresher or years < 1:
                 profile_updates["experience"] = "fresher"
             elif 1 <= years < 4:
                 profile_updates["experience"] = "mid"

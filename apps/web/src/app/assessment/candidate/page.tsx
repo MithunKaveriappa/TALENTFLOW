@@ -4,6 +4,16 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
+import { 
+  ChevronLeft, 
+  Mic, 
+  Send, 
+  ShieldAlert, 
+  Timer, 
+  SkipForward, 
+  Loader2,
+  ArrowRight
+} from "lucide-react";
 
 type Question = {
   id?: string;
@@ -198,11 +208,16 @@ export default function AssessmentExam() {
             setShowAadhaar(true);
           }
         } else {
+          // Update local session state to reflect the new step
+          if (session) {
+            setSession({
+              ...session,
+              current_step: (session.current_step || 0) + 1
+            });
+          }
           setCurrentQuestion(nextQ);
           setAnswer("");
           setTimeLeft(60);
-          // Refresh progress bar implicitly via current step from nextQ metadata if needed
-          // Removed redundant /start call to reduce latency
         }
       } catch (err) {
         console.error("Submission error:", err);
@@ -215,18 +230,19 @@ export default function AssessmentExam() {
 
   // Timer logic
   useEffect(() => {
+    if (showAadhaar || isBlocked || !currentQuestion || isFinishing || isLoading) return;
+
     if (timeLeft <= 0) {
       handleNext(true); // Auto-jump on timeout
       return;
     }
-    if (showAadhaar || isBlocked || !currentQuestion) return;
 
     const timer = setInterval(() => {
-      setTimeLeft((prev) => prev - 1);
+      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [timeLeft, currentQuestion, showAadhaar, isBlocked, handleNext]);
+  }, [timeLeft, currentQuestion, showAadhaar, isBlocked, isFinishing, isLoading, handleNext]);
 
   const handleAadhaarUpload = async () => {
     if (!aadhaarFile) return;
@@ -242,10 +258,12 @@ export default function AssessmentExam() {
       }
 
       const fileExt = aadhaarFile.name.split(".").pop();
-      const filePath = `aadhaar/${user.id}-${Date.now()}.${fileExt}`;
+      const bucket = "id-proofs";
+      const folder = "id-proofs";
+      const filePath = `${folder}/${user.id}-${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
-        .from("documents")
+        .from(bucket)
         .upload(filePath, aadhaarFile);
 
       if (uploadError) throw uploadError;
@@ -260,7 +278,7 @@ export default function AssessmentExam() {
         // Mark identity as verified in the profile
         await apiClient.patch(
           "/candidate/profile",
-          { identity_verified: true },
+          { identity_verified: true, identity_proof_path: filePath },
           authSession.access_token,
         );
 
@@ -284,38 +302,26 @@ export default function AssessmentExam() {
 
   if (isBlocked) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white rounded-3xl p-8 text-center shadow-2xl border-4 border-red-500">
-          <div className="h-20 w-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <svg
-              className="h-10 w-10 text-red-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 15v2m0 0v2m0-2h2m-2 0H10m11 3a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
+      <div className="min-h-screen bg-black flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-[#111] rounded-[32px] p-10 text-center shadow-2xl border border-red-900/30">
+          <div className="h-20 w-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-8">
+            <ShieldAlert size={40} className="text-red-500" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">
+          <h1 className="text-2xl font-black text-white mb-4 tracking-tight">
             Account Permanently Blocked
           </h1>
-          <p className="text-slate-600 mb-6">
+          <p className="text-gray-400 mb-8 leading-relaxed">
             A security violation (tab switching) was detected. Due to our
             high-trust policy, you are permanently disqualified from using
             TalentFlow.
           </p>
-          <div className="text-xs text-slate-400 bg-slate-50 p-4 rounded-xl border mb-6">
+          <div className="text-[10px] font-black tracking-widest text-red-500 bg-red-500/5 p-4 rounded-2xl border border-red-500/10 mb-8 uppercase">
             This action is irreversible.
           </div>
 
           <button
             onClick={handleLogout}
-            className="w-full py-3 text-slate-400 hover:text-slate-900 font-bold uppercase tracking-widest text-[10px] transition-colors"
+            className="w-full py-4 text-gray-500 hover:text-white font-black uppercase tracking-[0.3em] text-[10px] transition-all border border-white/5 rounded-2xl hover:bg-white/5"
           >
             LOGOUT SESSION
           </button>
@@ -326,33 +332,24 @@ export default function AssessmentExam() {
 
   if (showAadhaar) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
-        <div className="max-w-xl w-full bg-white rounded-3xl p-10 shadow-xl border border-slate-100 text-center">
-          <div className="h-16 w-16 bg-emerald-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <svg
-              className="h-8 w-8 text-emerald-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6">
+        <div className="max-w-xl w-full bg-[#111] rounded-[40px] p-12 shadow-2xl border border-white/5 text-center">
+          <div className="h-20 w-20 bg-blue-600/10 rounded-[20px] flex items-center justify-center mx-auto mb-8">
+            <div className="h-10 w-10 text-blue-500">
+               <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+               </svg>
+            </div>
           </div>
-          <h1 className="text-3xl font-extrabold text-slate-900 mb-4">
-            Assessment Complete!
+          <h1 className="text-4xl font-black text-white mb-4 tracking-tight">
+            Signals Captured.
           </h1>
-          <p className="text-slate-600 mb-8 leading-relaxed">
-            Your professional signals have been captured. To finalize your
-            high-trust profile, please upload a clear scan of your Aadhaar card
-            for ID verification.
+          <p className="text-gray-400 mb-10 leading-relaxed text-lg">
+            Your evaluation is complete. To finalize your high-trust profile, 
+            upload a clear scan of your Aadhaar card for ID verification.
           </p>
 
-          <div className="relative group mb-8">
+          <div className="relative group mb-10">
             <input
               type="file"
               accept="image/*,.pdf"
@@ -360,11 +357,11 @@ export default function AssessmentExam() {
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
             />
             <div
-              className={`border-2 border-dashed rounded-2xl p-10 transition-all ${aadhaarFile ? "border-emerald-500 bg-emerald-50" : "border-slate-200 bg-slate-50 group-hover:bg-slate-100"}`}
+              className={`border-2 border-dashed rounded-3xl p-12 transition-all ${aadhaarFile ? "border-blue-500 bg-blue-500/5" : "border-white/10 bg-white/5 group-hover:bg-white/10"}`}
             >
-              <div className="flex flex-col items-center gap-2">
+              <div className="flex flex-col items-center gap-4">
                 <svg
-                  className={`h-10 w-10 ${aadhaarFile ? "text-emerald-500" : "text-slate-400"}`}
+                  className={`h-12 w-12 ${aadhaarFile ? "text-blue-500" : "text-gray-600"}`}
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -376,12 +373,14 @@ export default function AssessmentExam() {
                     d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
                   />
                 </svg>
-                <span className="text-sm font-semibold text-slate-700">
-                  {aadhaarFile ? aadhaarFile.name : "Select your ID Document"}
-                </span>
-                <span className="text-xs text-slate-400">
-                  PDF, JPG, or PNG (Max 5MB)
-                </span>
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm font-black text-white tracking-wide">
+                    {aadhaarFile ? aadhaarFile.name : "Secure Document Upload"}
+                  </span>
+                  <span className="text-[10px] font-bold text-gray-500 tracking-widest uppercase">
+                    PDF, JPG, or PNG (MAX 5MB)
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -389,12 +388,12 @@ export default function AssessmentExam() {
           <button
             onClick={handleAadhaarUpload}
             disabled={!aadhaarFile || isUploading || isFinishing}
-            className={`w-full py-4 rounded-2xl font-bold text-white shadow-lg transition-all ${!aadhaarFile ? "bg-slate-300" : "bg-indigo-600 hover:bg-indigo-700 hover:-translate-y-0.5 shadow-indigo-200"}`}
+            className={`w-full py-5 rounded-2xl font-black text-sm tracking-[0.2em] transform transition-all active:scale-[0.98] ${!aadhaarFile ? "bg-gray-800 text-gray-500" : "bg-blue-600 text-white hover:bg-blue-500 shadow-xl shadow-blue-600/20"}`}
           >
             {isUploading
-              ? "Verifying..."
+              ? "ENCRYPTING..."
               : isFinishing
-                ? "Profile finalized!"
+                ? "PROFILE FINALIZED"
                 : "COMPLETE REGISTRATION"}
           </button>
         </div>
@@ -403,169 +402,197 @@ export default function AssessmentExam() {
   }
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Header with Progress & Timer */}
-      <div className="sticky top-0 z-20 bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-6 flex-1">
-          <div className="h-10 w-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-100">
-            <div className="h-5 w-5 rounded bg-white rotate-45" />
-          </div>
-          <div className="flex-1 max-w-md hidden md:block">
-            <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
-              <span>Assessment Progress</span>
-              <span>
-                Question {session?.current_step || 1} of{" "}
-                {session?.total_budget || "--"}
-              </span>
+    <div className="min-h-screen bg-[#0D0D0D] text-white selection:bg-blue-500 selection:text-white flex flex-col">
+      {/* Dynamic Header (Modern Chat Look) */}
+      <header className="sticky top-0 z-50 bg-[#0D0D0D]/90 backdrop-blur-xl border-b border-white/5 py-5 px-8 flex items-center justify-between">
+        <div className="flex items-center gap-6">
+          <button 
+            onClick={() => router.back()} 
+            className="p-2 -ml-2 text-gray-500 hover:text-white transition-colors rounded-full hover:bg-white/5"
+          >
+            <ChevronLeft size={24} />
+          </button>
+          
+          <div className="flex items-center gap-3.5">
+            <div className="h-11 w-11 bg-blue-600 rounded-[14px] flex items-center justify-center shadow-2xl shadow-blue-900/40">
+              <div className="h-5 w-5 bg-black rounded-md transform rotate-45" />
             </div>
-            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-indigo-600 transition-all duration-500"
-                style={{
-                  width: `${((session?.current_step || 0) / (session?.total_budget || 1)) * 100}%`,
-                }}
-              />
-            </div>
+            <span className="text-xl font-black tracking-[0.1em] text-white">TALENTFLOW</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-8">
+          {/* Subtle Progress HUD */}
+          {session && !showAadhaar && (
+            <div className="hidden lg:flex flex-col items-end gap-1.5 pt-1">
+              <div className="flex items-center gap-3 text-xs font-black text-gray-400 tracking-[0.15em] uppercase">
+                <span>SIGNAL CYCLE: {session?.current_step || 1} / {session?.total_budget || "--"}</span>
+              </div>
+              <div className="h-1.5 w-48 bg-white/5 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-blue-600 transition-all duration-500 ease-out shadow-[0_0_8px_rgba(37,99,235,0.8)]"
+                  style={{ width: `${((session?.current_step || 0) / (session?.total_budget || 1)) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="h-8 w-[1px] bg-white/10 hidden md:block" />
+
           <button
             onClick={handleLogout}
-            className="hidden sm:flex items-center gap-2 text-slate-400 hover:text-red-500 transition-colors mr-2 group"
+            className="text-xs font-black tracking-[0.2em] text-gray-500 hover:text-white transition-all uppercase px-4 py-2 hover:bg-white/5 rounded-lg"
           >
-            <svg
-              className="h-4 w-4 group-hover:scale-110 transition-transform"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-              />
-            </svg>
-            <span className="text-[10px] font-black uppercase tracking-widest">
-              Logout
-            </span>
-          </button>
-
-          <div
-            className={`px-4 py-2 rounded-xl flex items-center gap-3 border ${timeLeft <= 10 ? "bg-red-50 border-red-100 text-red-600 animate-pulse" : "bg-slate-50 border-slate-100 text-slate-700"}`}
-          >
-            <svg
-              className="h-5 w-5 opacity-70"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <span className="font-mono text-lg font-bold">{timeLeft}s</span>
-          </div>
-          <button
-            onClick={() => handleNext(true)}
-            className="text-xs font-bold text-slate-400 hover:text-red-500 px-4 py-2 rounded-lg border border-slate-100 transition-all"
-          >
-            SKIP
+            LOGOUT
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* Main Exam Area */}
-      <main className="max-w-4xl mx-auto px-6 py-12 md:py-24">
+      {/* Main Wide-Screen Viewport */}
+      <main className="flex-1 w-full max-w-6xl mx-auto px-8 pt-10 pb-36 flex flex-col gap-10">
+        
+        {/* Security Warning Banner */}
         {warning && (
-          <div className="mb-8 p-4 bg-orange-50 border border-orange-100 text-orange-800 rounded-2xl flex items-start gap-4 animate-in fade-in slide-in-from-top-4">
-            <svg
-              className="h-6 w-6 shrink-0"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
-            </svg>
-            <p className="text-sm font-semibold">{warning}</p>
-            <button
-              onClick={() => setWarning(null)}
-              className="text-orange-900 ml-auto"
+          <div className="w-full bg-red-950/30 border border-red-500/30 rounded-2xl p-4 flex items-center gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="h-10 w-10 flex items-center justify-center bg-red-500/20 rounded-xl text-red-500 shrink-0">
+              <ShieldAlert size={20} />
+            </div>
+            <div className="flex-1">
+              <p className="text-xs font-black text-red-400 tracking-widest uppercase mb-0.5">Integrity Guard Alert</p>
+              <p className="text-sm font-bold text-red-200/70 leading-tight">{warning}</p>
+            </div>
+            <button 
+              onClick={() => setWarning(null)} 
+              className="p-2 text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
             >
               &times;
             </button>
           </div>
         )}
 
-        <div className="space-y-8">
-          <div className="space-y-2">
-            <span className="text-xs font-black text-indigo-500 uppercase tracking-[0.2em]">
-              Evaluation Case
-            </span>
-            <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 leading-[1.2]">
-              {currentQuestion?.text || "Preparing your case..."}
-            </h1>
+        {/* Dynamic Chat Content Area */}
+        <div className="relative flex-1 flex flex-col gap-8">
+          
+          {/* Top Right "Action Cluster" to match image's "start" button layout */}
+          <div className="flex justify-end pr-2">
+            {!isLoading && currentQuestion && (
+              <div className="flex items-center gap-3">
+                 <div className="bg-white/5 border border-white/5 rounded-2xl px-5 py-2.5 flex items-center gap-3">
+                    <Timer size={14} className={timeLeft <= 10 ? "text-red-500 animate-pulse" : "text-gray-500"} />
+                    <span className={`font-mono text-sm font-black ${timeLeft <= 10 ? "text-red-500" : "text-white"}`}>
+                       {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, "0")}
+                    </span>
+                 </div>
+                 
+                 <button 
+                  onClick={() => handleNext(true)}
+                  className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-2xl font-black text-sm tracking-wide transition-all shadow-xl shadow-blue-900/20 active:scale-95"
+                >
+                  skip
+                </button>
+              </div>
+            )}
+            
+            {!currentQuestion && isLoading && (
+                 <div className="h-10 px-8 bg-blue-600/20 rounded-2xl flex items-center gap-3 text-blue-400 text-sm font-black">
+                    <Loader2 size={16} className="animate-spin" />
+                    PREPARING SIGNAL...
+                 </div>
+            )}
           </div>
 
-          <div className="relative">
-            <textarea
-              value={answer}
-              onChange={(e) => {
-                const val = e.target.value;
-                setAnswer(val);
-                if (val.toLowerCase().trim() === "logout") {
-                  handleLogout();
-                }
-              }}
-              placeholder="Type your professional response here... Be detailed yet precise. (Type 'logout' to exit)"
-              className="w-full h-64 md:h-80 bg-slate-50 border border-slate-200 rounded-3xl p-8 text-lg text-slate-800 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all placeholder:text-slate-400 resize-none shadow-sm"
-              disabled={isLoading || !currentQuestion}
-              autoFocus
-            />
-            <div className="absolute bottom-6 right-8 flex items-center gap-2 text-[10px] font-bold text-slate-400 bg-white/50 backdrop-blur px-3 py-1.5 rounded-full">
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              LIVE MONITORING ACTIVE
+          {/* Question Hub */}
+          <div className="w-full space-y-8 animate-in fade-in duration-700">
+            <div className="flex flex-col gap-3">
+               <div className="flex items-center gap-3">
+                 <div className="h-[2px] w-8 bg-blue-600" />
+                 <span className="text-xs font-black text-blue-600 tracking-[0.3em] uppercase">
+                    SYSTEM_ORIGIN: ASSESSMENT_DRIVERS
+                 </span>
+               </div>
+               
+               <h1 className="text-lg md:text-xl lg:text-2xl font-black text-white leading-[1.4] tracking-tight max-w-5xl">
+                {currentQuestion?.text || "Awaiting neural synchronization..."}
+               </h1>
             </div>
-          </div>
 
-          <div className="flex justify-end pt-4">
-            <button
-              onClick={() => handleNext(false)}
-              disabled={!answer.trim() || isLoading}
-              className="group flex items-center gap-4 bg-slate-900 hover:bg-indigo-600 text-white px-8 py-5 rounded-2xl font-black transition-all disabled:bg-slate-200 shadow-xl shadow-slate-200 hover:shadow-indigo-200 hover:-translate-y-1"
-            >
-              {isLoading ? "EVALUATING..." : "CONFIRM RESPONSE"}
-              <svg
-                className="h-5 w-5 group-hover:translate-x-1 transition-transform"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M14 5l7 7m0 0l-7 7m7-7H3"
-                />
-              </svg>
-            </button>
+            <div className="flex flex-wrap gap-3 py-2">
+              <div className="bg-white/5 border border-white/5 px-4 py-2 rounded-lg text-xs font-black text-gray-400 tracking-widest uppercase">
+                CATEGORY: {currentQuestion?.category || "Unknown"}
+              </div>
+              <div className="bg-white/5 border border-white/5 px-4 py-2 rounded-lg text-xs font-black text-gray-400 tracking-widest uppercase">
+                OBJECTIVE: {currentQuestion?.driver || "Evaluative"}
+              </div>
+              <div className="bg-blue-900/10 border border-blue-900/30 px-4 py-2 rounded-lg text-xs font-black text-blue-400 tracking-widest uppercase">
+                FRAMEWORK: STAR_MODEL
+              </div>
+            </div>
           </div>
         </div>
       </main>
 
-      <footer className="fixed bottom-0 left-0 right-0 p-6 pointer-events-none">
-        <div className="max-w-4xl mx-auto flex justify-between items-center text-[10px] font-bold text-slate-300 tracking-widest uppercase">
-          <span>TF-SHIELD v2.4a ENABLED</span>
-          <span>LATENCY: 24MS</span>
+      {/* Styled Sticky Footer with Chat Bar */}
+      <footer className="fixed bottom-0 left-0 right-0 p-8 pb-10 bg-gradient-to-t from-black via-black to-transparent pointer-events-none">
+        <div className="max-w-6xl mx-auto pointer-events-auto relative group">
+          <div className="absolute -inset-1 bg-gradient-to-r from-blue-600/20 to-blue-500/10 rounded-[28px] blur-xl opacity-0 group-focus-within:opacity-100 transition duration-700" />
+          
+          <div className="relative bg-[#0F0F0F] border border-white/10 group-focus-within:border-blue-500/40 rounded-[24px] overflow-hidden transition-all duration-300">
+            <textarea
+              autoFocus
+              disabled={isLoading || !currentQuestion}
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+              placeholder="Type your strategic response..."
+              className="w-full h-32 md:h-40 bg-transparent p-6 pr-40 text-base md:text-lg font-bold text-white placeholder:text-gray-700 focus:outline-none resize-none transition-all"
+            />
+            
+            {/* Unified Control Bar on Right (Matching Image) */}
+            <div className="absolute right-6 bottom-6 flex items-center gap-5">
+              <button 
+                disabled 
+                className="p-3 text-gray-700 hover:text-gray-500 transition-colors cursor-not-allowed hidden sm:block"
+                title="Voice input disabled for security"
+              >
+                <Mic size={24} />
+              </button>
+              
+              <button
+                onClick={() => handleNext(false)}
+                disabled={!answer.trim() || isLoading}
+                className={`flex items-center gap-3 px-8 py-4 rounded-2xl font-black text-xs tracking-[0.2em] uppercase transition-all shadow-2xl ${
+                  !answer.trim() || isLoading 
+                    ? "bg-gray-800/10 text-gray-700" 
+                    : "bg-blue-600 text-white hover:bg-blue-500 hover:shadow-blue-600/20 shadow-blue-900/40"
+                }`}
+              >
+                {isLoading ? (
+                  <Loader2 className="animate-spin" size={18} />
+                ) : (
+                  <>
+                    <span className="hidden sm:inline">TRANSMIT SIGNAL</span>
+                    <Send size={18} />
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Minimal metadata footer */}
+          <div className="mt-6 flex justify-between items-center px-4 pb-4">
+             <div className="flex gap-6 text-xs font-black text-gray-600 tracking-[0.2em] uppercase">
+                <span className="flex items-center gap-2">
+                   <div className="h-1 w-1 bg-blue-600 rounded-full animate-pulse" />
+                   EVALUATION_MODE: ACTIVE
+                </span>
+                <span className="flex items-center gap-2">
+                   <div className="h-1 w-1 bg-gray-500 rounded-full" />
+                   ENCRYPTION: SHIELD-v3.0-AES-256
+                </span>
+             </div>
+             <span className="text-xs font-black text-gray-700 tracking-widest uppercase">
+                &copy; 2026 TALENTFLOW AI CORP
+             </span>
+          </div>
         </div>
       </footer>
     </div>

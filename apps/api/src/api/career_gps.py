@@ -42,9 +42,19 @@ async def generate_gps(request: GPSInput, user: dict = Depends(get_current_user)
     user_id = user["sub"]
     try:
         result = await CareerGPSService.generate_gps(user_id, request.model_dump())
+        # The result now contains 'source' identifying which AI was used
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        err_msg = str(e)
+        if "QUOTA_EXCEEDED" in err_msg:
+            raise HTTPException(
+                status_code=429, 
+                detail="Your AI quota for today has been reached. Please try again tomorrow."
+            )
+        if "AI_TIMEOUT" in err_msg:
+            raise HTTPException(status_code=504, detail="AI generation took too long. Please try again.")
+            
+        raise HTTPException(status_code=500, detail=err_msg)
 
 @router.patch("/milestone/{milestone_id}")
 def update_milestone_status(

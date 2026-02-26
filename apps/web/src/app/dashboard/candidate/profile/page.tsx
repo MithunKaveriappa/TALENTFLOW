@@ -46,6 +46,8 @@ interface ProfileData {
   linkedin_url?: string;
   portfolio_url?: string;
   job_type?: string;
+  expected_salary?: number;
+  location_tier?: string;
   assessment_status?: string;
   completion_score?: number;
   experience?: string;
@@ -603,6 +605,24 @@ export default function CandidateProfilePage() {
                   <option value="remote">Remote</option>
                   <option value="hybrid">Hybrid</option>
                 </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                  Expected Annual Salary (LPA / $)
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    name="expected_salary"
+                    value={profile?.expected_salary || ""}
+                    onChange={handleInputChange}
+                    className="w-full px-6 py-4 rounded-xl bg-slate-50 border border-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all font-bold text-slate-700"
+                    placeholder="e.g. 1200000"
+                  />
+                  <div className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-300 uppercase tracking-widest pointer-events-none">
+                    Target
+                  </div>
+                </div>
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-2">

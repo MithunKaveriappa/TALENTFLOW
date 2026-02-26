@@ -202,6 +202,11 @@ export default function CandidateHeader() {
                       <div className="flex justify-between gap-4 relative z-10">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1.5">
+                            {notif.type === "INTERVIEW_PROPOSED" && (
+                              <div className="h-6 w-6 bg-amber-50 rounded-lg flex items-center justify-center border border-amber-100/50">
+                                <Calendar className="h-3 w-3 text-amber-500" />
+                              </div>
+                            )}
                             <h4
                               className={`text-[13px] ${!notif.is_read ? "font-black" : "font-bold text-slate-700"} text-slate-900 leading-snug`}
                             >
@@ -230,6 +235,19 @@ export default function CandidateHeader() {
                                   UNREAD TRANSMISSION
                                 </span>
                               </div>
+                            )}
+
+                            {notif.type === "INTERVIEW_PROPOSED" && (
+                              <button
+                                onClick={() =>
+                                  router.push(
+                                    "/dashboard/candidate/notifications",
+                                  )
+                                }
+                                className="px-2 py-0.5 bg-indigo-600 text-white rounded text-[8px] font-black uppercase tracking-widest hover:bg-slate-900 transition-colors"
+                              >
+                                PICK SLOT
+                              </button>
                             )}
                           </div>
                         </div>

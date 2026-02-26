@@ -396,7 +396,11 @@ async def delete_job(job_id: str, user: dict = Depends(get_current_user)):
 @router.post("/jobs/generate-ai")
 async def generate_job_ai(data: JobAIPrompt, user: dict = Depends(get_current_user)):
     """Generate job details using AI."""
-    return await recruiter_service.generate_job_description(data.prompt, data.experience_band)
+    return await recruiter_service.generate_job_description(
+        data.prompt, 
+        data.experience_band, 
+        data.location
+    )
 
 @router.post("/details")
 async def update_details(data: CompanyDetailsUpdate, user: dict = Depends(get_current_user)):
@@ -481,3 +485,13 @@ async def handle_tab_switch(user: dict = Depends(get_current_user)):
         return {"status": "blocked", "message": "Security violation detected. You have been permanently blocked."}
     
     return {"status": "warning", "message": "Final warning: Tab switching is strictly prohibited."}
+
+@router.get("/talent-pool")
+async def get_talent_pool(user: dict = Depends(get_current_user)):
+    user_id = user["sub"]
+    # Check if blocked
+    blocked = supabase.table("blocked_users").select("*").eq("user_id", user_id).execute()
+    if blocked.data:
+        raise HTTPException(status_code=403, detail="Account blocked")
+        
+    return await recruiter_service.get_talent_pool()

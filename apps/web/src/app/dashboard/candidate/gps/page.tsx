@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
 import { motion } from "framer-motion";
 import confetti from "canvas-confetti";
+import { toast } from "sonner";
 import {
   Rocket,
   Target,
@@ -105,9 +106,11 @@ export default function CareerGPSPage() {
         inputs,
         session?.access_token,
       );
+      toast.success("Career GPS generated successfully!");
       await fetchGPS();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to generate GPS", err);
+      toast.error(err.message || "Failed to generate your Career GPS. Please try again.");
     } finally {
       setIsGenerating(false);
     }

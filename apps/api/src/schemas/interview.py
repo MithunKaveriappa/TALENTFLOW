@@ -40,7 +40,7 @@ class InterviewCancelRequest(BaseModel):
 
 class InterviewFeedbackRequest(BaseModel):
     feedback: str
-    next_status: str # 'offered' or 'rejected'
+    next_status: str # 'offered', 'rejected', or 'shortlisted' (for next round)
 
 class InterviewResponse(BaseModel):
     id: str

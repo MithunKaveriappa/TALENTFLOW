@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import {
   X,
@@ -8,6 +8,7 @@ import {
   Phone,
   MapPin,
   Calendar,
+  Clock,
   GraduationCap,
   User,
   Star,
@@ -20,7 +21,10 @@ import {
   BrainCircuit,
 } from "lucide-react";
 import { format } from "date-fns";
+import { apiClient } from "@/lib/apiClient";
+import { supabase } from "@/lib/supabaseClient";
 import InterviewScheduler from "./InterviewScheduler";
+import InterviewFeedbackModal from "./InterviewFeedbackModal";
 
 interface CandidateProfile {
   user_id: string;
@@ -63,6 +67,9 @@ interface ProfileModalProps {
   initialTab?: string;
   applicationId?: string;
   isDiscovery?: boolean;
+  interviews?: any[];
+  onRefresh?: () => void;
+  initialFeedbackOpen?: boolean;
 }
 
 interface ParsedResume {
@@ -90,9 +97,28 @@ export default function CandidateProfileModal({
   initialTab = "resume",
   applicationId,
   isDiscovery = false,
+  interviews = [],
+  onRefresh,
+  initialFeedbackOpen = false,
 }: ProfileModalProps) {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [showScheduler, setShowScheduler] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(initialFeedbackOpen);
+
+  // Find the active (scheduled or pending) interview
+  const activeInterview = interviews.find(i => 
+    i.status === "scheduled" || i.status === "pending_confirmation"
+  );
+  const completedInterviews = interviews.filter(i => i.status === "completed")
+    .sort((a, b) => b.round_number - a.round_number);
+  
+  const confirmedSlot = activeInterview?.interview_slots?.find((s: any) => s.is_selected);
+
+  useEffect(() => {
+    if (initialFeedbackOpen) {
+      setShowFeedbackModal(true);
+    }
+  }, [initialFeedbackOpen]);
 
   if (!isOpen) return null;
 
@@ -539,18 +565,155 @@ export default function CandidateProfileModal({
                     <Video className="w-8 h-8 text-indigo-600" />
                   </div>
                   <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight mb-2">
-                    Interview Scheduler
+                    Interview Intelligence
                   </h3>
-                  <p className="text-[10px] text-slate-500 font-medium max-w-60 leading-relaxed mb-8">
-                    Invite this candidate to a live video assessment or
-                    behavioral interview session.
-                  </p>
-                  <button
-                    onClick={() => setShowScheduler(true)}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] shadow-lg shadow-indigo-600/20 transition-all active:scale-95"
-                  >
-                    Schedule New Session
-                  </button>
+                  
+                  {activeInterview ? (
+                    <div className="max-w-sm w-full bg-white border border-slate-100 rounded-3xl p-8 shadow-xl shadow-slate-200/50 space-y-6">
+                      <div className="text-center">
+                        <div className={`mx-auto w-fit px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest mb-3 ${
+                          activeInterview.status === "scheduled" 
+                            ? (confirmedSlot && new Date(confirmedSlot.start_time) < new Date() ? "bg-slate-100 text-slate-600 border border-slate-200" : "bg-emerald-50 text-emerald-600 border border-emerald-100")
+                            : "bg-amber-50 text-amber-600 border border-amber-100"
+                        }`}>
+                          {activeInterview.status === "scheduled" 
+                            ? (confirmedSlot && new Date(confirmedSlot.start_time) < new Date() ? "● Conducted" : "● Confirmed") 
+                            : "○ Awaiting Candidate"}
+                        </div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
+                          {activeInterview.round_name}
+                        </p>
+                      </div>
+
+                      <div className={`p-4 rounded-2xl border ${
+                        activeInterview.status === "scheduled" 
+                          ? "bg-indigo-50 border-indigo-100/50" 
+                          : "bg-slate-50 border-slate-100"
+                      }`}>
+                        <div className="flex items-center gap-3 mb-2">
+                          <Clock className={`h-4 w-4 ${activeInterview.status === "scheduled" ? "text-indigo-600" : "text-slate-400"}`} />
+                          <p className={`text-[9px] font-black uppercase tracking-widest ${activeInterview.status === "scheduled" ? "text-indigo-700" : "text-slate-500"}`}>
+                            {activeInterview.status === "scheduled" ? "Scheduled Transmission" : "Proposed Slots"}
+                          </p>
+                        </div>
+                        <p className="text-[11px] font-black text-slate-700 leading-tight">
+                          {confirmedSlot ? (
+                            new Date(confirmedSlot.start_time).toLocaleString('en-US', {
+                              month: 'long',
+                              day: 'numeric',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              hour12: true,
+                              timeZoneName: 'short'
+                            })
+                          ) : (
+                            "Candidate is reviewing available slots..."
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="space-y-3">
+                        {activeInterview.status === "scheduled" && activeInterview.meeting_link && (() => {
+                          const now = new Date();
+                          const start = new Date(confirmedSlot?.start_time || "");
+                          const end = new Date(confirmedSlot?.end_time || "");
+                          // Allow join 5 minutes before start and until the end of the slot
+                          const isActive = now >= new Date(start.getTime() - 5 * 60000) && now <= end;
+
+                          if (isActive) {
+                            return (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const { data: { session } } = await supabase.auth.getSession();
+                                    if (session) {
+                                      apiClient.post(`/interviews/${activeInterview.id}/join-event`, {}, session.access_token);
+                                    }
+                                  } catch (err) {
+                                    console.error("Failed to signal join:", err);
+                                  }
+                                  window.open(activeInterview.meeting_link, "_blank");
+                                }}
+                                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] shadow-lg shadow-indigo-600/20 transition-all flex items-center justify-center gap-2"
+                              >
+                                <Video className="w-4 h-4" />
+                                Join Session
+                              </button>
+                            );
+                          }
+                          return (
+                            <div className="p-3 bg-slate-50 border border-slate-100 rounded-2xl text-center">
+                              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                                {now < start ? "Session Opening Soon" : "Session Expired"}
+                              </p>
+                            </div>
+                          );
+                        })()}
+                        
+                        {activeInterview.status === "scheduled" && (
+                          <button
+                            onClick={() => setShowFeedbackModal(true)}
+                            className="w-full bg-slate-900 hover:bg-slate-800 text-white py-4 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] shadow-2xl transition-all active:scale-95"
+                          >
+                            Log Evaluation
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-[10px] text-slate-500 font-medium max-w-60 leading-relaxed mb-8">
+                        Invite this candidate to a live video assessment or
+                        behavioral interview session.
+                      </p>
+                      <button
+                        onClick={() => setShowScheduler(true)}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] shadow-lg shadow-indigo-600/20 transition-all active:scale-95"
+                      >
+                        Schedule New Session
+                      </button>
+                    </>
+                  )}
+
+                  {/* Interview History */}
+                  {completedInterviews.length > 0 && (
+                    <div className="w-full max-w-sm mt-12 text-left">
+                      <div className="flex items-center gap-2 mb-6 border-b border-slate-100 pb-4">
+                        <ClipboardList className="w-3.5 h-3.5 text-slate-400" />
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          Historical Archives
+                        </h4>
+                      </div>
+                      <div className="space-y-4">
+                        {completedInterviews.map((int) => (
+                          <div 
+                            key={int.id}
+                            className="p-5 bg-slate-50/50 border border-slate-100/50 rounded-2xl relative overflow-hidden group hover:bg-white hover:border-indigo-100 transition-all"
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <span className="text-[8px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full uppercase tracking-widest">
+                                Round {int.round_number}
+                              </span>
+                              <span className="text-[8px] font-bold text-slate-400 uppercase">
+                                {format(new Date(int.updated_at), "MMM dd, yyyy")}
+                              </span>
+                            </div>
+                            <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight mb-2">
+                              {int.round_name}
+                            </p>
+                            {int.feedback && (
+                              <div className="relative mt-3 pl-4 border-l-2 border-slate-200">
+                                <p className="text-[11px] text-slate-600 font-medium italic leading-relaxed">
+                                  &quot;{int.feedback}&quot;
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -651,10 +814,26 @@ export default function CandidateProfileModal({
         <InterviewScheduler
           candidateName={candidate.full_name}
           applicationId={applicationId}
+          initialRoundNumber={interviews.length + 1}
           onClose={() => setShowScheduler(false)}
           onSuccess={() => {
             setShowScheduler(false);
-            onClose();
+            if (onRefresh) onRefresh();
+          }}
+        />
+      )}
+
+      {showFeedbackModal && activeInterview && applicationId && (
+        <InterviewFeedbackModal
+          isOpen={showFeedbackModal}
+          onClose={() => setShowFeedbackModal(false)}
+          interviewId={activeInterview.id}
+          applicationId={applicationId}
+          candidateName={candidate.full_name}
+          roundName={activeInterview.round_name}
+          onSuccess={() => {
+            setShowFeedbackModal(false);
+            if (onRefresh) onRefresh();
           }}
         />
       )}

@@ -1,8 +1,10 @@
 from typing import Dict, Any, List
 from src.core.supabase import supabase
 import google.generativeai as genai
-from src.core.config import GOOGLE_API_KEY
+from src.core.config import GOOGLE_API_KEY, OPENROUTER_API_KEY
 import json
+import httpx
+from google.api_core import exceptions as google_exceptions
 
 class CareerGPSService:
     @staticmethod
@@ -69,7 +71,7 @@ class CareerGPSService:
 
     @staticmethod
     async def generate_gps(user_id: str, candidate_info: Dict[str, Any]):
-        """Generates and persists the career GPS path."""
+        """Generates and persists the career GPS path using an AI Router (OpenAI/OpenRouter -> Gemini)."""
         # 1. Fetch current profile
         profile_res = supabase.table("candidate_profiles").select("*").eq("user_id", user_id).execute()
         if not profile_res.data:
@@ -88,22 +90,68 @@ class CareerGPSService:
             "long_term_goal": candidate_info["long_term_goal"]
         }).eq("user_id", user_id).execute()
         
-        # 3. Call Gemini
-        if not GOOGLE_API_KEY:
-            raise Exception("Gemini API Key missing")
-            
-        genai.configure(api_key=GOOGLE_API_KEY)
-        model = genai.GenerativeModel('gemini-3-flash-preview')
-        
         prompt = CareerGPSService.get_prompt(profile, candidate_info)
-        response = model.generate_content(prompt)
-        
+        gps_data = None
+        generation_source = "Gemini"
+
+        # 3. AI Router Execution (OpenRouter/OpenAI Priority)
+        # We use OpenRouter as a primary router because it can access OpenAI (gpt-4o-mini), 
+        # Claude (3.5-haiku), or Llama (3.1/3.3-70b) consistently.
+        if OPENROUTER_API_KEY and len(OPENROUTER_API_KEY) > 10:
+            try:
+                print(f"DEBUG: Attempting GPS Generation via OpenRouter (OpenAI Router)...")
+                async with httpx.AsyncClient(timeout=45.0) as client:
+                    response = await client.post(
+                        "https://openrouter.ai/api/v1/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                            "Content-Type": "application/json",
+                            "HTTP-Referer": "https://talentflow.ai", # Optional for OpenRouter
+                            "X-Title": "TalentFlow"
+                        },
+                        json={
+                            "model": "openai/gpt-4o-mini", # Optimized OpenAI model for logic-heavy JSON
+                            "messages": [
+                                {"role": "system", "content": "You are an elite Career Architect for IT Tech Sales. Always output valid JSON only."},
+                                {"role": "user", "content": prompt}
+                            ],
+                            "response_format": {"type": "json_object"}
+                        }
+                    )
+                    
+                    if response.status_code == 200:
+                        res_json = response.json()
+                        content = res_json['choices'][0]['message']['content']
+                        gps_data = json.loads(content)
+                        generation_source = "OpenRouter (OpenAI-Powered)"
+                    else:
+                        print(f"DEBUG: OpenRouter failed ({response.status_code}): {response.text}")
+            except Exception as e:
+                print(f"DEBUG: OpenRouter Route Trace Error: {str(e)}")
+
+        # 4. Fallback to Gemini if Router failed or was unavailable
+        if not gps_data:
+            if not GOOGLE_API_KEY:
+                raise Exception("Neither OpenRouter nor Gemini API keys are configured.")
+                
+            try:
+                print(f"DEBUG: Falling back to Gemini for GPS generation...")
+                genai.configure(api_key=GOOGLE_API_KEY)
+                model = genai.GenerativeModel('gemini-3-flash-preview')
+                
+                response = model.generate_content(prompt)
+                cleaned_text = response.text.strip().replace("```json", "").replace("```", "")
+                gps_data = json.loads(cleaned_text)
+                generation_source = "Gemini"
+                
+            except google_exceptions.ResourceExhausted:
+                raise Exception("QUOTA_EXCEEDED: AI daily limit reached on both Router and Gemini. Try again tomorrow.")
+            except Exception as e:
+                print(f"GPS Gemini Fallback Error: {str(e)}")
+                raise Exception(f"Failed to generate GPS. All AI routes failed.")
+
+        # 5. Persist to Database (Same as before)
         try:
-            # Clean response text and parse JSON
-            cleaned_text = response.text.strip().replace("```json", "").replace("```", "")
-            gps_data = json.loads(cleaned_text)
-            
-            # 4. Save to Database
             # Create the GPS parent entry (upsert)
             existing_gps = supabase.table("career_gps").select("id").eq("candidate_id", user_id).execute()
             
@@ -137,8 +185,12 @@ class CareerGPSService:
             
             supabase.table("career_milestones").insert(milestones).execute()
             
-            return {"status": "success", "gps_id": gps_id, "data": gps_data}
-            
+            return {
+                "status": "success", 
+                "gps_id": gps_id, 
+                "data": gps_data,
+                "source": generation_source
+            }
         except Exception as e:
-            print(f"GPS Generation Error: {str(e)}")
-            raise Exception("Failed to generate or parse Career GPS roadmap.")
+            print(f"Persistence Error: {str(e)}")
+            raise Exception("GPS generated but failed to save to timeline.")

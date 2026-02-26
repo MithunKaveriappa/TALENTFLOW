@@ -44,6 +44,7 @@ export default function NewJobPage() {
 
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
+  const [salaryLoading, setSalaryLoading] = useState(false);
   const [showAiAssistant, setShowAiAssistant] = useState(false);
 
   useEffect(() => {
@@ -101,6 +102,7 @@ export default function NewJobPage() {
         {
           prompt: aiPrompt,
           experience_band: formData.experience_band,
+          location: formData.location, // Passing location for localized salary
         },
         session.access_token,
       );
@@ -115,6 +117,38 @@ export default function NewJobPage() {
       console.error("AI Generation failed:", err);
     } finally {
       setAiLoading(false);
+    }
+  };
+
+  const handleRecalculateSalary = async () => {
+    if (!formData.title || !formData.location) return;
+    setSalaryLoading(true);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const aiResult = await apiClient.post(
+        "/recruiter/jobs/generate-ai",
+        {
+          prompt: `Recalculate ONLY salary for role "${formData.title}" in location "${formData.location}" for ${formData.experience_band} level.`,
+          experience_band: formData.experience_band,
+          location: formData.location,
+        },
+        session.access_token,
+      );
+
+      if (aiResult.salary_range) {
+        setFormData({
+          ...formData,
+          salary_range: aiResult.salary_range,
+        });
+      }
+    } catch (err) {
+      console.error("Salary recalculation failed:", err);
+    } finally {
+      setSalaryLoading(false);
     }
   };
 
@@ -356,14 +390,25 @@ export default function NewJobPage() {
                 />
               </Field>
               <Field label="Salary Range" icon={DollarSign}>
-                <input
-                  value={formData.salary_range}
-                  onChange={(e) =>
-                    setFormData({ ...formData, salary_range: e.target.value })
-                  }
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
-                  placeholder="e.g. $120k - $160k"
-                />
+                <div className="relative">
+                  <input
+                    value={formData.salary_range}
+                    onChange={(e) =>
+                      setFormData({ ...formData, salary_range: e.target.value })
+                    }
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-sm font-bold focus:ring-2 focus:ring-indigo-500 transition-all outline-none pr-10"
+                    placeholder="e.g. $120k - $160k"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRecalculateSalary}
+                    disabled={salaryLoading || !formData.location}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-indigo-600 hover:bg-white rounded-md transition-all shadow-sm disabled:opacity-30 disabled:grayscale"
+                    title="Recalculate salary based on location"
+                  >
+                    <Sparkles className={`w-3.5 h-3.5 ${salaryLoading ? "animate-spin" : ""}`} />
+                  </button>
+                </div>
               </Field>
             </div>
           </Section>

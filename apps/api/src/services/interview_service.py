@@ -199,6 +199,71 @@ class InterviewService:
             "updated_at": datetime.now().isoformat()
         }).eq("id", interview["application_id"]).execute()
 
+        # 4. Trigger Notifications based on Decision
+        from src.services.notification_service import NotificationService
+        if next_status == "offered":
+            NotificationService.create_notification(
+                user_id=interview["candidate_id"],
+                type="OFFER_RECEIVED",
+                title="Job Offer Received!",
+                message=f"Congratulations! You have received a job offer following your {interview['round_name']}.",
+                metadata={"application_id": interview["application_id"]}
+            )
+        elif next_status == "rejected":
+            NotificationService.create_notification(
+                user_id=interview["candidate_id"],
+                type="APPLICATION_REJECTED",
+                title="Application Update",
+                message=f"Thank you for interviewing for this position. The recruiter has decided not to move forward at this time.",
+                metadata={"application_id": interview["application_id"]}
+            )
+        elif next_status == "shortlisted":
+            NotificationService.create_notification(
+                user_id=interview["candidate_id"],
+                type="INTERVIEW_PASSED",
+                title="Interview Feedback Received",
+                message=f"Great news! You have passed the {interview['round_name']}. The recruiter will be scheduling the next round soon.",
+                metadata={"application_id": interview["application_id"]}
+            )
+
         return {"status": "completed", "decision": next_status}
+
+    @staticmethod
+    async def register_join_event(user_id: str, interview_id: str, role: str):
+        """
+        Notify the other party that someone has joined the meeting.
+        """
+        # 1. Fetch interview
+        res = supabase.table("interviews").select("*").eq("id", interview_id).execute()
+        if not res.data:
+            raise ValueError("Interview not found")
+        
+        interview = res.data[0]
+        
+        # 2. Determine recipient and message
+        from src.services.notification_service import NotificationService
+        
+        if role == "recruiter":
+            # Recruiter joined -> Notify candidate
+            recipient_id = interview["candidate_id"]
+            title = "Recruiter has Joined"
+            message = "Your interviewer has entered the meeting room and is waiting for you."
+            notif_type = "INTERVIEW_READY"
+        else:
+            # Candidate joined -> Notify recruiter
+            recipient_id = interview["recruiter_id"]
+            title = "Candidate holds Protocol"
+            message = f"Candidate for {interview['round_name']} has entered the meeting room."
+            notif_type = "CANDIDATE_JOINED"
+
+        NotificationService.create_notification(
+            user_id=recipient_id,
+            type=notif_type,
+            title=title,
+            message=message,
+            metadata={"interview_id": interview_id, "application_id": interview["application_id"]}
+        )
+        
+        return {"status": "event_registered"}
 
 interview_service = InterviewService()

@@ -238,6 +238,22 @@ export default function RecruiterOnboarding() {
             nextDetails.name = val;
           } else if (!nextDetails.website) {
             nextDetails.website = val;
+            
+            // Auto-generate bio from website
+            try {
+              addMessage("Synthesizing company biological signals from website...", "bot");
+              const res = await apiClient.post(
+                "/recruiter/generate-bio",
+                { website: val },
+                token,
+              );
+              if (res.bio) {
+                nextDetails.description = res.bio;
+                addMessage("Synthesized Narrative: " + res.bio, "bot");
+              }
+            } catch (err) {
+              console.error("Bio generation failed", err);
+            }
           } else if (!nextDetails.location) {
             nextDetails.location = val;
           } else if (!nextDetails.description) {
@@ -381,10 +397,17 @@ export default function RecruiterOnboarding() {
             "bot",
           );
           promptNextDetail(profile.companies || {});
-        } else if (currentStep === "ASSESSMENT_PROMPT") {
+        } else if (currentStep === "ASSESSMENT_PROMPT" || currentStep === "ASSESSMENT_CHAT") {
+          // Resuming from assessment state
           showAssessmentPrompt();
         } else if (currentStep === "COMPLETED") {
-          router.push("/dashboard/recruiter");
+          // If they came back here specifically to complete the assessment (after skipping)
+          if (profile.assessment_status !== "completed") {
+            setState("ASSESSMENT_PROMPT");
+            showAssessmentPrompt();
+          } else {
+            router.push("/dashboard/recruiter");
+          }
         }
       }
     }

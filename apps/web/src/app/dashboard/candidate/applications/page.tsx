@@ -11,7 +11,10 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
+  Calendar,
+  Video,
 } from "lucide-react";
+import CandidateInterviewConfirmModal from "@/components/CandidateInterviewConfirmModal";
 
 interface Application {
   id: string;
@@ -24,35 +27,51 @@ interface Application {
     interview_link?: string;
     interview_time?: string;
   };
+  active_interview?: {
+    id: string;
+    status: string;
+    meeting_link?: string;
+    interview_slots?: Array<{
+      id: string;
+      start_time: string;
+      end_time: string;
+      is_selected: boolean;
+    }>;
+  };
 }
 
 export default function CandidateApplicationsPage() {
   const router = useRouter();
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedInterviewId, setSelectedInterviewId] = useState<string | null>(
+    null,
+  );
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const loadData = async () => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) {
+        router.replace("/login");
+        return;
+      }
+
+      const appsData = await apiClient.get(
+        "/candidate/applications",
+        session.access_token,
+      );
+      setApplications(appsData);
+    } catch (err) {
+      console.error("Failed to load applications:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        if (!session) {
-          router.replace("/login");
-          return;
-        }
-
-        const appsData = await apiClient.get(
-          "/candidate/applications",
-          session.access_token,
-        );
-        setApplications(appsData);
-      } catch (err) {
-        console.error("Failed to load applications:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
     loadData();
   }, [router]);
 
@@ -139,17 +158,85 @@ export default function CandidateApplicationsPage() {
                 </div>
 
                 <div className="flex items-center gap-4">
-                  {app.status === "interview_scheduled" &&
-                    app.metadata?.interview_link && (
-                      <button
-                        onClick={() =>
-                          window.open(app.metadata?.interview_link, "_blank")
-                        }
-                        className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 transition"
-                      >
-                        Enter Meeting
-                      </button>
+                  {/* If an interview is scheduled, show the protocol button */}
+                  {app.active_interview?.status === "scheduled" &&
+                    app.active_interview?.meeting_link && (
+                      <div className="flex flex-col items-end gap-2">
+                        <div className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-[10px] font-black uppercase tracking-widest border border-indigo-100 animate-in fade-in zoom-in duration-500">
+                          <Clock className="h-3 w-3" />
+                          {(() => {
+                            const slot =
+                              app.active_interview?.interview_slots?.find(
+                                (s: any) => s.is_selected,
+                              );
+                            if (!slot) return "Pending Coord...";
+                            return new Date(slot.start_time).toLocaleString([], {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              timeZoneName: 'short'
+                            });
+                          })()}
+                        </div>
+                        {(() => {
+                          const slot = app.active_interview?.interview_slots?.find((s: any) => s.is_selected);
+                          const now = new Date();
+                          const start = new Date(slot?.start_time || "");
+                          const end = new Date(slot?.end_time || "");
+                          const isActive = now >= new Date(start.getTime() - 5 * 60000) && now <= end;
+
+                          if (isActive) {
+                            return (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const { data: { session } } = await supabase.auth.getSession();
+                                    if (session) {
+                                      apiClient.post(`/interviews/${app.active_interview?.id}/join-event`, {}, session.access_token);
+                                    }
+                                  } catch (err) {
+                                    console.error("Failed to signal join:", err);
+                                  }
+                                  app.active_interview?.meeting_link && window.open(
+                                    app.active_interview.meeting_link,
+                                    "_blank",
+                                  );
+                                }}
+                                className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-700 transition flex items-center gap-2 shadow-lg shadow-indigo-200 active:scale-95"
+                              >
+                                <Video className="h-3.5 w-3.5" />
+                                Initiate Meeting Protocol
+                              </button>
+                            );
+                          }
+                          return (
+                            <div className="px-4 py-2 bg-slate-50 text-slate-400 rounded-xl font-black text-[10px] uppercase tracking-widest border border-slate-100 italic">
+                              {now < start ? "Secure: Locked Until Start" : "Secure: Session Expired"}
+                            </div>
+                          );
+                        })()}
+                      </div>
                     )}
+
+                  {/* If an interview is pending confirmation from the candidate */}
+                  {app.active_interview?.status === "pending_confirmation" && (
+                    <div className="flex flex-col items-end gap-2 px-6">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-full border border-slate-100">
+                        Round {app.active_interview.round_number}: {app.active_interview.round_name}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setSelectedInterviewId(app.active_interview?.id || "");
+                          setIsModalOpen(true);
+                        }}
+                        className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-700 transition flex items-center gap-2 animate-pulse shadow-lg shadow-indigo-100"
+                      >
+                        <Calendar className="h-3.5 w-3.5" />
+                        Pick Slot
+                      </button>
+                    </div>
+                  )}
                   <button
                     onClick={() =>
                       router.push("/dashboard/candidate/applications/")
@@ -173,6 +260,15 @@ export default function CandidateApplicationsPage() {
           ))}
         </div>
       )}
+
+      <CandidateInterviewConfirmModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        interviewId={selectedInterviewId || ""}
+        onSuccess={() => {
+          loadData();
+        }}
+      />
     </div>
   );
 }

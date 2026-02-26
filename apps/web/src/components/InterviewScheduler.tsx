@@ -24,6 +24,7 @@ interface InterviewSchedulerProps {
   }[];
   onClose: () => void;
   onSuccess: () => void;
+  initialRoundNumber?: number;
 }
 
 export default function InterviewScheduler({
@@ -32,10 +33,11 @@ export default function InterviewScheduler({
   applications = [],
   onClose,
   onSuccess,
+  initialRoundNumber,
 }: InterviewSchedulerProps) {
   const [loading, setLoading] = useState(false);
   const [roundName, setRoundName] = useState("Technical Interview");
-  const [roundNumber, setRoundNumber] = useState(1);
+  const [roundNumber, setRoundNumber] = useState(initialRoundNumber || 1);
   const [format, setFormat] = useState<"virtual" | "onsite">("virtual");
   const [location, setLocation] = useState("");
   const [interviewer, setInterviewer] = useState("");
@@ -88,6 +90,12 @@ export default function InterviewScheduler({
       } = await supabase.auth.getSession();
       if (!session) return;
 
+      // Convert local datetime-local strings to ISO 8601 strings that include the current machine's timezone
+      const formattedSlots = slots.map(slot => ({
+        start_time: new Date(slot.start_time).toISOString(),
+        end_time: new Date(slot.end_time).toISOString()
+      }));
+
       await apiClient.post(
         "/interviews/propose",
         {
@@ -97,7 +105,7 @@ export default function InterviewScheduler({
           format: format,
           location: format === "onsite" ? location : null,
           interviewer_names: interviewers,
-          slots: slots,
+          slots: formattedSlots,
         },
         session.access_token,
       );
@@ -307,9 +315,14 @@ export default function InterviewScheduler({
           {/* Slot Selection */}
           <div className="space-y-6">
             <div className="flex items-center justify-between">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                Proposed Time Slots (Max 5)
-              </label>
+              <div>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
+                  Proposed Time Slots (Max 5)
+                </label>
+                <p className="text-[8px] font-bold text-indigo-500 uppercase tracking-widest mt-0.5">
+                  Operating in {Intl.DateTimeFormat().resolvedOptions().timeZone}
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={addSlot}

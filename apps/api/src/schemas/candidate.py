@@ -24,6 +24,8 @@ class CandidateProfileUpdate(BaseModel):
     linkedin_url: Optional[str] = None
     portfolio_url: Optional[str] = None
     location: Optional[str] = None
+    expected_salary: Optional[int] = None
+    location_tier: Optional[str] = None
     learning_links: Optional[List[Dict[str, str]]] = None
     career_interests: Optional[List[str]] = None
     learning_interests: Optional[List[str]] = None
@@ -35,6 +37,7 @@ class CandidateProfileUpdate(BaseModel):
     graduation_year: Optional[int] = None
     referral: Optional[str] = None
     identity_verified: Optional[bool] = None
+    identity_proof_path: Optional[str] = None
     education_history: Optional[List[Dict[str, Any]]] = None
     experience_history: Optional[List[Dict[str, Any]]] = None
     career_gap_report: Optional[Dict[str, Any]] = None
@@ -54,6 +57,7 @@ class CandidateStats(BaseModel):
     completion_score: int
     assessment_status: str
     identity_verified: bool
+    identity_proof_path: Optional[str] = None
     terms_accepted: bool
     account_status: str
 
@@ -77,3 +81,6 @@ class JobApplicationResponse(BaseModel):
     applied_at: datetime
     job_title: str
     company_name: str
+    feedback: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    active_interview: Optional[Dict[str, Any]] = None

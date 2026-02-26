@@ -1,18 +1,68 @@
 import json
 import random
 import asyncio
-from typing import List, Dict, Optional
+import httpx
+from typing import List, Dict, Optional, Any
 from datetime import datetime
 from src.core.supabase import async_supabase as supabase # Switch to Async
 from src.services.notification_service import NotificationService
 import google.generativeai as genai
-from src.core.config import GOOGLE_API_KEY
+from src.core.config import GOOGLE_API_KEY, OPENROUTER_API_KEY
 
 class AssessmentService:
     def __init__(self):
         genai.configure(api_key=GOOGLE_API_KEY)
         # Upgraded to Gemini 3 Flash (Preview) for Elite Performance & Reliability
         self.model = genai.GenerativeModel('gemini-3-flash-preview')
+        self._client = httpx.AsyncClient(timeout=30.0)
+
+    async def _call_ai_robust(self, prompt: str, system_message: str = "You are a professional assessment auditor.") -> Optional[str]:
+        """
+        High-precision AI caller with Gemini primary and OpenRouter (GPT-4o) fallback.
+        Ensures AI generation never fails at any cost as per elite requirements.
+        """
+        # 1. PRIMARY: Gemini 3 Flash
+        try:
+            # Use generation_config for more deterministic assessment outputs if needed
+            response = await asyncio.wait_for(self.model.generate_content_async(prompt), timeout=15.0)
+            if response and response.text:
+                return response.text.strip()
+        except Exception as e:
+            print(f"DEBUG: Gemini Primary Failed: {str(e)}. Falling back to OpenRouter...")
+
+        # 2. SECONDARY: OpenRouter (GPT-4o-mini)
+        if OPENROUTER_API_KEY:
+            try:
+                response = await self._client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                        "Content-Type": "application/json",
+                        "X-Title": "TalentFlow Business Assessment"
+                    },
+                    json={
+                        "model": "openai/gpt-4o-mini",
+                        "messages": [
+                            {"role": "system", "content": system_message},
+                            {"role": "user", "content": prompt}
+                        ],
+                        "temperature": 0.3 # Lower temperature for assessment consistency
+                    }
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    return data['choices'][0]['message']['content'].strip()
+                else:
+                    print(f"DEBUG: OpenRouter Secondary Failed ({response.status_code}): {response.text}")
+            except Exception as or_e:
+                print(f"DEBUG: OpenRouter Critical Failure: {str(or_e)}")
+
+        # 3. TERTIARY: Extreme Fallback (Retry Gemini one last time if it was a transient error)
+        try:
+             response = await asyncio.wait_for(self.model.generate_content_async(prompt), timeout=10.0)
+             return response.text.strip()
+        except:
+             return None
 
     async def get_or_create_session(self, user_id: str):
         # 1. Fetch profile to get experience band
@@ -111,30 +161,81 @@ class AssessmentService:
                 skills_exist = bool(sk_res.data and sk_res.data[0].get("skills"))
             except: pass
 
-            # 5. Iterative Selection based on Weights & Priority
-            # Priority: Resume -> Skills -> Behavioral -> Psychometric
+            # 4a. DYNAMIC REDISTRIBUTION
+            # If resume or skill data is missing, move their target budget to behavioral/psychometric
+            # to ensure the "Mixed" logic doesn't default to hardcoded behavioral at the end.
+            if not resume_data_exists or not skills_exist:
+                redistribute_sum = 0
+                if not resume_data_exists:
+                    redistribute_sum += targets.get("resume", 0)
+                    targets["resume"] = 0
+                if not skills_exist:
+                    redistribute_sum += targets.get("skill", 0)
+                    targets["skill"] = 0
+                
+                if redistribute_sum > 0:
+                    # Give half to behavioral and half to psychometric
+                    bh_add = redistribute_sum // 2
+                    psy_add = redistribute_sum - bh_add
+                    targets["behavioral"] += bh_add
+                    targets["psychometric"] += psy_add
+
+            # 5. Iterative Selection based on Weights & Priority (UNBIASED MIXING Feb 2026)
+            # Mixed selection based on remaining slots
+            remaining_categories = []
+            for cat, target in targets.items():
+                if counts.get(cat, 0) < target:
+                    remaining_categories.append(cat)
             
-            # Category: Resume
-            if counts["resume"] < targets["resume"] and resume_data_exists:
-                q = await self._try_generate_resume_question(user_id, counts["resume"])
-                if q and q.get("text"): return q
+            # 5a. AVOID CATEGORY REPETITION (for smoother "Mixed" feel)
+            last_cat = None
+            if responses_res.data:
+                # Get category of THE VERY LAST response
+                # Sort by created_at if possible, but they are returned in insert order usually
+                last_cat = responses_res.data[-1]["category"]
 
-            # Category: Skills
-            if counts["skill"] < targets["skill"] and skills_exist:
-                q = await self._try_generate_skill_question(user_id, band)
-                if q and q.get("text"): return q
+            # Randomized shuffle
+            random.shuffle(remaining_categories)
+            
+            # Move the last category to the end of the priority list if it's there
+            if last_cat in remaining_categories and len(remaining_categories) > 1:
+                remaining_categories.remove(last_cat)
+                remaining_categories.append(last_cat)
 
-            # Category: Behavioral
-            if counts["behavioral"] < targets["behavioral"]:
-                return await self._get_predefined_question(user_id, band, "behavioral")
+            # Execution map for dynamic selection
+            for cat in remaining_categories:
+                if cat == "resume" and resume_data_exists:
+                    q = await self._try_generate_resume_question(user_id, counts["resume"])
+                    if q and q.get("text"): return q
+                
+                if cat == "skill" and skills_exist:
+                    q = await self._try_generate_skill_question(user_id, band)
+                    if q and q.get("text"): return q
+                
+                if cat in ["behavioral", "psychometric"]:
+                    q = await self._get_predefined_question(user_id, band, cat)
+                    if q and q.get("text"): return q
 
-            # Category: Psychometric
-            if counts["psychometric"] < targets["psychometric"]:
-                return await self._get_predefined_question(user_id, band, "psychometric")
+            # Final Fallback if all AI/Seeded generation fails
+            # Instead of a hardcoded behavioral, try to fulfill ANY remaining category with a predefined pool
+            if remaining_categories:
+                # Try in order of remaining categories
+                for fallback_cat in remaining_categories:
+                    # If we can't do AI, try the predefined pool for that category or fallback to behavioral
+                    actual_cat = fallback_cat if fallback_cat in ["behavioral", "psychometric"] else "behavioral"
+                    q = await self._get_predefined_question(user_id, band, actual_cat)
+                    if q and q.get("text"):
+                        # Mark it as the intended category so counts increment correctly
+                        q["category"] = fallback_cat
+                        return q
 
-            # Fallback: If AI targets can't be met (missing data), fill with randomized seeded questions
-            choice = random.choice(["behavioral", "psychometric"])
-            return await self._get_predefined_question(user_id, band, choice)
+            # Absolute bottom fallback (should rarely be hit)
+            return {
+                "text": "Provide an overview of a situation where you had to manage a complex stakeholder environment. How did you ensure all parties reached consensus?",
+                "category": "behavioral", 
+                "driver": "prioritization", 
+                "difficulty": "medium"
+            }
 
         except Exception as e:
             print(f"ERROR calculating next question: {str(e)}")
@@ -240,150 +341,114 @@ class AssessmentService:
             
         res = await query.limit(20).execute()
         
+        # FIX: CONSISTENT MIXING Fallback to any band for this category if band-specific is exhausted
         if not res.data:
-            # Fallback to any band if current band is exhausted
-            res = await supabase.table("assessment_questions") \
+            fallback_query = supabase.table("assessment_questions") \
                 .select("*") \
-                .eq("category", cat) \
-                .limit(1).execute()
+                .eq("category", cat)
+            
+            if used_ids:
+                fallback_query = fallback_query.not_.in_("id", used_ids)
+            
+            res = await fallback_query.limit(20).execute()
         
         if not res.data:
-            return {"text": f"Tell me about a time you handled a difficult challenge in {cat} context.", "category": cat, "driver": "generic", "difficulty": "medium"}
+            # Absolute fallback if category is totally empty or exhausted
+            return {"text": f"Tell me about a time you handled a difficult challenge in {cat} context. How did you resolve it?", "category": cat, "driver": "generic", "difficulty": "medium"}
 
         q = random.choice(res.data)
+        # Safely handle potential column name differences (trait_driver vs driver, etc)
         return {
-            "id": q["id"],
-            "text": q["question_text"],
-            "category": q["category"],
-            "driver": q["trait_driver"],
-            "difficulty": q["difficulty_level"]
-        }
-        
-        # Get questions already asked to avoid repetition
-        used_q_res = await supabase.table("assessment_responses").select("question_id").eq("candidate_id", user_id).execute()
-        used_ids = [r["question_id"] for r in used_q_res.data if r.get("question_id")]
-        
-        # Select a question from DB
-        query = supabase.table("assessment_questions").select("*").eq("category", cat).eq("experience_band", band)
-        
-        res = await query.execute()
-        available = [q for q in res.data if q["id"] not in used_ids]
-            
-        if not available:
-            # Fallback if band specific is empty, try any band
-            fallback_res = await supabase.table("assessment_questions").select("*").eq("category", cat).execute()
-            available = [q for q in fallback_res.data if q["id"] not in used_ids]
-
-        if not available:
-            return {"status": "no_more_questions"}
-            
-        q = random.choice(available)
-        return {
-            "id": q["id"],
-            "text": q["question_text"],
-            "category": q["category"],
-            "driver": q["driver"],
-            "difficulty": q["difficulty"]
+            "id": q.get("id"),
+            "text": q.get("question_text", "Could not load question text"),
+            "category": q.get("category", cat),
+            "driver": q.get("trait_driver") or q.get("driver") or "generic",
+            "difficulty": q.get("difficulty_level") or q.get("difficulty") or "medium"
         }
 
     async def _ai_generate(self, prompt: str) -> Optional[str]:
-        try:
-            # Add strict timeout to prevent "Failed to fetch" on frontend
-            response = await asyncio.wait_for(self.model.generate_content_async(prompt), timeout=15.0)
-            return response.text.strip()
-        except asyncio.TimeoutError:
-            print("DEBUG: AI Generation timed out.")
-            return None
-        except Exception as e:
-            print(f"DEBUG: Gemini Generation Error: {str(e)}")
-            return None 
+        # Using Robust Caller (Gemini primary + GPT-4o-mini secondary)
+        return await self._call_ai_robust(prompt, "You are a professional assessment question generator.")
 
     async def evaluate_answer(self, user_id: str, question_id: Optional[str], category: str, answer: str, difficulty: str, metadata: dict = {}):
-        # 1. Handle Skip
+        # 1. Update Step Immediately to unlock next question (latency reduction)
+        session_res = await supabase.table("assessment_sessions").select("current_step").eq("candidate_id", user_id).execute()
+        if session_res.data:
+            new_step = session_res.data[0]["current_step"] + 1
+            await supabase.table("assessment_sessions").update({"current_step": new_step}).eq("candidate_id", user_id).execute()
+
+        # 2. Handle Skip
         if not answer or answer.strip() == "":
-            return await self._store_response(user_id, question_id, category, answer, 0, True, metadata)
+            return await self._store_response(user_id, question_id, category, answer, 0, True, metadata, skip_session_update=True)
 
-        # 2. Evaluation Method
-        # Shifted to full semantic AI evaluation to eliminate linguistic and keyword bias
+        # 3. AI Evaluation
         score, eval_meta = await self._evaluate_ai(answer, category, metadata)
-
-        # Merge original question metadata with AI evaluation results
         full_metadata = {**metadata, **eval_meta}
-        return await self._store_response(user_id, question_id, category, answer, score, False, full_metadata)
+        
+        return await self._store_response(user_id, question_id, category, answer, score, False, full_metadata, skip_session_update=True)
 
     async def _evaluate_ai(self, answer: str, category: str, q_metadata: dict):
         rubric = q_metadata.get('evaluation_rubric')
-        rubric_instruction = f"Evaluation Rubric: {rubric}" if rubric else "No specific rubric provided. Use the STAR (Situation, Task, Action, Result) framework to identify logical depth and evidence."
+        rubric_instruction = f"Target Rubric: {rubric}" if rubric else "No specific rubric provided. Use STAR framework."
 
-        # Elite AI Auditor Prompt Engineering (Feb 2026)
         prompt = f"""
-        Act as a Lead Behavioral Psychologist and Senior GTM Strategy Consultant for TalentFlow.
-        YOUR TASK: Conduct a rigorous, unbiased audit of a candidate's response to an IT Tech Sales assessment.
-
-        CONTEXT:
-        Category: {category}
-        Question: {q_metadata.get('text', 'Professional question')}
-        Candidate Answer: {answer}
-        
+        Role: Lead Psychometric Auditor.
+        Goal: Scientific, unbiased high-precision evaluation.
+        Category: {category.upper()}
+        Context: {q_metadata.get('text', 'Professional Question')}
+        Candidate: "{answer}"
         {rubric_instruction}
         
-        EVALUATION FRAMEWORK (0-6 SCALE):
-        - 6 (ELITE): Explicit evidence of STAR framework. Metrics-driven results. Deep strategic ownership.
-        - 4 (SOLID): Clear logical path. Specific examples provided. Demonstrates core competency.
-        - 2 (WEAK): Generic 'filler' content. No specific evidence. Passive language.
-        - 0 (NONE): Non-responsive or logical failure.
-
-        NEUTRALITY & BIAS GUARDRAILS:
-        1. SIGNAL OVER SYNTAX: Ignore non-standard grammar, regional idioms, or non-native phrasing. Focus on 'Commercial Logic'.
-        2. STAR GATE: If a candidate fails to mention a Result (even if the Action was good), cap the score at 3.
-        3. EVIDENCE ONLY: Score ONLY on provided text. Do not infer professional background.
+        SCORING (0-6):
+        6: Exemplary STAR coverage. Metrics. Outcome focus.
+        4: Proficient logical workflow. Demonstrated skill.
+        2: Marginal. Vague/theoretical. No evidence.
+        0: Non-responsive.
         
-        Return ONLY a JSON object: {{"score": 4, "reasoning": "Succinct 1-sentence audit trail", "framework_used": "STAR-detected/General-Logic"}}
+        GUARDRAILS: linguistic neutrality. Structure over syntax.
+        Output: JSON {{"score": int, "explanation": "string", "detected_framework": "string"}}
         """
         try:
-            res = await asyncio.wait_for(self.model.generate_content_async(prompt), timeout=18.0)
-            # Robust JSON cleaning
-            text = res.text.strip().replace('```json', '').replace('```', '').replace('json', '').strip()
+            # Use robust AI caller for high-precision evaluation
+            response_text = await self._call_ai_robust(prompt, "You are a Lead Psychometric Auditor.")
+            if not response_text:
+                raise Exception("AI Evaluation null response")
+
+            text = response_text.strip().replace('```json', '').replace('```', '').replace('json', '').strip()
+            if text.find('{') != -1 and text.rfind('}') != -1:
+                text = text[text.find('{'):text.rfind('}')+1]
             data = json.loads(text)
             return data.get("score", 0), {
-                "reasoning": data.get("reasoning", ""), 
-                "framework": data.get("framework_used", "N/A"),
-                "evaluator": "AI_AUDITOR_GEMINI_3"
+                "reasoning": data.get("explanation", ""), 
+                "framework": data.get("detected_framework", "N/A"),
+                "evaluator": "AUDITOR_V3"
             }
-        except asyncio.TimeoutError:
-            print("DEBUG: AI Evaluation timed out.")
-            return 3, {"reasoning": "Fallback score due to AI timeout (18s exceeded)", "evaluator": "FALLBACK"}
         except Exception as e:
-            print(f"DEBUG: AI Eval Error: {str(e)}")
-            return 3, {"reasoning": "Fallback score due to unexpected error", "evaluator": "FALLBACK"}
+            print(f"Auditor Delay/Error: {str(e)}")
+            return 3, {"reasoning": "Verification bypassed due to latency.", "evaluator": "FALLBACK"}
 
-    async def _store_response(self, user_id: str, q_id: Optional[str], category: str, answer: str, score: int, is_skipped: bool, metadata: dict):
-        # 1. Fetch current session for updates (Safe fetch)
-        session_res = await supabase.table("assessment_sessions").select("*").eq("candidate_id", user_id).execute()
-        if not session_res.data:
-            return {"status": "error", "message": "Session not found"}
+    async def _store_response(self, user_id: str, q_id: Optional[str], category: str, answer: str, score: int, is_skipped: bool, metadata: dict, skip_session_update: bool = False):
+        if not skip_session_update:
+            session_res = await supabase.table("assessment_sessions").select("*").eq("candidate_id", user_id).execute()
+            if session_res.data:
+                session = session_res.data[0]
+                new_step = session["current_step"] + 1
+                
+                # Confidence tracking
+                driver = metadata.get("driver")
+                confidence = session.get("driver_confidence", {})
+                if driver and score >= 4:
+                    confidence[driver] = confidence.get(driver, 0) + 1
+                
+                await supabase.table("assessment_sessions").update({
+                    "current_step": new_step,
+                    "driver_confidence": confidence
+                }).eq("candidate_id", user_id).execute()
         
-        session = session_res.data[0]
-        new_step = session["current_step"] + 1
-        
-        # 2. Update Driver Confidence if score > 4
-        driver = metadata.get("driver")
-        confidence = session.get("driver_confidence", {})
-        if driver and score >= 4:
-            curr_conf = confidence.get(driver, 0)
-            confidence[driver] = curr_conf + 1
-            
-        # 3. Update session
-        await supabase.table("assessment_sessions").update({
-            "current_step": new_step,
-            "driver_confidence": confidence
-        }).eq("candidate_id", user_id).execute()
-
-        # 4. Store the response
         res_data = {
             "candidate_id": user_id,
             "question_id": q_id,
-            "question_text": metadata.get("text"), # Store the actual question text
+            "question_text": metadata.get("text"), 
             "category": category,
             "driver": metadata.get("driver"),
             "raw_answer": answer,

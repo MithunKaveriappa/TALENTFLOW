@@ -109,6 +109,13 @@ export default function RecruiterSidebar({
       icon: <Users className="h-4 w-4" />,
       items: [
         {
+          label: "Talent Pool",
+          href: "/dashboard/recruiter/talent-pool",
+          icon: <Globe className="h-4 w-4" />,
+          locked: isLocked,
+          description: "Visualized view of total verified candidates",
+        },
+        {
           label: "Candidate Pool",
           href: "/dashboard/recruiter/hiring/pool",
           icon: <UsersRound className="h-4 w-4" />,

@@ -13,11 +13,13 @@ import {
   Briefcase,
   Zap,
   ShieldCheck,
+  Calendar,
 } from "lucide-react";
 
 interface LatestApplication {
   id: string;
   status: string;
+  feedback?: string;
   jobs?: {
     title: string;
     companies?: {
@@ -26,7 +28,14 @@ interface LatestApplication {
     };
   };
   interviews?: Array<{
+    status: string;
     meeting_link?: string;
+    interview_slots?: Array<{
+      id: string;
+      start_time: string;
+      end_time: string;
+      is_selected: boolean;
+    }>;
   }>;
 }
 
@@ -134,10 +143,10 @@ export default function CandidateDashboard() {
                 Awaiting Sync
               </div>
             </div>
-            <p className="text-slate-500 font-bold uppercase tracking-[0.3em] text-[10px] flex items-center gap-2">
+            <div className="text-slate-500 font-bold uppercase tracking-[0.3em] text-[10px] flex items-center gap-2">
               <div className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
               Complete all synchronization signals to unlock transmission.
-            </p>
+            </div>
           </header>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -428,21 +437,96 @@ export default function CandidateDashboard() {
                         />
                       </div>
 
-                      {latestApp.status === "interview_scheduled" && (
-                        <button
-                          onClick={() =>
-                            latestApp.interviews?.[0]?.meeting_link &&
-                            window.open(
-                              latestApp.interviews[0].meeting_link,
-                              "_blank",
-                            )
-                          }
-                          className="w-full mt-4 bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
-                        >
-                          <Video className="h-4 w-4" />
-                          Enter Interview Protocol
-                        </button>
-                      )}
+                      {/* Mission Deployment: Show if any interview is scheduled */}
+                      {(() => {
+                        const scheduledInterview = latestApp.interviews?.find(i => i.status === "scheduled");
+                        const pendingInvitation = latestApp.interviews?.find(i => i.status === "pending_confirmation");
+                        const activeInt = scheduledInterview || pendingInvitation;
+                        
+                        if (!activeInt) return null;
+
+                        return (
+                          <div className="mt-6 p-6 bg-slate-900 rounded-[2rem] border border-white/10 shadow-2xl relative overflow-hidden group/btn">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover/btn:bg-indigo-500/20 transition-all" />
+                            
+                            <div className="flex items-center justify-between mb-4 relative z-10">
+                              <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 bg-white/10 rounded-xl flex items-center justify-center border border-white/5">
+                                  <Calendar className="h-5 w-5 text-indigo-400" />
+                                </div>
+                                <div>
+                                  <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">
+                                    Mission Deployment
+                                  </p>
+                                  <p className="text-sm font-black text-white tracking-tight">
+                                    {(() => {
+                                      const slot = activeInt.interview_slots?.find((s: any) => s.is_selected);
+                                      if (!slot && activeInt.status === "pending_confirmation") return "Pending Your Confirmation";
+                                      if (!slot) return "Coordinates Pending...";
+                                      return new Date(slot.start_time).toLocaleString([], {
+                                        weekday: 'short',
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                        timeZoneName: 'short'
+                                      });
+                                    })()}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="h-8 w-8 rounded-full border-2 border-indigo-500/30 flex items-center justify-center">
+                                <div className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse" />
+                              </div>
+                            </div>
+
+                            {activeInt.status === "scheduled" ? (() => {
+                              const slot = activeInt.interview_slots?.find((s: any) => s.is_selected);
+                              const now = new Date();
+                              const start = new Date(slot?.start_time || "");
+                              const end = new Date(slot?.end_time || "");
+                              const isActive = now >= new Date(start.getTime() - 5 * 60000) && now <= end;
+
+                              if (isActive) {
+                                return (
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        const { data: { session } } = await supabase.auth.getSession();
+                                        if (session) {
+                                          apiClient.post(`/interviews/${activeInt.id}/join-event`, {}, session.access_token);
+                                        }
+                                      } catch (err) {
+                                        console.error("Failed to signal join:", err);
+                                      }
+                                      if (activeInt.meeting_link) {
+                                        window.open(activeInt.meeting_link, "_blank");
+                                      }
+                                    }}
+                                    className="w-full bg-indigo-600 text-white py-4 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-indigo-700 shadow-lg shadow-indigo-900/20 transition-all active:scale-[0.98] border border-indigo-400/20 relative z-10"
+                                  >
+                                    <Video className="h-4 w-4" />
+                                    Initiate Interview Protocol
+                                  </button>
+                                );
+                              }
+                              return (
+                                <div className="w-full bg-white/5 text-slate-400 py-4 rounded-xl font-black uppercase tracking-widest text-[10px] text-center border border-white/5 italic">
+                                  {now < start ? "Secure: Locked Until Start" : "Secure: Session Expired"}
+                                </div>
+                              );
+                            })() : (
+                              <button
+                                onClick={() => router.push("/dashboard/candidate/applications/")}
+                                className="w-full bg-white/10 text-white py-4 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-white/20 transition-all active:scale-[0.98] border border-white/10 relative z-10"
+                              >
+                                <Calendar className="h-4 w-4" />
+                                Confirm Slots in Transmission
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -520,15 +604,17 @@ export default function CandidateDashboard() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                {latestApp?.feedback && (
+                  <FeedbackItem
+                    title="Recruiter Note"
+                    desc={latestApp.feedback}
+                    status="Direct"
+                  />
+                )}
                 <FeedbackItem
                   title="Decision Logic"
                   desc="Logical flow in responses is above benchmark. Candidate treats sales scenarios as strategic operations rather than simple transactions."
                   status="Elite"
-                />
-                <FeedbackItem
-                  title="Adaptive Quotient"
-                  desc="High degree of flexibility shown when handling complex customer objections in the AI-generated skill scenarios."
-                  status="Superior"
                 />
               </div>
             </div>

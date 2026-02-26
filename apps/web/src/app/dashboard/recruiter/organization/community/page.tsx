@@ -52,7 +52,7 @@ export default function RecruiterCommunity() {
         </button>
       </header>
 
-      <CommunityFeed userRole="recruiter" />
+      <CommunityFeed />
     </div>
   );
 }

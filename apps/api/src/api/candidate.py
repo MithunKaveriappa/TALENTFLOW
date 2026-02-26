@@ -28,24 +28,28 @@ class EducationData(BaseModel):
     degree: str
     institution: str
     year: str
+    field: Optional[str] = None
+    gpa: Optional[str] = None
 
 class ExperienceData(BaseModel):
     role: str
     company: str
+    location: Optional[str] = "Remote"
     start: str
     end: str
     description: Optional[str] = None
+    key_achievements: Optional[List[str]] = []
 
 class GenerateResumeRequest(BaseModel):
     full_name: str
-    email: str
     phone: str
     location: str
-    linkedin: Optional[str] = None
-    bio: Optional[str] = None
-    education: EducationData
+    bio: str
+    education: List[EducationData]
     timeline: List[ExperienceData]
     skills: List[str]
+    linkedin: Optional[str] = None
+    portfolio: Optional[str] = None
     template: str = "professional"
 
 @router.get("/profile")
@@ -94,6 +98,18 @@ async def update_profile(
         # 1. Update Profile Fields
         update_data = request.model_dump(exclude_unset=True, by_alias=True)
         
+        # AI Location Tiering System
+        if "location" in update_data and update_data["location"]:
+            loc = update_data["location"].lower()
+            tier1 = ['bangalore', 'bengaluru', 'mumbai', 'delhi', 'hyderabad', 'chennai', 'kolkata', 'pune', 'ahmedabad']
+            tier2 = ['jaipur', 'lucknow', 'nagpur', 'indore', 'kochi', 'madurai', 'coimbatore', 'chandigarh', 'mysore', 'surat']
+            if any(city in loc for city in tier1):
+                update_data["location_tier"] = "Tier 1"
+            elif any(city in loc for city in tier2):
+                update_data["location_tier"] = "Tier 2"
+            else:
+                update_data["location_tier"] = "Tier 3"
+        
         # SILENT PROTECTION: If assessment is completed, we don't allow changing seniority signals.
         # Instead of erroring out (which blocks profile saves), we just strip them from the payload 
         # to ensure the save succeeds for other fields.
@@ -139,10 +155,10 @@ async def get_latest_application(user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/stats", response_model=CandidateStats)
-def get_stats(user: dict = Depends(get_current_user)):
+async def get_stats(user: dict = Depends(get_current_user)):
     user_id = user["sub"]
     try:
-        return CandidateService.get_candidate_stats(user_id)
+        return await CandidateService.get_candidate_stats(user_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -235,27 +251,34 @@ async def generate_resume(
             {"content-type": "application/pdf", "x-upsert": "true"}
         )
         
-        # 4. Update Profile
+        # 4. Update Profile (High-Fidelity Sync)
         await supabase.table("candidate_profiles").update({
             "resume_uploaded": True,
+            "resume_path": file_path,
             "full_name": request.full_name,
             "phone_number": request.phone,
             "location": request.location,
+            "professional_summary": request.bio,
             "bio": request.bio,
             "linkedin_url": request.linkedin,
+            "portfolio_url": request.portfolio,
             "skills": request.skills,
+            "education_history": [e.model_dump() for e in request.education],
+            "experience_history": [ex.model_dump() for ex in request.timeline],
             "current_role": request.timeline[0].role if request.timeline else None,
-            "current_company_name": request.timeline[0].company if request.timeline else None
+            "current_company_name": request.timeline[0].company if request.timeline else None,
+            "last_resume_parse_at": "now()",
+            "ai_extraction_confidence": 1.0
         }).eq("user_id", user_id).execute()
         
-        # 5. Store detailed data in resume_data table
+        # 5. Store forensic data in resume_data table
         await supabase.table("resume_data").upsert({
             "user_id": user_id,
-            "raw_text": f"Generated Resume Content:\n{str(resume_data_dict)}",
-            "timeline": [item.model_dump() for item in request.timeline],
+            "raw_text": f"User built resume manually.\nSummary: {request.bio}",
+            "raw_education": [e.model_dump() for e in request.education],
+            "raw_experience": [ex.model_dump() for ex in request.timeline],
             "skills": request.skills,
-            "education": request.education.model_dump(),
-            "achievements": [request.bio] if request.bio else []
+            "parsed_at": "now()"
         }).execute()
         
         return {"status": "resume_generated", "path": file_path}
@@ -288,13 +311,16 @@ async def verify_id(
     user: dict = Depends(get_current_user)
 ):
     user_id = user["sub"]
+    id_path = request.get("id_path")
     try:
         await supabase.table("candidate_profiles").update({
             "identity_verified": True,
+            "identity_proof_path": id_path,
             "onboarding_step": "AWAITING_TC"
         }).eq("user_id", user_id).execute()
-        return {"status": "id_uploaded"}
+        return {"status": "id_uploaded", "path": id_path}
     except Exception as e:
+        print(f"VERIFY ID ERROR: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/accept-tc")

@@ -1,22 +1,93 @@
 import json
 import random
 import httpx
+import asyncio
 from bs4 import BeautifulSoup
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from datetime import datetime
 from src.core.supabase import supabase
 import google.generativeai as genai
-from src.core.config import GOOGLE_API_KEY
+from src.core.config import GOOGLE_API_KEY, OPENROUTER_API_KEY
 
 class RecruiterService:
     def __init__(self):
         genai.configure(api_key=GOOGLE_API_KEY)
         # Migrated to Gemini 3 Flash (Preview) for Elite Recruitment Audits
         self.model = genai.GenerativeModel('gemini-3-flash-preview')
+        self._client = httpx.AsyncClient(timeout=30.0)
+
+    async def _call_ai(self, prompt: str, system_message: str = "You are a helpful recruitment assistant.") -> str:
+        """
+        Unified High-Precision AI Caller (Gemini primary + GPT-4o-mini secondary).
+        Ensures evaluation and generation never fail as per elite requirements.
+        """
+        # 1. PRIMARY: Gemini 3 Flash (Async)
+        try:
+            response = await asyncio.wait_for(self.model.generate_content_async(prompt), timeout=15.0)
+            if response and response.text:
+                return response.text.strip()
+        except Exception as e:
+            print(f"DEBUG: Recruiter Gemini Primary Failed: {str(e)}. Falling back to OpenRouter...")
+
+        # 2. SECONDARY: OpenRouter (GPT-4o-mini)
+        if OPENROUTER_API_KEY:
+            try:
+                response = await self._client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                        "Content-Type": "application/json",
+                        "X-Title": "TalentFlow"
+                    },
+                    json={
+                        "model": "openai/gpt-4o-mini",
+                        "messages": [
+                            {"role": "system", "content": system_message},
+                            {"role": "user", "content": prompt}
+                        ],
+                        "temperature": 0.4
+                    }
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    return data['choices'][0]['message']['content'].strip()
+                else:
+                    print(f"DEBUG: Recruiter OpenRouter Failed ({response.status_code}): {response.text}")
+            except Exception as or_e:
+                print(f"DEBUG: Recruiter OpenRouter Critical Failure: {str(or_e)}")
+        
+        # 3. TERTIARY: Extreme Fallback (Retry Gemini)
+        try:
+            response = await asyncio.wait_for(self.model.generate_content_async(prompt), timeout=10.0)
+            return response.text.strip()
+        except:
+            return ""
+
+    async def _call_ai_json(self, prompt: str, system_message: str = "You are a helpful recruitment assistant.") -> Dict[str, Any]:
+        """
+        Helper to call AI and return a parsed JSON object.
+        """
+        res_text = await self._call_ai(prompt, system_message)
+        if not res_text:
+            return {}
+        
+        try:
+            # Extract JSON from potential markdown markers
+            text = res_text
+            if "```json" in text:
+                text = text.split("```json")[1].split("```")[0].strip()
+            elif "```" in text:
+                # Sometimes it just says ``` without json
+                text = text.split("```")[1].split("```")[0].strip()
+            
+            return json.loads(text.strip())
+        except Exception as e:
+            print(f"DEBUG: Failed to parse AI JSON: {str(e)}\nRaw: {res_text[:200]}")
+            return {}
 
     async def generate_company_bio(self, website_url: str) -> str:
         """
-        Scrapes a company website and uses Gemini to generate a professional 2-3 sentence bio.
+        Scrapes a company website and uses Gemini (with OpenRouter fallback) to generate a professional 2-3 sentence bio.
         """
         try:
             if not website_url.startswith(('http://', 'https://')):
@@ -48,11 +119,11 @@ class RecruiterService:
             Return ONLY the bio text. No introduction or conversational filler.
             """
             
-            res = self.model.generate_content(prompt)
-            bio = res.text.strip()
+            bio = await self._call_ai(prompt, "You are an elite company biographer for a recruitment platform.")
             
             # Basic cleanup if AI returns markdown or quotes
-            bio = bio.replace('"', '').replace('**', '').strip()
+            if bio:
+                bio = bio.replace('"', '').replace('**', '').strip()
             
             return bio
         except Exception as e:
@@ -179,7 +250,8 @@ class RecruiterService:
                     qualification_held, graduation_year, referral, bio, profile_photo_url,
                     resume_path,
                     users(email)
-                )
+                ),
+                interviews(*, interview_slots(*))
             """).eq("jobs.company_id", company_id).order("created_at", desc=True)
             
             res = query.execute()
@@ -796,15 +868,7 @@ class RecruiterService:
         }}
         """
         try:
-            res = self.model.generate_content(prompt)
-            # More robust JSON extraction
-            text = res.text
-            if "```json" in text:
-                text = text.split("```json")[1].split("```")[0].strip()
-            elif "```" in text:
-                text = text.split("```")[1].split("```")[0].strip()
-            
-            data = json.loads(text.strip())
+            data = await self._call_ai_json(prompt, "You are an unbiased Corporate Quality Auditor.")
             
             relevance = data.get("relevance", 0)
             specificity = data.get("specificity", 0)
@@ -1222,23 +1286,34 @@ class RecruiterService:
 
         return {"status": "invited", "data": res.data[0] if res.data else None}
 
-    async def generate_job_description(self, prompt: str, experience_band: str):
+    async def generate_job_description(self, prompt: str, experience_band: str, location: Optional[str] = None):
         """Generate an elite IT Tech Sales job description using Gemini 3 Flash."""
+        
+        # Enhanced location context for dynamic salary scaling and role demand
+        location_context = f"LOCATION: {location or 'Global (Remote)'}"
+        
         ai_prompt = f"""
         Act as an Elite SaaS GTM (Go-To-Market) Architect and Executive Recruiter for TalentFlow.
         YOUR MISSION: Transform a recruiter's rough notes into a high-conversion, enterprise-grade Job Description (JD).
         VERTICAL FOCUS: IT Tech Sales (SaaS, Cloud, Cybersecurity, AI Infrastructure).
 
-        USER INPUT: "{prompt}"
-        TARGET EXPERIENCE LEVEL: {experience_band}
+        CONTEXT:
+        - USER INPUT: "{prompt}"
+        - TARGET EXPERIENCE LEVEL: {experience_band}
+        - {location_context}
 
         INSTRUCTIONS & SPECIALIZATION RULES:
-        1. "title": Must be an industry-standard B2B SaaS title (e.g. Enterprise AE, SDR, Regional Sales Director).
+        1. "title": Must be an industry-standard B2B SaaS title (e.g., Enterprise AE, SDR, Regional Sales Director).
         2. "description": 250 words. Focus on the 'Value-Based Selling' mission, the specific tech vertical, and the role's impact on company ARR/Pipeline.
-        3. "requirements": Professional standards for {experience_band}. Must include specific years of experience and track record metrics (e.g. "Exceeded quota of $1.5M ARR").
+        3. "requirements": Professional standards for {experience_band}. Must include specific years of experience and track record metrics (e.g., "Exceeded quota of $1.5M ARR").
         4. "skills_required": Mix technical (CRM/Salesforce, Cloud concepts) with tactical (MEDDPICC, Challenger Sale, Prospecting).
         5. "job_type": Categorize strictly as "remote", "hybrid", or "onsite".
-        6. Salary: Provide a realistic global market range for {experience_band} if not specified in input.
+        6. Salary Scaling (CRITICAL): 
+           - If a specific location is provided, calculate the `salary_range` based on the city tier, local cost of living (HCOL/LCOL), and current local role demand for {experience_band}.
+           - Use your localized market intelligence to adjust for city-specific standards (e.g., San Francisco vs. Austin, or London vs. Manchester).
+           - If it's a 'Tier 1' city with high AI/SaaS demand, apply a local premium.
+           - Provide the range in the currency most appropriate for that region or USD if ambiguous.
+        7. If {location} is provided, ensure the "description" or "requirements" subtly reflects any local cultural or strategic nuances (e.g., "Must build relationships in the DACH region").
 
         TONE: Professional, Ambitious, and Precise. No generic corporate 'filler' text (like "Rockstar" or "Guru").
 
@@ -1249,45 +1324,16 @@ class RecruiterService:
             "requirements": ["Requirement 1", "Requirement 2", ...],
             "skills_required": ["Skill 1", "Skill 2", ...],
             "job_type": "remote/hybrid/onsite",
-            "salary_range": "e.g., $120,000 - $160,000 + Equity"
+            "salary_range": "Currency Value-Range (e.g., $120k-$160k + OTE)"
         }}
         """
         
         try:
-            # Prioritize Gemini 3 Flash (Preview) for maximum intelligence and speed
-            models_to_try = [
-                'gemini-3-flash-preview', 
-                'gemma-3-27b-it', 
-                'gemini-2.0-flash', 
-                'gemini-flash-latest'
-            ]
-            response = None
-            last_error = None
-
-            for model_name in models_to_try:
-                try:
-                    self.model = genai.GenerativeModel(model_name)
-                    response = self.model.generate_content(ai_prompt)
-                    if response:
-                        print(f"DEBUG: Job Description generated using {model_name}")
-                        break
-                except Exception as e:
-                    last_error = e
-                    continue
-            
-            if not response:
-                raise last_error or Exception("All models failed")
-
-            # Extract JSON from potential markdown markers
-            text = response.text
-            if "```json" in text:
-                text = text.split("```json")[1].split("```")[0]
-            elif "```" in text:
-                text = text.split("```")[1].split("```")[0]
-            
-            return json.loads(text.strip())
+            # Uses unified AI caller with quota-aware fallback
+            return await self._call_ai_json(ai_prompt, "You are an Elite SaaS GTM Architect.")
         except Exception as e:
             print(f"AI Generation/Parsing Error: {str(e)}")
+            return {}
             # Robust fallback so the UI doesn't break
             return {
                 "title": f"New {experience_band.capitalize()} Role",
@@ -1297,5 +1343,32 @@ class RecruiterService:
                 "job_type": "onsite",
                 "salary_range": "Competitive"
             }
+
+    async def get_talent_pool(self):
+        """Fetch all verified candidates for the global pool."""
+        try:
+            # We fetch all candidates who have completed their assessment
+            # Backend uses service role, so this bypasses RLS
+            res = supabase.table("candidate_profiles")\
+                .select("user_id, full_name, experience, years_of_experience, skills, location, expected_salary, target_role, current_role, location_tier")\
+                .eq("assessment_status", "completed")\
+                .execute()
+            
+            return res.data or []
+        except Exception as e:
+            print(f"SERVICE ERROR: get_talent_pool: {str(e)}")
+            # If columns expected_salary or location_tier don't exist, we fallback
+            if "expected_salary" in str(e) or "location_tier" in str(e):
+                res = supabase.table("candidate_profiles")\
+                    .select("user_id, full_name, experience, years_of_experience, skills, location, target_role, current_role")\
+                    .eq("assessment_status", "completed")\
+                    .execute()
+                data = res.data or []
+                # Inject nulls for missing columns
+                for item in data:
+                    item["expected_salary"] = None
+                    item["location_tier"] = "Unspecified"
+                return data
+            return []
 
 recruiter_service = RecruiterService()

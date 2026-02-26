@@ -58,8 +58,8 @@ async def submit_answer(submission: AnswerSubmission, user: dict = Depends(get_c
 async def handle_tab_switch(user: dict = Depends(get_current_user)):
     user_id = user["sub"]
     
-    # 1. Increment switch count in the session
-    session_res = await async_supabase.table("assessment_sessions").select("warning_count").eq("candidate_id", user_id).execute()
+    # 1. Increment switch count in the session (Safer select to handle missing DB column)
+    session_res = await async_supabase.table("assessment_sessions").select("*").eq("candidate_id", user_id).execute()
     
     current_count = 0
     if session_res.data and len(session_res.data) > 0:
@@ -67,8 +67,11 @@ async def handle_tab_switch(user: dict = Depends(get_current_user)):
     
     new_count = current_count + 1
     
-    # Update count
-    await async_supabase.table("assessment_sessions").update({"warning_count": new_count}).eq("candidate_id", user_id).execute()
+    # Update count (Try-catch to fail gracefully if DB schema isn't synced yet)
+    try:
+        await async_supabase.table("assessment_sessions").update({"warning_count": new_count}).eq("candidate_id", user_id).execute()
+    except Exception as e:
+        print(f"DEBUG: warning_count update failed (likely missing column): {str(e)}")
     
     if new_count >= 2:
         # BAN USER

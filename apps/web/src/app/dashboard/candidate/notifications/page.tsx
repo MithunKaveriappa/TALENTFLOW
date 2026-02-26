@@ -11,7 +11,9 @@ import {
   MessageSquare,
   Clock,
   Globe,
+  Calendar,
 } from "lucide-react";
+import CandidateInterviewConfirmModal from "@/components/CandidateInterviewConfirmModal";
 
 interface Notification {
   id: string;
@@ -26,6 +28,10 @@ interface Notification {
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedInterviewId, setSelectedInterviewId] = useState<string | null>(
+    null,
+  );
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -139,7 +145,16 @@ export default function NotificationsPage() {
           notifications.map((notif) => (
             <div
               key={notif.id}
-              onClick={() => !notif.is_read && markAsRead(notif.id)}
+              onClick={() => {
+                if (!notif.is_read) markAsRead(notif.id);
+                if (
+                  notif.type === "INTERVIEW_PROPOSED" &&
+                  notif.metadata?.interview_id
+                ) {
+                  setSelectedInterviewId(notif.metadata.interview_id as string);
+                  setIsModalOpen(true);
+                }
+              }}
               className={`
                 bg-white rounded-4xl p-8 border transition-all cursor-pointer group
                 ${notif.is_read ? "border-slate-100 opacity-80" : "border-indigo-100 shadow-xl shadow-indigo-100/30 hover:border-indigo-200"}
@@ -171,7 +186,14 @@ export default function NotificationsPage() {
                   <p className="text-sm text-slate-500 font-medium leading-relaxed mb-4">
                     {notif.message}
                   </p>
-                  {!notif.is_read && (
+                  
+                  {notif.type === "INTERVIEW_PROPOSED" && (
+                    <button className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition">
+                      Schedule Now
+                    </button>
+                  )}
+
+                  {!notif.is_read && notif.type !== "INTERVIEW_PROPOSED" && (
                     <div className="flex items-center gap-2 text-indigo-600 font-bold text-[9px] uppercase tracking-widest">
                       <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse" />
                       New Transmission
@@ -183,6 +205,16 @@ export default function NotificationsPage() {
           ))
         )}
       </div>
+
+      <CandidateInterviewConfirmModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        interviewId={selectedInterviewId || ""}
+        onSuccess={() => {
+          // You could reload notifications or redirect to applications
+          console.log("Interview confirmed!");
+        }}
+      />
     </div>
   );
 }
@@ -197,6 +229,8 @@ function getNotificationIcon(type: string) {
       return <CheckCircle2 className="w-6 h-6" />;
     case "MESSAGE_RECEIVED":
       return <MessageSquare className="w-6 h-6" />;
+    case "INTERVIEW_PROPOSED":
+      return <Calendar className="w-6 h-6" />;
     default:
       return <Info className="w-6 h-6" />;
   }
@@ -212,6 +246,8 @@ function getNotificationStyle(type: string) {
       return "bg-purple-50 text-purple-600";
     case "MESSAGE_RECEIVED":
       return "bg-blue-50 text-blue-600";
+    case "INTERVIEW_PROPOSED":
+      return "bg-amber-50 text-amber-600";
     default:
       return "bg-slate-50 text-slate-600";
   }

@@ -25,6 +25,7 @@ import {
   MapPin,
   Phone,
   Mail,
+  Video,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { apiClient } from "@/lib/apiClient";
@@ -77,6 +78,7 @@ interface Application {
     final_score: number;
   } | null;
   is_skill_match?: boolean;
+  interviews?: any[];
 }
 
 interface GroupedApplications {
@@ -117,6 +119,8 @@ export default function ApplicationsPipelinePage() {
     status: string;
     initialTab?: string;
     applicationId?: string;
+    interviews?: any[];
+    initialFeedbackOpen?: boolean;
   }>({
     isOpen: false,
     candidate: null,
@@ -127,6 +131,8 @@ export default function ApplicationsPipelinePage() {
     status: "",
     initialTab: "resume",
     applicationId: undefined,
+    interviews: [],
+    initialFeedbackOpen: false,
   });
   const [expandedJobs, setExpandedJobs] = useState<Record<string, boolean>>({});
   const [searchTerm, setSearchTerm] = useState("");
@@ -697,6 +703,112 @@ export default function ApplicationsPipelinePage() {
                               ? "Interview"
                               : app.status.replace("_", " ")}
                         </span>
+                        {/* Show Join button or status if an interview is active */}
+                        {(() => {
+                          const interview = app.interviews?.find((i: any) => 
+                            i.status === "scheduled" || i.status === "pending_confirmation"
+                          );
+                          if (!interview) return null;
+
+                          const slot = interview.interview_slots?.find((s: any) => s.is_selected);
+                          
+                          return (
+                            <div className="mt-2 space-y-1 animate-in fade-in zoom-in duration-500">
+                              <div className={`flex items-center justify-center gap-1.5 px-1.5 py-1 rounded-lg text-[7px] font-black uppercase tracking-widest border ${
+                                interview.status === "scheduled" 
+                                  ? "bg-indigo-50 text-indigo-700 border-indigo-100" 
+                                  : "bg-amber-50 text-amber-700 border-amber-100"
+                              }`}>
+                                <Clock className="h-2.5 w-2.5" />
+                                {interview.status === "scheduled" ? (
+                                  slot ? new Date(slot.start_time).toLocaleString('en-US', {
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    hour12: true,
+                                    timeZoneName: "short"
+                                  }) : "COORDINATING..."
+                                ) : (
+                                  `R${interview.round_number} PROPOSED`
+                                )}
+                              </div>
+                                <div className="space-y-1">
+                                  {(() => {
+                                    if (interview.status === "pending_confirmation") {
+                                      return (
+                                        <p className="text-[6px] text-amber-500 font-bold uppercase tracking-tighter text-center leading-none px-1 py-1 bg-amber-50/50 rounded-md border border-amber-100/50 italic">
+                                          Awaiting Candidate Action
+                                        </p>
+                                      );
+                                    }
+                                    const now = new Date();
+                                    const start = new Date(slot?.start_time || "");
+                                    const end = new Date(slot?.end_time || "");
+                                    const isActive = now >= new Date(start.getTime() - 5 * 60000) && now <= end;
+
+                                    if (isActive) {
+                                      return (
+                                        <>
+                                          <button
+                                            onClick={async (e) => {
+                                              e.stopPropagation();
+                                              try {
+                                                const { data: { session } } = await supabase.auth.getSession();
+                                                if (session) {
+                                                  apiClient.post(`/interviews/${interview.id}/join-event`, {}, session.access_token);
+                                                }
+                                              } catch (err) {
+                                                console.error("Failed to signal join:", err);
+                                              }
+                                              window.open(interview.meeting_link, "_blank");
+                                            }}
+                                            className="w-full flex items-center justify-center gap-1 px-1.5 py-1.5 bg-indigo-600 text-white rounded-lg text-[7px] font-black uppercase tracking-widest hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 active:scale-95"
+                                          >
+                                            <Video className="h-2.5 w-2.5" />
+                                            Join Protocol
+                                          </button>
+                                          <p className="text-[6px] text-slate-400 font-bold uppercase tracking-tighter text-center leading-none px-1">
+                                            Host Notice: Log in on Jitsi to start
+                                          </p>
+                                        </>
+                                      );
+                                    }
+                                    if (now > end) {
+                                      return (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setProfileModal({
+                                              isOpen: true,
+                                              candidate: app.candidate_profiles,
+                                              resumeData: app.resume_data,
+                                              jobTitle: app.jobs.title,
+                                              appliedDate: app.created_at,
+                                              score: app.profile_scores?.final_score || 0,
+                                              status: app.status,
+                                              initialTab: "interview",
+                                              applicationId: app.id,
+                                              interviews: app.interviews,
+                                              initialFeedbackOpen: true,
+                                            });
+                                          }}
+                                          className="w-full px-2 py-1.5 bg-slate-900 text-white rounded-lg text-[7.5px] font-black uppercase tracking-widest hover:bg-slate-800 transition active:scale-95 animate-pulse"
+                                        >
+                                          Evaluate Result
+                                        </button>
+                                      );
+                                    }
+                                    return (
+                                      <p className="text-[7px] text-slate-400 font-black uppercase text-center py-1 mt-1 bg-slate-50 rounded-lg border border-slate-100 italic">
+                                        Locked Until Start
+                                      </p>
+                                    );
+                                  })()}
+                                </div>
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -747,6 +859,7 @@ export default function ApplicationsPipelinePage() {
                                     status: app.status,
                                     initialTab: "application",
                                     applicationId: app.id,
+                                    interviews: app.interviews,
                                   })
                                 }
                                 className="w-full text-left px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 hover:text-indigo-600 transition-colors flex items-center gap-2"
@@ -768,15 +881,85 @@ export default function ApplicationsPipelinePage() {
                                       ? "original_resume"
                                       : "resume",
                                     applicationId: app.id,
+                                    interviews: app.interviews,
                                   })
                                 }
                                 className="w-full text-left px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-colors flex items-center gap-2"
                               >
                                 <Eye className="w-3 h-3" /> View Resume
                               </button>
-                              {app.status !== "rejected" && (
+                              
+                              {app.status !== "rejected" && app.status !== "offered" && (
                                 <>
                                   <div className="h-px bg-slate-50 my-1 mx-2" />
+                                  
+                                  {app.status === "applied" && (
+                                    <button
+                                      onClick={() => {
+                                        setActiveApplicationId(app.id);
+                                        handleBulkStatusChange("shortlisted");
+                                      }}
+                                      className="w-full text-left px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:bg-indigo-50 transition-colors flex items-center gap-2"
+                                    >
+                                      <Zap className="w-3 h-3" /> Shortlist
+                                    </button>
+                                  )}
+
+{app.status === "shortlisted" && !app.interviews?.some(i => i.status === "pending_confirmation" || i.status === "scheduled") && (
+                                    <button
+                                      onClick={() => {
+                                        setProfileModal({
+                                          isOpen: true,
+                                          candidate: app.candidate_profiles,
+                                          resumeData: app.resume_data,
+                                          jobTitle: app.jobs.title,
+                                          appliedDate: app.created_at,
+                                          score: app.profile_scores?.final_score || 0,
+                                          status: app.status,
+                                          initialTab: "interview",
+                                          applicationId: app.id,
+                                          interviews: app.interviews,
+                                        });
+                                      }}
+                                      className="w-full text-left px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:bg-indigo-50 transition-colors flex items-center gap-2"
+                                    >
+                                      <Video className="w-3 h-3" /> Propose Next Round
+                                    </button>
+                                  )}
+
+                                  {app.status === "interview_scheduled" && (
+                                    <button
+                                      onClick={() => {
+                                        setProfileModal({
+                                          isOpen: true,
+                                          candidate: app.candidate_profiles,
+                                          resumeData: app.resume_data,
+                                          jobTitle: app.jobs.title,
+                                          appliedDate: app.created_at,
+                                          score: app.profile_scores?.final_score || 0,
+                                          status: app.status,
+                                          initialTab: "interview",
+                                          applicationId: app.id,
+                                          interviews: app.interviews,
+                                          initialFeedbackOpen: true,
+                                        });
+                                      }}
+                                      className="w-full text-left px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:bg-indigo-50 transition-colors flex items-center gap-2"
+                                    >
+                                      <Video className="w-3 h-3" /> Log Evaluation
+                                    </button>
+                                  )}
+
+                                  <button
+                                    onClick={() => {
+                                      setActiveApplicationId(app.id);
+                                      handleBulkStatusChange("offered");
+                                    }}
+                                    className="w-full text-left px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:bg-emerald-50 transition-colors flex items-center gap-2"
+                                  >
+                                    <CheckCircle2 className="w-3 h-3" /> Make Offer
+                                  </button>
+
                                   <button
                                     onClick={() => {
                                       setActiveApplicationId(app.id);
@@ -824,11 +1007,12 @@ export default function ApplicationsPipelinePage() {
             applications.find((a) => a.id === activeApplicationId)
               ?.candidate_profiles.full_name || "Candidate"
           }
+          applicationId={activeApplicationId}
+          initialRoundNumber={(applications.find(a => a.id === activeApplicationId)?.interviews?.length || 0) + 1}
           onClose={() => {
             setIsInterviewModalOpen(false);
             setActiveApplicationId(null);
           }}
-          applicationId={activeApplicationId}
           onSuccess={() => {
             setIsInterviewModalOpen(false);
             setActiveApplicationId(null);
@@ -849,6 +1033,12 @@ export default function ApplicationsPipelinePage() {
           status={profileModal.status}
           initialTab={profileModal.initialTab}
           applicationId={profileModal.applicationId}
+          interviews={profileModal.interviews}
+          initialFeedbackOpen={profileModal.initialFeedbackOpen}
+          onRefresh={() => {
+            fetchApplications();
+            setProfileModal({ ...profileModal, isOpen: false });
+          }}
         />
       )}
     </div>

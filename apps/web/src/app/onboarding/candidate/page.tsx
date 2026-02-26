@@ -8,6 +8,7 @@ import { apiClient } from "@/lib/apiClient";
 import { useVoice } from "@/hooks/useVoice";
 import { extractNameFromEmail } from "@/utils/emailValidation";
 import { SKILLS_BY_EXPERIENCE } from "./skillsData";
+import { TermsModal } from "@/components/TermsModal";
 
 type Message = {
   id: string;
@@ -20,7 +21,13 @@ type Message = {
 type OnboardingState =
   | "INITIAL"
   | "AWAITING_EXPERIENCE"
+  | "AWAITING_RESUME_CHOICE"
   | "AWAITING_RESUME"
+  | "AWAITING_MANUAL_BIO"
+  | "AWAITING_MANUAL_EDUCATION"
+  | "AWAITING_MANUAL_EXPERIENCE"
+  | "AWAITING_MANUAL_SKILLS"
+  | "AWAITING_MANUAL_CONTACT"
   | "AWAITING_SKILLS"
   | "AWAITING_GPS_VISION"
   | "AWAITING_GPS_INTERESTS"
@@ -29,12 +36,54 @@ type OnboardingState =
   | "AWAITING_TC"
   | "COMPLETED";
 
+interface EducationEntry {
+  school: string;
+  degree: string;
+  field: string;
+  location: string;
+  gpa: string;
+  start_year: string;
+  end_year: string;
+}
+
+interface ExperienceEntry {
+  role: string;
+  company: string;
+  location: string;
+  start_date: string;
+  end_date: string;
+  description: string;
+  key_achievements: string[];
+}
+
+interface ManualResumeData {
+  bio: string;
+  education: EducationEntry[];
+  experience: ExperienceEntry[];
+  skills: string[];
+  phone: string;
+  location: string;
+  linkedin: string;
+  portfolio: string;
+}
+
 export default function CandidateOnboarding() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [state, setState] = useState<OnboardingState>("INITIAL");
   const [experienceBand, setExperienceBand] = useState<string>("fresher");
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
+  const [manualResumeData, setManualResumeData] = useState<ManualResumeData>({
+    bio: "",
+    education: [],
+    experience: [],
+    skills: [],
+    phone: "",
+    location: "",
+    linkedin: "",
+    portfolio: "",
+  });
   const userIdRef = useRef<string | null>(null);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -168,11 +217,24 @@ export default function CandidateOnboarding() {
             "bot",
           );
 
-          if (savedStep === "AWAITING_RESUME") {
+          if (savedStep === "AWAITING_RESUME" || savedStep === "AWAITING_RESUME_CHOICE") {
             addMessage(
-              "I'm still waiting for your resume upload. Please upload it (PDF only) when you're ready.",
+              "I'm waiting for your resume. You can either upload a PDF or build it manually here.",
               "bot",
+              ["Upload PDF", "Build Manually"],
             );
+          } else if (
+            savedStep === "AWAITING_MANUAL_BIO" ||
+            savedStep === "AWAITING_MANUAL_EDUCATION" ||
+            savedStep === "AWAITING_MANUAL_EXPERIENCE" ||
+            savedStep === "AWAITING_MANUAL_SKILLS" ||
+            savedStep === "AWAITING_MANUAL_CONTACT"
+          ) {
+            addMessage(
+                "We were building your resume manually! Let's continue.",
+                "bot",
+                ["Continue Building"]
+            )
           } else if (savedStep === "AWAITING_SKILLS") {
             addMessage(
               "We were just finalizing your skills. Feel free to refine them below.",
@@ -196,7 +258,7 @@ export default function CandidateOnboarding() {
             addMessage(
               "Almost done! Please review and accept our Terms and Conditions to complete your onboarding.",
               "bot",
-              ["Accept Terms & Conditions"],
+              ["Read Terms & Policy", "Accept Terms & Conditions"],
             );
           }
         }
@@ -289,17 +351,201 @@ export default function CandidateOnboarding() {
             "bot",
           );
 
-          const nextState = "AWAITING_RESUME";
+          const nextState = "AWAITING_RESUME_CHOICE";
           await saveStep(nextState);
 
           setTimeout(() => {
             addMessage(
-              "Next, I'll need your resume to understand your background better. Please upload it (PDF only).",
+              "Next, I'll need your resume to understand your background. Would you like to upload a PDF or build it manually now?",
               "bot",
+              ["Upload PDF", "Build Manually"],
             );
             setState(nextState);
           }, 1000);
         }
+      } else if (state === "AWAITING_RESUME_CHOICE") {
+        if (workingInput.toLowerCase().includes("upload")) {
+          setState("AWAITING_RESUME");
+          addMessage(
+            "Perfect! Please upload your resume (PDF only) using the button below.",
+            "bot",
+          );
+        } else if (workingInput.toLowerCase().includes("build")) {
+          setState("AWAITING_MANUAL_BIO");
+          addMessage(
+            "Great! Let's build your resume step-by-step. First, let's start with a short Professional Summary. What would you like to say about your career so far?",
+            "bot",
+            ["I'm a fresh graduate eager to start", "Experienced Tech Sales person looking for growth"]
+          );
+        } else {
+            addMessage(
+                "Please choose an option to continue.",
+                "bot",
+                ["Upload PDF", "Build Manually"]
+            )
+        }
+      } else if (state === "AWAITING_MANUAL_BIO") {
+        setManualResumeData(prev => ({ ...prev, bio: workingInput }));
+        setState("AWAITING_MANUAL_EDUCATION");
+        addMessage(
+            "Got it! Now, let's add your education history. Please tell me your: School/College Name, Degree (e.g., B.Tech), Field of Study (e.g., CS), Location, GPA (e.g., 3.8/4 or 80%), and Years (e.g., 2018–2022).",
+            "bot",
+            ["Skip Education"]
+        )
+      } else if (state === "AWAITING_MANUAL_EDUCATION") {
+        const lowerInput = workingInput.toLowerCase();
+        if (lowerInput.includes("skip") || lowerInput.includes("next") || lowerInput.includes("proceed to experience")) {
+            setState("AWAITING_MANUAL_EXPERIENCE")
+            addMessage(
+                "Let's move to your experience. Please describe your: Role Title, Company Name, Location, Dates (e.g., Jan 2022 - Present), Description of what you did, and Key Achievements.",
+                "bot",
+                ["Skip Experience"]
+            )
+        } else {
+            // Very simple parser for manual education
+            // In a production app, we would have multiple input fields or a sub-chatbot
+            // But for this exercise, we'll try to extract them briefly and prompt for one more or next
+            const edu = {
+                school: workingInput.split(",")[0]?.trim() || "Institute",
+                degree: workingInput.split(",")[1]?.trim() || "Degree",
+                field: workingInput.split(",")[2]?.trim() || "Field",
+                location: workingInput.split(",")[3]?.trim() || "Location",
+                gpa: workingInput.split(",")[4]?.trim() || "0.0",
+                start_year: "N/A",
+                end_year: "N/A"
+            }
+            setManualResumeData(prev => ({ ...prev, education: [...prev.education, edu] }))
+            addMessage(`Added ${edu.degree} from ${edu.school}. Would you like to add more education or move to Experience?`, "bot", ["Add More Education", "Proceed to Experience"])
+        }
+      } else if (state === "AWAITING_MANUAL_EXPERIENCE") {
+        const lowerInput = workingInput.toLowerCase();
+        if (lowerInput.includes("added more education") || lowerInput === "add more education") {
+            setState("AWAITING_MANUAL_EDUCATION")
+            addMessage("Sure! Please tell me your other School/College Name and details.", "bot")
+            setIsLoading(false);
+            return;
+        }
+
+        if (lowerInput.includes("skip") || lowerInput === "next" || lowerInput.includes("proceed to skills")) {
+             if (manualResumeData.experience.length === 0 && (lowerInput.includes("proceed") || lowerInput.includes("skip"))) {
+                 addMessage("Alright, let's input your experience. Please tell me your: Role, Company, Location, Dates, and accomplishments.", "bot", ["Skip Experience"])
+                setIsLoading(false);
+                return;
+             }
+            setState("AWAITING_MANUAL_SKILLS")
+            addMessage(
+                "Now, tell me your key skills (e.g., SaaS Sales, CRM, Prospecting, Negotiation, Cloud, SaaS). Please separate them with commas.",
+                "bot",
+                ["Skip Skills"]
+            )
+        } else {
+            const exp = {
+                role: workingInput.split(",")[0]?.trim() || "Role",
+                company: workingInput.split(",")[1]?.trim() || "Company",
+                location: workingInput.split(",")[2]?.trim() || "Location",
+                start_date: "N/A",
+                end_date: "N/A",
+                description: workingInput,
+                key_achievements: []
+            }
+            setManualResumeData(prev => ({ ...prev, experience: [...prev.experience, exp] }))
+            addMessage(`Added your experience at ${exp.company}. Would you like to add more roles or move to Skills?`, "bot", ["Add More Experience", "Proceed to Skills"])
+        }
+      } else if (state === "AWAITING_MANUAL_SKILLS") {
+        const lowerInput = workingInput.toLowerCase();
+          if (lowerInput.includes("add more experience") || lowerInput === "add more experience") {
+            setState("AWAITING_MANUAL_EXPERIENCE")
+            addMessage("Sure! Please tell me your other Role and details.", "bot")
+            setIsLoading(false);
+            return;
+        }
+
+        if (lowerInput.includes("skip") || lowerInput === "next" || lowerInput.includes("proceed to skills")) {
+            setState("AWAITING_MANUAL_CONTACT")
+            addMessage("Finally, tell me your contact details: Phone Number, Location, LinkedIn Profile (URL), and Portfolio (optional).", "bot")
+        } else {
+            const skills = workingInput.split(",").map(s => s.trim()).filter(Boolean);
+            setManualResumeData(prev => ({ ...prev, skills: [...prev.skills, ...skills] }))
+            addMessage(`Recorded ${skills.length} skills. Moving to contact info.`, "bot")
+            setState("AWAITING_MANUAL_CONTACT")
+            addMessage("Finally, tell me your contact details: Phone Number, Location, LinkedIn Profile (URL), and Portfolio (optional).", "bot")
+        }
+      } else if (state === "AWAITING_MANUAL_CONTACT") {
+        const phone = workingInput.split(",")[0]?.trim() || workingInput;
+        const location = workingInput.split(",")[1]?.trim() || "";
+        const linkedin = workingInput.split(",")[2]?.trim() || "";
+        const portfolio = workingInput.split(",")[3]?.trim() || "";
+        
+        setManualResumeData(prev => ({ ...prev, phone, location, linkedin, portfolio }));
+        
+        addMessage("Perfect! I have everything I need to generate your high-fidelity resume.", "bot");
+        addMessage("Generating your resume PDF and syncing your profile... please wait.", "bot");
+        
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        // Generate via API
+        const payload = {
+            full_name: user?.user_metadata?.full_name || extractNameFromEmail(user?.email || ""),
+            phone: phone,
+            email: user?.email || "",
+            location: location || "Remote",
+            linkedin: linkedin,
+            portfolio: portfolio,
+            bio: manualResumeData.bio,
+            education: manualResumeData.education.length > 0 ? manualResumeData.education.map(e => ({
+                school: e.school,
+                degree: e.degree,
+                field: e.field,
+                location: e.location,
+                gpa: e.gpa,
+                years: `${e.start_year || ""} - ${e.end_year || ""}`
+            })) : [
+                {
+                    school: "Self-Taught / Other",
+                    degree: "None",
+                    field: "None",
+                    location: location,
+                    gpa: "N/A",
+                    years: "N/A"
+                }
+            ],
+            timeline: manualResumeData.experience.length > 0 ? manualResumeData.experience.map(ex => ({
+                role: ex.role,
+                company: ex.company,
+                location: ex.location,
+                start: ex.start_date,
+                end: ex.end_date,
+                description: ex.description,
+                key_achievements: ex.key_achievements
+            })) : [
+                {
+                    role: "Aspiring Tech Sales Professional",
+                    company: "Active Learner",
+                    location: location,
+                    start: "Current",
+                    end: "Present",
+                    description: "Actively building skills in IT Tech Sales.",
+                    key_achievements: ["Successfully completed multiple sales training modules"]
+                }
+            ],
+            skills: manualResumeData.skills.length > 0 ? manualResumeData.skills : ["Persistence", "Communication", "Research"]
+        };
+
+        const res = await apiClient.post("/candidate/generate-resume", payload, session?.access_token);
+        
+        if (res.filename) {
+             addMessage(`Resume generated successfully: ${res.filename}`, "bot");
+             addMessage("You can download it from your profile later. Now, let's finalize your skills.", "bot");
+             setSelectedSkills(manualResumeData.skills);
+             
+             const nextState = "AWAITING_SKILLS";
+             await saveStep(nextState);
+             setState(nextState);
+        } else {
+            throw new Error("Failed to generate resume PDF.");
+        }
+
       } else if (state === "AWAITING_SKILLS") {
         const skillsFromInput = workingInput
           .split(",")
@@ -418,6 +664,12 @@ export default function CandidateOnboarding() {
           "bot",
         );
       } else if (state === "AWAITING_TC") {
+        if (workingInput.toLowerCase().includes("read")) {
+          setIsTermsModalOpen(true);
+          setIsLoading(false);
+          return;
+        }
+
         const {
           data: { session },
         } = await supabase.auth.getSession();
@@ -469,11 +721,12 @@ export default function CandidateOnboarding() {
       if (!user || !session) throw new Error("Not authenticated");
 
       const fileExt = file.name.split(".").pop();
-      const folder = state === "AWAITING_RESUME" ? "resumes" : "id-proofs";
-      const filePath = `${folder}/${user.id}-${Math.random()}.${fileExt}`;
+      const bucket = state === "AWAITING_RESUME" ? "resumes" : "id-proofs";
+      const folder = bucket; 
+      const filePath = `${folder}/${user.id}-${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
-        .from(folder)
+        .from(bucket)
         .upload(filePath, file);
 
       if (uploadError) throw uploadError;
@@ -524,7 +777,7 @@ export default function CandidateOnboarding() {
           addMessage(
             "Last step: Please accept our Terms and Conditions to finalize your profile.",
             "bot",
-            ["Accept Terms & Conditions"],
+            ["Read Terms & Policy", "Accept Terms & Conditions"],
           );
           const nextState = "AWAITING_TC";
           await saveStep(nextState);
@@ -770,18 +1023,20 @@ export default function CandidateOnboarding() {
                   ? "Please use the upload box above"
                   : state === "AWAITING_SKILLS"
                     ? "Add custom skills (comma separated)..."
-                    : "Type your response..."
+                    : state.startsWith("AWAITING_MANUAL")
+                      ? "Type your details here..."
+                      : "Type your response..."
               }
               disabled={
                 isLoading ||
                 state === "AWAITING_RESUME" ||
                 state === "AWAITING_ID"
               }
-              className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+              className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-80"
             />
             <button
               onClick={isListening ? stopListening : startListening}
-              disabled={state === "AWAITING_RESUME"}
+              disabled={state === "AWAITING_RESUME" || state === "AWAITING_ID"}
               className={`p-3 rounded-xl ${isListening ? "bg-red-500 text-white animate-pulse" : "bg-slate-100 text-slate-600"} disabled:opacity-50`}
             >
               <svg
@@ -827,6 +1082,10 @@ export default function CandidateOnboarding() {
           </div>
         </div>
       </div>
+      <TermsModal
+        isOpen={isTermsModalOpen}
+        onClose={() => setIsTermsModalOpen(false)}
+      />
     </div>
   );
 }

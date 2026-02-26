@@ -19,12 +19,14 @@ async def propose_interview(
     user: dict = Depends(get_current_user)
 ):
     """Recruiter proposes an interview with slots."""
+    print(f"DEBUG PROPOSE: User {user.get('sub')} (email: {user.get('email')}) has role {user.get('role')}")
     if user.get("role") != "recruiter":
         raise HTTPException(status_code=403, detail="Only recruiters can propose interviews")
     
     try:
         return await interview_service.propose_interview(user["sub"], request)
     except ValueError as e:
+        print(f"DEBUG PROPOSE ERROR: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/confirm", response_model=dict)
@@ -74,6 +76,21 @@ async def submit_feedback(
             interview_id, 
             request.feedback, 
             request.next_status
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/{interview_id}/join-event")
+async def register_join(
+    interview_id: str,
+    user: dict = Depends(get_current_user)
+):
+    """Notify the other party that a user has joined the meeting."""
+    try:
+        return await interview_service.register_join_event(
+            user["sub"],
+            interview_id,
+            user.get("role", "candidate")
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
