@@ -66,3 +66,11 @@ npm run dev
 - Frontend follows backend instructions.
 - No frontend guessing of state.
 - Assessment is one-attempt-only.
+
+## Git Update
+- git status
+- git add .
+- git config --global user.email "you@example.com"
+- git config --global user.name "Your Name"
+- git commit -m "changes"
+- git push origin main
