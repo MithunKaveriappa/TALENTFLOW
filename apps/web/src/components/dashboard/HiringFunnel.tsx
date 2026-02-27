@@ -8,6 +8,7 @@ import {
   Award,
   CheckCircle,
   ArrowRight,
+  Zap,
 } from "lucide-react";
 
 interface FunnelData {
@@ -25,97 +26,85 @@ interface HiringFunnelProps {
 const HiringFunnel: React.FC<HiringFunnelProps> = ({ data }) => {
   const stages = [
     {
-      label: "Interest Captured",
+      label: "Interest",
+      fullLabel: "Interest Captured",
       value: data.applied,
       icon: Users,
-      color: "from-blue-500 to-blue-600",
-      light: "bg-blue-50",
-      text: "text-blue-600",
+      color: "text-blue-500",
+      bg: "bg-blue-500/5",
     },
     {
-      label: "Verified Matches",
+      label: "Matches",
+      fullLabel: "Verified Matches",
       value: data.shortlisted,
       icon: UserCheck,
-      color: "from-indigo-500 to-indigo-600",
-      light: "bg-indigo-50",
-      text: "text-indigo-600",
+      color: "text-indigo-500",
+      bg: "bg-indigo-500/5",
     },
     {
-      label: "Active Dialogues",
+      label: "Dialogues",
+      fullLabel: "Active Dialogues",
       value: data.interviewed,
       icon: MessageSquare,
-      color: "from-purple-500 to-purple-600",
-      light: "bg-purple-50",
-      text: "text-purple-600",
+      color: "text-purple-500",
+      bg: "bg-purple-500/5",
     },
     {
-      label: "Success Secured",
+      label: "Secured",
+      fullLabel: "Success Secured",
       value: data.hired,
       icon: CheckCircle,
-      color: "from-emerald-500 to-emerald-600",
-      light: "bg-emerald-50",
-      text: "text-emerald-600",
+      color: "text-emerald-500",
+      bg: "bg-emerald-500/5",
     },
   ];
 
   return (
-    <div className="space-y-8">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+    <div className="space-y-6">
+      <div className="flex items-center gap-2">
         {stages.map((stage, idx) => (
-          <div key={stage.label} className="relative group">
-            <div className="p-8 rounded-[3rem] border border-slate-100 transition-all duration-700 hover:shadow-2xl hover:shadow-slate-200/50 bg-white relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-slate-50 rounded-full blur-2xl -mr-12 -mt-12 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-
-              <div
-                className={`w-14 h-14 rounded-2xl ${stage.light} ${stage.text} border border-transparent group-hover:border-current/10 flex items-center justify-center mb-6 transition-all duration-500 group-hover:scale-110 group-hover:rotate-3 relative z-10 shadow-sm`}
-              >
-                <stage.icon size={28} />
-              </div>
-              <div className="space-y-2 relative z-10">
-                <div className="text-4xl font-black text-slate-900 tracking-tighter group-hover:text-indigo-600 transition-colors">
+          <React.Fragment key={stage.label}>
+            <div className="flex-1 min-w-0 bg-white border border-slate-100 rounded-xl p-4 transition-all duration-300 group hover:shadow-md hover:border-slate-200">
+              <div className="flex items-center justify-between mb-3">
+                <div className={`p-1.5 rounded-lg ${stage.bg} ${stage.color}`}>
+                  <stage.icon size={16} />
+                </div>
+                <div className="text-2xl font-black text-slate-900 tracking-tighter leading-none">
                   {stage.value}
                 </div>
-                <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 leading-tight">
+              </div>
+              <div className="space-y-0.5">
+                <div className="text-[10px] font-black text-slate-800 tracking-tight leading-none group-hover:text-indigo-600 truncate">
                   {stage.label}
+                </div>
+                <div className="text-[9px] font-medium text-slate-400 opacity-60 leading-none">
+                  {stage.fullLabel}
                 </div>
               </div>
             </div>
             {idx < stages.length - 1 && (
-              <div className="hidden md:flex absolute -right-3 top-1/2 -translate-y-1/2 z-20 w-6 h-6 items-center justify-center bg-white rounded-full border border-slate-100 text-slate-300 shadow-sm group-hover:text-indigo-500 transition-colors">
-                <ArrowRight size={14} />
-              </div>
+              <ArrowRight className="text-slate-200 shrink-0" size={14} />
             )}
-          </div>
+          </React.Fragment>
         ))}
       </div>
 
-      <div className="p-6 bg-slate-900 rounded-4xl flex items-center justify-between text-white overflow-hidden relative">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 blur-3xl rounded-full translate-x-32 -translate-y-32" />
-        <div className="flex items-center gap-6 relative z-10">
-          <div className="flex -space-x-3">
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="h-10 w-10 rounded-full border-2 border-slate-900 bg-slate-800 flex items-center justify-center text-[10px] font-bold"
-              >
-                TF
-              </div>
-            ))}
+      <div className="p-4 bg-slate-900 rounded-xl flex items-center justify-between text-white overflow-hidden relative border border-white/5 shadow-lg shadow-indigo-900/10">
+        <div className="absolute inset-0 bg-linear-to-r from-indigo-500/5 to-transparent pointer-events-none" />
+        <div className="flex items-center gap-4 relative z-10">
+          <div className="h-8 px-2.5 bg-indigo-500/10 rounded-lg flex items-center gap-2">
+            <Zap size={14} className="text-indigo-400" />
+            <span className="text-[8px] font-black uppercase tracking-[0.2em] text-indigo-300">
+              Performance
+            </span>
           </div>
-          <div>
-            <p className="text-sm font-bold text-indigo-300">
-              Conversion Momentum
-            </p>
-            <p className="text-xs text-slate-400">
-              Your engagement is 12% higher than similar entities.
-            </p>
-          </div>
-        </div>
-        <div className="text-right relative z-10">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">
-            Momentum Score
+          <p className="text-[11px] text-slate-400 font-medium">
+            Efficiency is <span className="text-white">12% above average.</span>
           </p>
-          <p className="text-2xl font-black text-white italic">
+        </div>
+        <div className="text-right relative z-10 flex items-center gap-2">
+          <span className="text-[8px] font-black uppercase tracking-widest text-slate-500">Momentum</span>
+          <p className="text-2xl font-black text-white italic tracking-tighter">
             {data.applied > 0
               ? ((data.hired / data.applied) * 100).toFixed(1)
               : 0}

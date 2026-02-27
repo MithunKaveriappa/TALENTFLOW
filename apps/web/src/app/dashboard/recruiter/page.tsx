@@ -130,7 +130,7 @@ export default function RecruiterDashboard() {
         <div className="flex flex-col items-center gap-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           <p className="text-slate-500 font-bold text-xs uppercase tracking-widest">
-            Syncing Command Center...
+            Loading Dashboard...
           </p>
         </div>
       </div>
@@ -188,11 +188,11 @@ export default function RecruiterDashboard() {
               </div>
               <div>
                 <h3 className="text-amber-900 font-bold text-lg tracking-tight">
-                  Incomplete Onboarding
+                  Incomplete Profile
                 </h3>
                 <p className="text-amber-800/70 text-sm font-medium">
-                  Finish your assessment to unlock trust-verified matchmaking
-                  signals and elite pool access.
+                  Complete your assessment to find top matching candidates
+                  and access the verified talent pool.
                 </p>
               </div>
             </div>
@@ -217,8 +217,8 @@ export default function RecruiterDashboard() {
             </div>
             <p className="text-slate-500 font-medium flex items-center gap-2">
               <Building2 className="h-4 w-4 text-slate-400" />
-              {profile?.companies?.name || "TalentFlow Partner"} &bull; Live
-              Intelligence
+              {profile?.companies?.name || "TalentFlow Partner"} &bull; Real-time
+              updates
             </p>
           </div>
           <div className="flex items-center gap-4">
@@ -249,65 +249,84 @@ export default function RecruiterDashboard() {
             <div className="space-y-8">
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <div className="px-3 py-1 bg-white/10 backdrop-blur-md rounded-full border border-white/10">
+                  <div className="px-3 py-1 bg-white/10 backdrop-blur-md rounded-full border border-white/10 flex items-center gap-2">
+                    <ShieldCheck className="h-3 w-3 text-indigo-400" />
                     <span className="text-[9px] font-black uppercase tracking-[0.2em] text-indigo-400">
-                      Live Presence Analysis
+                      Live Verification Analysis
                     </span>
                   </div>
                 </div>
                 <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter leading-tight">
-                  Presence{" "}
+                  Company{" "}
                   <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-400 to-purple-400">
-                    Authenticity
+                    Trust Score
                   </span>
                 </h2>
-                <p className="text-slate-400 text-base md:text-lg font-medium leading-relaxed max-w-md opacity-80">
-                  Your current standing reflects the trust the platform holds in
-                  your recruitment signals.
+                <p className="text-slate-400 text-sm md:text-base font-medium leading-relaxed max-w-md opacity-80">
+                  This score is calculated based on your brand transparency,
+                  onboarding accuracy, and culture audit results.
                 </p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-5 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-md hover:bg-white/10 transition-colors">
-                  <div className="text-2xl font-black text-white mb-0.5">
-                    {(profile?.companies?.profile_score ?? 0) >= 85
-                      ? "Elite"
-                      : (profile?.companies?.profile_score ?? 0) >= 70
-                        ? "Prime"
-                        : "Growth"}
+                  <div className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">
+                    Hiring Tier
                   </div>
-                  <div className="text-[9px] font-black uppercase tracking-widest text-slate-500">
-                    Presence Standing
+                  <div className="flex items-end gap-2">
+                    <div className="text-3xl font-black text-white leading-none">
+                      {(profile?.companies?.profile_score ?? 0) >= 85
+                        ? "Elite"
+                        : (profile?.companies?.profile_score ?? 0) >= 70
+                          ? "Prime"
+                          : "Growth"}
+                    </div>
+                  </div>
+                  <div className="mt-2 text-[8px] font-bold text-slate-500 uppercase tracking-widest leading-normal">
+                    Based on audit quality
                   </div>
                 </div>
                 <div className="p-5 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-md hover:bg-white/10 transition-colors">
-                  <div className="text-2xl font-black text-white mb-0.5">
-                    {profile?.completion_score}%
+                  <div className="text-xs font-black text-slate-500 uppercase tracking-widest mb-1">
+                    Profile completion
                   </div>
-                  <div className="text-[9px] font-black uppercase tracking-widest text-slate-500">
-                    Profile Integrity
+                  <div className="flex items-end gap-2">
+                    <div className="text-3xl font-black text-white leading-none">
+                      {profile?.completion_score}%
+                    </div>
+                  </div>
+                  <div className="mt-2 text-[8px] font-bold text-slate-500 uppercase tracking-widest leading-normal">
+                    Data provided to candidates
                   </div>
                 </div>
               </div>
             </div>
 
             <div className="flex justify-center lg:justify-end">
-              <div className="relative h-56 w-56 md:h-64 md:w-64 group/shield">
+              <div className="relative h-64 w-64 md:h-72 md:w-72 group/shield">
                 {/* Visual Glow */}
-                <div className="absolute inset-0 bg-indigo-600/20 rounded-full blur-3xl group-hover/shield:bg-indigo-500/30 transition-all duration-700" />
+                <div className="absolute inset-x-0 bottom-0 top-0 m-auto h-48 w-48 bg-indigo-600/20 rounded-full blur-3xl group-hover/shield:bg-indigo-500/30 transition-all duration-700" />
 
-                <div className="absolute inset-0 rounded-full border border-white/5 flex items-center justify-center backdrop-blur-sm z-10">
-                  <div className="text-center p-8 bg-slate-800/40 rounded-full border border-white/10 shadow-3xl backdrop-blur-xl group-hover/shield:scale-105 transition-transform duration-500">
-                    <Building2 className="h-14 w-14 text-white mb-3 mx-auto drop-shadow-2xl" />
-                    <div className="text-[9px] font-black uppercase tracking-[0.3em] text-indigo-400">
-                      Authentic
+                <div className="absolute inset-0 rounded-full flex flex-col items-center justify-center z-10 text-center">
+                  <div className="bg-slate-800/60 p-10 rounded-full border border-white/10 shadow-3xl backdrop-blur-2xl group-hover/shield:scale-105 transition-transform duration-500">
+                    <div className="text-5xl font-black text-white tracking-tighter leading-none mb-1">
+                      {profile?.companies?.profile_score ?? 0}
+                    </div>
+                    <div className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400">
+                      Trust Index
+                    </div>
+                    <div className="mt-4 flex items-center justify-center gap-1.5 px-3 py-1 bg-white/5 rounded-full border border-white/5">
+                      <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                      <span className="text-[8px] font-black text-white/50 uppercase tracking-widest">
+                        Verified
+                      </span>
                     </div>
                   </div>
                 </div>
 
                 {/* Circular Progress SVG */}
                 <svg
-                  className="absolute inset-0 h-full w-full -rotate-90 drop-shadow-[0_0_15px_rgba(99,102,241,0.3)] z-20"
+                  className="absolute inset-0 h-full w-full -rotate-90 drop-shadow-[0_0_25px_rgba(99,102,241,0.4)] z-20"
                   viewBox="0 0 100 100"
                 >
                   <circle
@@ -315,8 +334,8 @@ export default function RecruiterDashboard() {
                     cy="50"
                     r="46"
                     fill="transparent"
-                    stroke="rgba(255,255,255,0.03)"
-                    strokeWidth="1.5"
+                    stroke="rgba(255,255,255,0.05)"
+                    strokeWidth="2"
                   />
                   <circle
                     cx="50"
@@ -324,7 +343,7 @@ export default function RecruiterDashboard() {
                     r="46"
                     fill="transparent"
                     stroke="url(#shieldGradient)"
-                    strokeWidth="4"
+                    strokeWidth="5"
                     strokeDasharray="289"
                     strokeDashoffset={
                       289 -
@@ -354,30 +373,30 @@ export default function RecruiterDashboard() {
         {/* Premium Metric Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
-            label="Active Roles"
+            label="Active Jobs"
             value={stats?.active_jobs_count?.toString() || "0"}
-            sub="Current Pipeline"
+            sub="Openings"
             icon={Briefcase}
             trend="+2 this week"
           />
           <StatCard
             label="Talent Reach"
             value={stats?.total_views?.toLocaleString() || "0"}
-            sub="Market Awareness"
+            sub="Viewed by candidates"
             icon={Users}
             color="indigo"
           />
           <StatCard
             label="Success Rate"
             value={`${stats?.conversion_rate || 0}%`}
-            sub="Conversion Metrics"
+            sub="Hiring efficiency"
             icon={Zap}
             color="amber"
           />
           <StatCard
-            label="V-Rank"
+            label="Visibility Score"
             value={stats?.visibility_tier || "Growth"}
-            sub="Algorithmic Position"
+            sub="Search ranking"
             icon={Award}
             color="emerald"
           />
@@ -386,20 +405,20 @@ export default function RecruiterDashboard() {
         {/* Analytics & Roadmap Section */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           <div className="xl:col-span-2 space-y-6">
-            <div className="bg-white/40 backdrop-blur-sm rounded-3xl p-8 border border-slate-100 shadow-sm space-y-8">
+            <div className="bg-white rounded-2xl p-8 border border-slate-100 shadow-sm space-y-8">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
                     <TrendingUp className="h-5 w-5 text-indigo-500" />
-                    Signal Momentum
+                    Hiring Progress
                   </h3>
-                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest opacity-70">
-                    Tracking candidate resonance live
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest opacity-80">
+                    Real-time candidate pipeline
                   </p>
                 </div>
-                <div className="px-3 py-1 bg-slate-900 text-white rounded-lg">
-                  <span className="text-[8px] font-black uppercase tracking-[0.2em]">
-                    Real-time
+                <div className="px-3 py-1 bg-slate-900/5 border border-slate-100 rounded-lg">
+                  <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-500">
+                    Auto-Sync Active
                   </span>
                 </div>
               </div>
@@ -418,52 +437,52 @@ export default function RecruiterDashboard() {
             </div>
 
             {/* Optimization Hub - Integrated Below Momentum */}
-            <div className="bg-white rounded-3xl border border-slate-100 p-8 shadow-xl shadow-slate-200/50 relative overflow-hidden group">
+            <div className="bg-white rounded-2xl border border-slate-100 p-8 shadow-sm relative overflow-hidden group">
               <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-50 rounded-full blur-3xl -mr-32 -mt-32 opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
 
               <div className="flex items-center justify-between mb-8 relative z-10">
                 <div>
                   <h3 className="text-xl font-black text-slate-900 tracking-tight">
-                    Optimization Roadmap
+                    Next Steps
                   </h3>
                   <p className="text-xs text-slate-500 font-medium">
-                    Refining your recruitment signal for maximum authenticity.
+                    Critical tasks to improve your profile.
                   </p>
                 </div>
                 <div className="flex items-center gap-4 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">
                   <div className="flex flex-col items-end">
                     <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">
-                      Signal Power
+                      Profile Strength
                     </div>
                     <div className="text-xl font-black text-indigo-600 leading-none">
                       {profile?.completion_score}%
                     </div>
                   </div>
-                  <div className="h-8 w-8 rounded-full border-4 border-slate-200 border-t-indigo-500 animate-[spin_3s_linear_infinite]" />
+                  <div className="h-8 w-8 rounded-full border-4 border-slate-200 border-t-indigo-500" />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-10">
                 <CompletionItem
-                  label="Company DNA"
+                  label="Company Branding"
                   done={!!profile?.companies?.logo_url}
                   href="/dashboard/recruiter/organization/branding"
                   icon={<Building2 className="h-3.5 w-3.5" />}
                 />
                 <CompletionItem
-                  label="Team Governance"
+                  label="Team Setup"
                   done={profile?.is_admin || false}
                   href="/dashboard/recruiter/organization/team"
                   icon={<ShieldCheck className="h-3.5 w-3.5" />}
                 />
                 <CompletionItem
-                  label="Cultural Mapping"
+                  label="Culture Audit"
                   done={profile?.assessment_status === "completed"}
                   href="/onboarding/recruiter"
                   icon={<Zap className="h-3.5 w-3.5" />}
                 />
                 <CompletionItem
-                  label="Role Precision"
+                  label="Job Postings"
                   done={(stats?.active_jobs_count || 0) > 0}
                   href="/dashboard/recruiter/hiring/jobs/new"
                   icon={<FileText className="h-3.5 w-3.5" />}
@@ -474,59 +493,65 @@ export default function RecruiterDashboard() {
 
           <div className="space-y-6">
             {/* AI Insights / Market Position */}
-            <div className="bg-slate-900 rounded-4xl p-8 text-white shadow-2xl shadow-indigo-900/10 flex flex-col min-h-80 justify-between relative overflow-hidden group border border-white/5">
-              <div className="absolute top-0 right-0 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl -mr-20 -mt-20 group-hover:bg-indigo-500/20 transition-all duration-700" />
+            <div className="bg-slate-900 rounded-2xl p-6 text-white shadow-xl shadow-indigo-900/10 flex flex-col items-center text-center justify-between min-h-[300px] relative overflow-hidden group border border-white/5">
+              <div className="absolute top-0 right-0 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl -mr-20 -mt-20 transition-all duration-700 pointer-events-none" />
 
-              <div className="space-y-6 relative z-10">
-                <div className="p-3 bg-white/5 border border-white/10 rounded-xl w-fit backdrop-blur-xl group-hover:scale-110 transition-transform">
+              <div className="space-y-4 relative z-10 w-full">
+                <div className="p-3 bg-white/5 border border-white/10 rounded-xl w-fit mx-auto backdrop-blur-xl">
                   <Compass className="h-5 w-5 text-indigo-400" />
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-2">
                   <div className="text-[9px] font-black uppercase tracking-[0.2em] text-indigo-400">
-                    Market Intelligence
+                    Market Insights
                   </div>
-                  <h3 className="text-2xl font-black tracking-tighter leading-tight">
-                    Strategic <br />
-                    Positioning
+                  <h3 className="text-xl font-black tracking-tighter leading-tight">
+                    Market Standing
                   </h3>
-                  <p className="text-slate-400 text-xs leading-relaxed font-medium opacity-80">
-                    Your profile is currently outperforming{" "}
-                    <span className="text-white font-bold">
-                      {profile?.companies?.profile_score}%
-                    </span>{" "}
-                    of regional competitors in verified engagement.
+                  <p className="text-slate-400 text-[11px] leading-relaxed font-medium opacity-80 px-4">
+                    Your quality index is higher than <span className="text-white font-bold">{profile?.companies?.profile_score}%</span> of other companies.
                   </p>
                 </div>
               </div>
 
-              <div className="space-y-4 pt-6 mt-6 border-t border-white/5 relative z-10">
-                <div className="flex items-center justify-between">
-                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">
-                    Presence Tier
+              <div className="space-y-3 pt-4 mt-4 border-t border-white/5 relative z-10 w-full">
+                <div className="flex items-center justify-between px-2">
+                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest leading-none">
+                    Visibility
                   </span>
-                  <span className="text-sm font-black text-white italic tracking-widest">
+                  <span className="text-[10px] font-black text-white italic tracking-widest leading-none">
                     {stats?.visibility_tier?.toUpperCase() || "GROWTH"}
                   </span>
                 </div>
-                <button className="w-full py-3 bg-white/5 border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-white/10 transition-all">
+                <button className="w-full py-2 bg-white/5 border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-white/10 transition-all hover:scale-[1.02] active:scale-95">
                   Deep Insights
                 </button>
               </div>
             </div>
 
-            {/* Support/Resource Card */}
-            <div className="bg-indigo-50 rounded-3xl p-8 border border-indigo-100 group hover:bg-indigo-100/50 transition-colors shadow-sm">
-              <div className="space-y-3">
-                <div className="h-10 w-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm mb-4">
-                  <Award className="h-5 w-5" />
+            {/* Tiers Card */}
+            <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm flex-1">
+              <div className="h-full flex flex-col">
+                <div className="h-8 w-8 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600 mb-4 shrink-0">
+                  <Award className="h-4 w-4" />
                 </div>
-                <h4 className="text-lg font-black text-slate-900 tracking-tight">
-                  Elite Partner Program
+                <h4 className="text-[13px] font-black text-slate-900 tracking-tight mb-3 shrink-0">
+                  Quick Tier Guide
                 </h4>
-                <p className="text-xs text-slate-600 leading-relaxed font-medium opacity-80">
-                  Reach a visibility tier of Prime to unlock exclusive talent
-                  pools and priority matching.
-                </p>
+                <div className="flex-1 flex flex-col justify-around gap-2">
+                  {[
+                    { l: "Elite", d: "Premium visibility", c: "bg-emerald-400" },
+                    { l: "Prime", d: "Brand strength", c: "bg-indigo-400" },
+                    { l: "Growth", d: "Building signals", c: "bg-slate-300" }
+                  ].map(t => (
+                    <div key={t.l} className="flex items-center justify-between group cursor-default">
+                      <div className="flex items-center gap-2">
+                        <div className={`h-1.5 w-1.5 rounded-full ${t.c}`} />
+                        <span className="text-[10px] font-bold text-slate-700 truncate">{t.l}</span>
+                      </div>
+                      <span className="text-[9px] font-medium text-slate-400">{t.d}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -597,37 +622,37 @@ function StatCard({
   color?: "slate" | "indigo" | "emerald" | "amber";
 }) {
   const colorMap = {
-    slate: "text-slate-400 bg-slate-50 border-slate-100",
-    indigo: "text-indigo-500 bg-indigo-50 border-indigo-100",
-    emerald: "text-emerald-500 bg-emerald-50 border-emerald-100",
-    amber: "text-amber-500 bg-amber-50 border-amber-100",
+    slate: "text-slate-500 bg-slate-50",
+    indigo: "text-indigo-600 bg-indigo-50",
+    emerald: "text-emerald-600 bg-emerald-50",
+    amber: "text-amber-600 bg-amber-50",
   };
 
   return (
-    <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-2xl hover:shadow-slate-200/50 transition-all duration-700 group relative overflow-hidden flex items-center gap-4">
-      <div className="absolute top-0 right-0 w-24 h-24 bg-slate-50 rounded-full blur-2xl -mr-12 -mt-12 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-
+    <div className="bg-white px-6 py-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all duration-300 group flex items-start gap-4">
       <div
-        className={`p-3.5 rounded-xl transition-all duration-500 border ${colorMap[color]} group-hover:scale-110 group-hover:rotate-3 shadow-sm shrink-0 relative z-10`}
+        className={`p-3 rounded-xl transition-all duration-500 ${colorMap[color]} group-hover:scale-110 shadow-sm shrink-0`}
       >
         {Icon && <Icon className="h-5 w-5" />}
       </div>
 
-      <div className="flex-1 min-w-0 relative z-10">
-        <div className="flex items-center justify-between mb-0.5">
-          <div className="text-[9px] font-black text-slate-400 uppercase tracking-[0.15em] truncate">
-            {label}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-start justify-between">
+          <div className="space-y-0.5">
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">
+              {label}
+            </div>
+            <div className="text-2xl font-black text-slate-900 tracking-tighter">
+              {value}
+            </div>
           </div>
           {trend && (
-            <span className="text-[7px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-100 uppercase tracking-tighter shrink-0">
+            <span className="text-[8px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100 uppercase translate-y-1">
               {trend}
             </span>
           )}
         </div>
-        <div className="text-2xl font-black text-slate-900 tracking-tighter leading-none group-hover:text-indigo-600 transition-all duration-500">
-          {value}
-        </div>
-        <div className="text-[9px] font-bold text-slate-400 mt-1 opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-1 group-hover:translate-y-0">
+        <div className="text-[9px] font-medium text-slate-400 mt-1 truncate opacity-70 group-hover:opacity-100 transition-opacity">
           {sub}
         </div>
       </div>
